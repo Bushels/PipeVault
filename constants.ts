@@ -1,5 +1,5 @@
 
-import type { Company, Pipe, StorageRequest, Yard } from './types';
+import type { Company, Pipe, StorageRequest, Yard, TruckLoad } from './types';
 
 export const MOCK_COMPANIES: Company[] = [
   { id: 'mps-group', name: 'MPS Group', domain: 'mpsgroup.ca' },
@@ -18,6 +18,10 @@ export const MOCK_INVENTORY: Pipe[] = [
     weight: 40,
     length: 40,
     quantity: 120,
+    status: 'IN_STORAGE',
+    dropOffTimestamp: '2024-01-20T08:30:00Z',
+    storageAreaId: 'B-S-1',
+    deliveryTruckLoadId: 'truck-001',
   },
   {
     id: 'pipe-002',
@@ -29,6 +33,10 @@ export const MOCK_INVENTORY: Pipe[] = [
     weight: 19.5,
     length: 31,
     quantity: 300,
+    status: 'IN_STORAGE',
+    dropOffTimestamp: '2024-01-22T14:15:00Z',
+    storageAreaId: 'B-S-1',
+    deliveryTruckLoadId: 'truck-002',
   },
    {
     id: 'pipe-003',
@@ -40,6 +48,10 @@ export const MOCK_INVENTORY: Pipe[] = [
     weight: 6.5,
     length: 32,
     quantity: 150,
+    status: 'IN_STORAGE',
+    dropOffTimestamp: '2024-08-05T10:00:00Z',
+    storageAreaId: 'A-N-3',
+    deliveryTruckLoadId: 'truck-003',
   },
 ];
 
@@ -155,4 +167,49 @@ export const YARD_DATA: Yard[] = [
     createYard('A', 'Yard A (Open Storage)'),
     createYard('B', 'Yard B (Fenced Storage)'),
     createYard('C', 'Yard C (Cold Storage)'),
+];
+
+export const MOCK_TRUCK_LOADS: TruckLoad[] = [
+  {
+    id: 'truck-001',
+    type: 'DELIVERY',
+    truckingCompany: 'Alberta Express Hauling',
+    driverName: 'Mike Johnson',
+    driverPhone: '555-111-2222',
+    arrivalTime: '2024-01-20T08:00:00Z',
+    departureTime: '2024-01-20T09:15:00Z',
+    jointsCount: 120,
+    storageAreaId: 'B-S-1',
+    relatedRequestId: 'req-001',
+    relatedPipeIds: ['pipe-001'],
+    notes: 'Casing pipes delivered in good condition. All joints inspected.',
+  },
+  {
+    id: 'truck-002',
+    type: 'DELIVERY',
+    truckingCompany: 'Alberta Express Hauling',
+    driverName: 'Sarah Williams',
+    driverPhone: '555-111-3333',
+    arrivalTime: '2024-01-22T14:00:00Z',
+    departureTime: '2024-01-22T15:30:00Z',
+    jointsCount: 300,
+    storageAreaId: 'B-S-1',
+    relatedRequestId: 'req-001',
+    relatedPipeIds: ['pipe-002'],
+    notes: 'Drill pipe delivery completed. Storage area B-S-1 at 70% capacity.',
+  },
+  {
+    id: 'truck-003',
+    type: 'DELIVERY',
+    truckingCompany: 'Summit Transport Inc.',
+    driverName: 'Tom Anderson',
+    driverPhone: '555-222-4444',
+    arrivalTime: '2024-08-05T09:30:00Z',
+    departureTime: '2024-08-05T10:45:00Z',
+    jointsCount: 150,
+    storageAreaId: 'A-N-3',
+    relatedRequestId: 'req-002',
+    relatedPipeIds: ['pipe-003'],
+    notes: 'Tubing delivered for Summit Drilling. Rack A-N-3 assigned.',
+  },
 ];

@@ -1,5 +1,6 @@
 import { GoogleGenAI, Chat } from '@google/genai';
 import type { ChatMessage, NewRequestDetails, Pipe, Session, TruckingInfo } from '../types';
+import { calculateDaysInStorage } from '../utils/dateUtils';
 
 if (!process.env.API_KEY) {
     console.warn("API_KEY environment variable not set. Using a mock response for Gemini API.");
@@ -117,11 +118,28 @@ export const getChatbotResponse = async (
 ): Promise<string> => {
     if (!process.env.API_KEY) return getMockChatResponse(userMessage);
 
-    const inventoryJson = JSON.stringify(inventoryData, null, 2);
-    const systemInstruction = `You are a helpful inventory assistant for PipeStore Pro.
+    // Enrich inventory data with calculated days in storage
+    const enrichedInventory = inventoryData.map(pipe => ({
+        ...pipe,
+        daysInStorage: calculateDaysInStorage(pipe.dropOffTimestamp, pipe.pickUpTimestamp),
+        dropOffDate: pipe.dropOffTimestamp ? new Date(pipe.dropOffTimestamp).toLocaleDateString() : 'N/A',
+        pickUpDate: pipe.pickUpTimestamp ? new Date(pipe.pickUpTimestamp).toLocaleDateString() : null,
+    }));
+
+    const inventoryJson = JSON.stringify(enrichedInventory, null, 2);
+    const systemInstruction = `You are a helpful inventory assistant for PipeVault.
 You are speaking with a representative from "${companyName}".
 You can ONLY answer questions based on their pipe inventory provided below.
 Do not make up information. If the user asks about something not in the data, or about another company, politely state that you do not have access to that information.
+
+The inventory data includes:
+- Current status (IN_STORAGE, PICKED_UP, etc.)
+- Days in storage (calculated from drop-off to pickup or current date)
+- Drop-off dates (when pipe arrived at facility)
+- Pick-up dates (when pipe was picked up, if applicable)
+- Well assignments (UWI and well name for picked up pipes)
+- Storage locations (rack/area where pipe is stored)
+
 When asked to schedule shipping, confirm the details based on the inventory and then respond ONLY with: "A shipping request has been logged and our team will contact you shortly with a quote and schedule."
 
 Their Inventory Data:

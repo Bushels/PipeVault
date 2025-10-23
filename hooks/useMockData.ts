@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Company, Pipe, StorageRequest, Yard } from '../types';
-import { MOCK_COMPANIES, MOCK_INVENTORY, MOCK_REQUESTS, YARD_DATA } from '../constants';
+import type { Company, Pipe, StorageRequest, Yard, TruckLoad } from '../types';
+import { MOCK_COMPANIES, MOCK_INVENTORY, MOCK_REQUESTS, YARD_DATA, MOCK_TRUCK_LOADS } from '../constants';
 import * as emailService from '../services/emailService';
 
 export const useMockData = () => {
@@ -8,6 +8,7 @@ export const useMockData = () => {
   const [inventory, setInventory] = useState<Pipe[]>(MOCK_INVENTORY);
   const [requests, setRequests] = useState<StorageRequest[]>(MOCK_REQUESTS);
   const [yards, setYards] = useState<Yard[]>(YARD_DATA);
+  const [truckLoads, setTruckLoads] = useState<TruckLoad[]>(MOCK_TRUCK_LOADS);
 
   const updateRequest = (updatedRequest: StorageRequest) => {
     setRequests(prevRequests =>
@@ -106,5 +107,75 @@ export const useMockData = () => {
   };
 
 
-  return { companies, inventory, requests, yards, updateRequest, addRequest, addCompany, approveRequest, rejectRequest };
+  const addTruckLoad = (newTruckLoad: Omit<TruckLoad, 'id'>, pipes?: Omit<Pipe, 'id'>[]) => {
+    const newId = `truck-${Date.now()}`;
+    const truckLoadWithId = { ...newTruckLoad, id: newId };
+    setTruckLoads(prev => [...prev, truckLoadWithId]);
+
+    // If pipes are provided (for delivery), add them to inventory
+    if (pipes && pipes.length > 0) {
+      pipes.forEach(pipe => {
+        const pipeWithTruckId = { ...pipe, deliveryTruckLoadId: newId };
+        addInventoryItem(pipeWithTruckId);
+      });
+      // Update the truck load's relatedPipeIds
+      truckLoadWithId.relatedPipeIds = pipes.map((_, index) => `pipe-${Date.now() + index}`);
+    }
+
+    return truckLoadWithId;
+  };
+
+  const updateTruckLoad = (truckLoadId: string, updates: Partial<TruckLoad>) => {
+    setTruckLoads(prev => prev.map(load =>
+      load.id === truckLoadId ? { ...load, ...updates } : load
+    ));
+  };
+
+  const addInventoryItem = (newPipe: Omit<Pipe, 'id'>) => {
+    const newId = `pipe-${Date.now()}`;
+    const pipeWithId = { ...newPipe, id: newId };
+    setInventory(prev => [...prev, pipeWithId]);
+    return pipeWithId;
+  };
+
+  const updateInventoryItem = (pipeId: string, updates: Partial<Pipe>) => {
+    setInventory(prev => prev.map(pipe =>
+      pipe.id === pipeId ? { ...pipe, ...updates } : pipe
+    ));
+  };
+
+  const pickUpPipes = (pipeIds: string[], uwi: string, wellName: string, truckLoadId?: string) => {
+    const pickUpTimestamp = new Date().toISOString();
+    setInventory(prev => prev.map(pipe => {
+      if (pipeIds.includes(pipe.id)) {
+        return {
+          ...pipe,
+          status: 'PICKED_UP' as const,
+          pickUpTimestamp,
+          assignedUWI: uwi,
+          assignedWellName: wellName,
+          pickupTruckLoadId: truckLoadId,
+        };
+      }
+      return pipe;
+    }));
+  };
+
+  return {
+    companies,
+    inventory,
+    requests,
+    yards,
+    truckLoads,
+    updateRequest,
+    addRequest,
+    addCompany,
+    approveRequest,
+    rejectRequest,
+    addTruckLoad,
+    updateTruckLoad,
+    addInventoryItem,
+    updateInventoryItem,
+    pickUpPipes,
+  };
 };

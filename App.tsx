@@ -32,14 +32,18 @@ function App() {
 
       if ('isAdmin' in session && session.isAdmin) {
           return (
-            <AdminDashboard 
+            <AdminDashboard
                 session={session}
                 onLogout={handleLogout}
                 requests={data.requests}
                 companies={data.companies}
                 yards={data.yards}
+                inventory={data.inventory}
+                truckLoads={data.truckLoads}
                 approveRequest={data.approveRequest}
                 rejectRequest={data.rejectRequest}
+                addTruckLoad={data.addTruckLoad}
+                pickUpPipes={data.pickUpPipes}
             />
           );
       } else {

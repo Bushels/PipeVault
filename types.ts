@@ -4,6 +4,8 @@ export interface Company {
   domain: string;
 }
 
+export type PipeStatus = 'PENDING_DELIVERY' | 'IN_STORAGE' | 'PICKED_UP' | 'IN_TRANSIT';
+
 export interface Pipe {
   id: string;
   companyId: string;
@@ -14,6 +16,18 @@ export interface Pipe {
   weight: number; // lbs/ft
   length: number; // feet
   quantity: number;
+  status: PipeStatus;
+  // Tracking timestamps
+  dropOffTimestamp?: string; // ISO 8601 timestamp when pipe arrived
+  pickUpTimestamp?: string; // ISO 8601 timestamp when pipe was picked up
+  // Assignment information for pick-up
+  assignedUWI?: string; // Unique Well Identifier
+  assignedWellName?: string; // Well name
+  // Storage location
+  storageAreaId?: string; // Which rack/area the pipe is stored in
+  // Related truck load
+  deliveryTruckLoadId?: string; // ID of the truck load that delivered this pipe
+  pickupTruckLoadId?: string; // ID of the truck load that picked up this pipe
 }
 
 export interface CasingSpec {
@@ -127,4 +141,27 @@ export interface Yard {
   id: string; // e.g., 'A'
   name: string; // e.g., 'Yard A (Open Storage)'
   areas: YardArea[];
+}
+
+// Truck Load Tracking
+export type TruckLoadType = 'DELIVERY' | 'PICKUP';
+
+export interface TruckLoad {
+  id: string;
+  type: TruckLoadType;
+  truckingCompany: string;
+  driverName: string;
+  driverPhone?: string;
+  arrivalTime: string; // ISO 8601 timestamp
+  departureTime?: string; // ISO 8601 timestamp (null if still on-site)
+  jointsCount: number;
+  storageAreaId?: string; // Where the pipe was placed (for DELIVERY)
+  relatedRequestId?: string; // Associated storage request
+  relatedPipeIds: string[]; // IDs of pipes on this load
+  // For pickups
+  assignedUWI?: string; // Well identifier for pickup loads
+  assignedWellName?: string; // Well name for pickup loads
+  notes?: string;
+  // Photos/documentation
+  photoUrls?: string[]; // URLs to load photos if implemented
 }

@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import type { AdminSession, StorageRequest, Company, Yard, YardArea, Rack, RequestStatus } from '../../types';
+import type { AdminSession, StorageRequest, Company, Yard, YardArea, Rack, RequestStatus, TruckLoad, Pipe } from '../../types';
 import AdminHeader from './AdminHeader';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { ChevronLeftIcon } from '../icons/Icons';
+import TruckLoadHistory from './TruckLoadHistory';
+import TruckReceiving from './TruckReceiving';
 
 // --- UTILITY FUNCTIONS ---
 const getCompanyName = (companyId: string, companies: Company[]) => {
@@ -228,14 +230,31 @@ interface AdminDashboardProps {
   requests: StorageRequest[];
   companies: Company[];
   yards: Yard[];
+  inventory: Pipe[];
+  truckLoads: TruckLoad[];
   approveRequest: (requestId: string, assignedRackIds: string[], requiredJoints: number) => void;
   rejectRequest: (requestId: string, reason: string) => void;
+  addTruckLoad: (truckLoad: Omit<TruckLoad, 'id'>, pipes?: Omit<Pipe, 'id'>[]) => void;
+  pickUpPipes: (pipeIds: string[], uwi: string, wellName: string, truckLoadId?: string) => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogout, requests, companies, yards, approveRequest, rejectRequest }) => {
-    const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'yards'>('pending');
+const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  session,
+  onLogout,
+  requests,
+  companies,
+  yards,
+  inventory,
+  truckLoads,
+  approveRequest,
+  rejectRequest,
+  addTruckLoad,
+  pickUpPipes,
+}) => {
+    const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'yards' | 'trucks'>('pending');
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<'ALL' | RequestStatus>('ALL');
+    const [showTruckReceiving, setShowTruckReceiving] = useState(false);
     
     const pendingRequests = requests.filter(r => r.status === 'PENDING');
     
@@ -366,6 +385,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogout, requ
                 );
             case 'yards':
                 return <YardStatusView yards={yards} />;
+            case 'trucks':
+                return <TruckLoadHistory truckLoads={truckLoads} />;
+        }
+    };
+
+    const handleTruckLoadSubmit = (truckLoad: Omit<TruckLoad, 'id'>, pipes?: Omit<Pipe, 'id'>[]) => {
+        const newTruckLoad = addTruckLoad(truckLoad, pipes);
+
+        // If it's a pickup, update the pipe status
+        if (truckLoad.type === 'PICKUP' && truckLoad.assignedUWI && truckLoad.assignedWellName) {
+            pickUpPipes(truckLoad.relatedPipeIds, truckLoad.assignedUWI, truckLoad.assignedWellName, newTruckLoad.id);
         }
     };
     
@@ -378,10 +408,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ session, onLogout, requ
                     <div className="flex items-center gap-2 p-1 bg-gray-800 rounded-lg">
                         <TabButton active={activeTab === 'pending'} onClick={() => setActiveTab('pending')}>Pending ({pendingRequests.length})</TabButton>
                         <TabButton active={activeTab === 'all'} onClick={() => setActiveTab('all')}>All Requests</TabButton>
+                        <TabButton active={activeTab === 'trucks'} onClick={() => setActiveTab('trucks')}>Truck Loads</TabButton>
                         <TabButton active={activeTab === 'yards'} onClick={() => setActiveTab('yards')}>Yard Status</TabButton>
                     </div>
                 </div>
                 {renderContent()}
+
+                {/* Floating Action Button for Truck Receiving */}
+                <button
+                    onClick={() => setShowTruckReceiving(true)}
+                    className="fixed bottom-8 right-8 bg-red-600 hover:bg-red-700 text-white rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all hover:scale-110 z-40"
+                    title="Log Truck Load"
+                >
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                </button>
+
+                {/* Truck Receiving Modal */}
+                {showTruckReceiving && (
+                    <TruckReceiving
+                        requests={requests}
+                        inventory={inventory}
+                        yards={yards}
+                        onSubmit={handleTruckLoadSubmit}
+                        onClose={() => setShowTruckReceiving(false)}
+                    />
+                )}
             </main>
         </div>
     );
