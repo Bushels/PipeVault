@@ -1,0 +1,5 @@
+{
+  "name": "PipeVault",
+  "description": "A sleek, AI-powered inventory management application for oil company pipe storage. Customers can request storage, get shipping quotes, and chat with an AI assistant about their inventory.",
+  "requestFramePermissions": []
+}
