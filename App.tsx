@@ -176,6 +176,7 @@ function App() {
                 requests={requests}
                 addCompany={addCompany}
                 addRequest={addRequest}
+                onAdminLogin={() => handleLogin({ isAdmin: true, username: 'Admin' })}
             />
           );
       }
