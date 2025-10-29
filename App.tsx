@@ -1,5 +1,7 @@
 
 import React, { useState } from 'react';
+import { useAuth } from './lib/AuthContext';
+import Auth from './components/Auth';
 import WelcomeScreen from './components/WelcomeScreen';
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
@@ -20,6 +22,7 @@ import type { AppSession, StorageRequest, Company, TruckLoad, Pipe } from './typ
 import * as emailService from './services/emailService';
 
 function App() {
+  const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const [session, setSession] = useState<AppSession | null>(null);
 
   // Fetch data from Supabase
@@ -41,8 +44,9 @@ function App() {
     setSession(session);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setSession(null);
+    await signOut();
   };
 
   // Wrapper functions to match the old useMockData interface
@@ -157,7 +161,7 @@ function App() {
   };
 
   // Show loading state
-  if (loadingCompanies || loadingRequests || loadingInventory || loadingYards || loadingTruckLoads) {
+  if (authLoading || loadingCompanies || loadingRequests || loadingInventory || loadingYards || loadingTruckLoads) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 font-sans flex items-center justify-center">
         <div className="text-center">
@@ -167,8 +171,33 @@ function App() {
       </div>
     );
   }
+
+  // Show auth screen if not authenticated
+  if (!user) {
+    return <Auth />;
+  }
   
   const renderContent = () => {
+      // If user is admin, show admin dashboard directly
+      if (isAdmin) {
+          return (
+            <AdminDashboard
+                session={{ isAdmin: true, username: user.email || 'Admin' }}
+                onLogout={handleLogout}
+                requests={requests}
+                companies={companies}
+                yards={yards}
+                inventory={inventory}
+                truckLoads={truckLoads}
+                approveRequest={approveRequest}
+                rejectRequest={rejectRequest}
+                addTruckLoad={addTruckLoad}
+                pickUpPipes={pickUpPipes}
+            />
+          );
+      }
+
+      // If no session selected, show welcome screen
       if (!session) {
           return (
              <WelcomeScreen
@@ -176,7 +205,6 @@ function App() {
                 requests={requests}
                 addCompany={addCompany}
                 addRequest={addRequest}
-                onAdminLogin={() => handleLogin({ isAdmin: true, username: 'Admin' })}
             />
           );
       }

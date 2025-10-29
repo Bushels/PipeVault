@@ -16,7 +16,6 @@ interface WelcomeScreenProps {
   requests: StorageRequest[];
   addCompany: (company: Omit<Company, 'id'>) => Promise<Company>;
   addRequest: (request: Omit<StorageRequest, 'id'>) => Promise<StorageRequest>;
-  onAdminLogin?: () => void;
 }
 
 type SelectedOption = 'menu' | 'new-storage' | 'delivery-in' | 'delivery-out' | 'inquire';
@@ -33,38 +32,11 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   requests,
   addCompany,
   addRequest,
-  onAdminLogin,
 }) => {
   const [selectedOption, setSelectedOption] = useState<SelectedOption>('menu');
   const [referenceId, setReferenceId] = useState('');
   const [email, setEmail] = useState('');
   const [authError, setAuthError] = useState('');
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [adminUsername, setAdminUsername] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [adminError, setAdminError] = useState('');
-
-  // Check for admin URL parameter on mount
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('admin') === 'true') {
-      setShowAdminLogin(true);
-    }
-  }, []);
-
-  const handleAdminLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminError('');
-
-    // Simple admin credentials (change these for production!)
-    if (adminUsername === 'Admin' && adminPassword === 'Admin') {
-      if (onAdminLogin) {
-        onAdminLogin();
-      }
-    } else {
-      setAdminError('Invalid admin credentials');
-    }
-  };
 
   const handleAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -319,76 +291,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
     );
   };
 
-  const renderAdminLogin = () => {
-    return (
-      <div className="max-w-md mx-auto">
-        <Card className="p-8">
-          <div className="text-center mb-6">
-            <PipeVaultIcon className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white">Admin Login</h2>
-            <p className="text-gray-400 mt-2">Enter your admin credentials</p>
-          </div>
-
-          <form onSubmit={handleAdminLogin} className="space-y-4">
-            <div>
-              <label htmlFor="admin-username" className="block text-sm font-medium text-gray-300 mb-2">
-                Username
-              </label>
-              <Input
-                id="admin-username"
-                type="text"
-                placeholder="Admin"
-                value={adminUsername}
-                onChange={(e) => setAdminUsername(e.target.value)}
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="admin-password" className="block text-sm font-medium text-gray-300 mb-2">
-                Password
-              </label>
-              <Input
-                id="admin-password"
-                type="password"
-                placeholder="Password"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                required
-              />
-            </div>
-
-            {adminError && <p className="text-sm text-red-400">{adminError}</p>}
-
-            <Button type="submit" className="w-full py-3 bg-red-600 hover:bg-red-700">
-              Login as Admin
-            </Button>
-
-            <Button
-              type="button"
-              onClick={() => {
-                setShowAdminLogin(false);
-                setAdminError('');
-                // Remove admin param from URL
-                window.history.replaceState({}, '', window.location.pathname);
-              }}
-              variant="secondary"
-              className="w-full"
-            >
-              ← Back to Main
-            </Button>
-          </form>
-        </Card>
-      </div>
-    );
-  };
-
   const renderContent = () => {
-    // Show admin login if triggered
-    if (showAdminLogin) {
-      return renderAdminLogin();
-    }
-
     switch (selectedOption) {
       case 'new-storage':
         return renderNewStorageFlow();

@@ -3,6 +3,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { QueryProvider } from './lib/QueryProvider';
+import { AuthProvider } from './lib/AuthContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -13,7 +14,9 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <QueryProvider>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </QueryProvider>
   </React.StrictMode>
 );
