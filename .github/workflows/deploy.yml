@@ -34,14 +34,8 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # This tells Vite to use relative paths for GitHub Pages
+          # This tells Vite to use correct base path for GitHub Pages
           VITE_GITHUB_PAGES: 'true'
-          # Supabase Configuration
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          # AI API Keys
-          VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
-          VITE_GOOGLE_AI_API_KEY: ${{ secrets.VITE_GOOGLE_AI_API_KEY }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
