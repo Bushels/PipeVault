@@ -29,8 +29,8 @@ export default defineConfig(({ mode }) => {
       build: {
         // Generate relative paths for better portability
         assetsDir: 'assets',
-        // Optimize for embedding
-        minify: 'terser',
+        // Optimize for embedding - using esbuild (faster and built-in)
+        minify: 'esbuild',
         sourcemap: false,
       }
     };
