@@ -24,6 +24,7 @@ import * as emailService from './services/emailService';
 function App() {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const [session, setSession] = useState<AppSession | null>(null);
+  const [guestMode, setGuestMode] = useState(false);
 
   // Fetch data from Supabase
   const { data: companies = [], isLoading: loadingCompanies } = useCompanies();
@@ -172,9 +173,9 @@ function App() {
     );
   }
 
-  // Show auth screen if not authenticated
-  if (!user) {
-    return <Auth />;
+  // Show auth screen if not authenticated (unless in guest mode)
+  if (!user && !guestMode) {
+    return <Auth onGuestAccess={() => setGuestMode(true)} />;
   }
   
   const renderContent = () => {

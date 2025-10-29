@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useAuth } from '../lib/AuthContext';
 import type { StorageRequest, Session, NewRequestDetails, RequestStatus, TruckingInfo, ProvidedTruckingDetails } from '../types';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -68,6 +69,7 @@ const initialTruckingDetails: ProvidedTruckingDetails = {
 };
 
 const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, session, updateRequest, addRequest }) => {
+    const { signUpWithEmail, signInWithEmail } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [wizardStep, setWizardStep] = useState<'details' | 'trucking' | 'submitted'>('details');
     
@@ -114,8 +116,8 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
 
         const truckingInfo: TruckingInfo = {
             truckingType,
-            details: (truckingType === 'quote' || (truckingType === 'provided' && truckingDetails.specialInstructions)) 
-                ? truckingDetails 
+            details: (truckingType === 'quote' || (truckingType === 'provided' && truckingDetails.specialInstructions))
+                ? truckingDetails
                 : undefined
         };
 
@@ -131,11 +133,28 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
                 truckingInfo: truckingInfo,
                 approvalSummary: summary
             };
-            
+
             if (request) {
                 updateRequest({ ...request, ...newRequestData });
             } else {
                 addRequest(newRequestData);
+
+                // Create Supabase account for new user (Reference ID = Password)
+                try {
+                    await signUpWithEmail(formData.contactEmail, referenceId);
+                    // Automatically sign in the user
+                    await signInWithEmail(formData.contactEmail, referenceId);
+                } catch (authError: any) {
+                    // If account already exists, just sign in
+                    if (authError.message?.includes('already registered')) {
+                        try {
+                            await signInWithEmail(formData.contactEmail, referenceId);
+                        } catch {
+                            // Silent fail - user can sign in manually later
+                            console.log('Could not auto-sign-in user');
+                        }
+                    }
+                }
             }
             setWizardStep('submitted');
         } catch (error) {
@@ -375,8 +394,20 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
     
     const renderSubmitted = () => (
          <WizardCard title="Thank You For Your Request!">
-            <div className="text-center">
+            <div className="text-center space-y-4">
                 <p className="text-gray-300">Your request has been submitted for approval. Our team will review the details and you will be notified shortly.</p>
+
+                <div className="bg-gray-800 p-6 rounded-lg border-2 border-yellow-500">
+                    <p className="text-yellow-400 font-semibold mb-2">🔑 Important - Save This Information!</p>
+                    <div className="bg-gray-900 p-4 rounded-md mt-3">
+                        <p className="text-sm text-gray-400">Your Project Reference ID</p>
+                        <p className="text-2xl font-bold text-red-500 mt-1">{referenceId}</p>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-3">
+                        💡 Your Project Reference ID acts as your password. Use it with your email to sign in and check your request status.
+                    </p>
+                </div>
+
                 <p className="text-red-500 font-semibold mt-4">MPS Celebrating 20 Years</p>
             </div>
         </WizardCard>
