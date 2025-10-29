@@ -1,0 +1,301 @@
+/**
+ * Data Service for PipeVault
+ * Handles all Wix Data operations
+ *
+ * Web Module (.jsw) - Can be called from frontend code
+ */
+
+import wixData from 'wix-data';
+import { generateRequestSummary } from './ai';
+
+/**
+ * Find company by email domain
+ * @param {string} email
+ * @returns {Promise<Object|null>} Company or null
+ */
+export async function findCompanyByEmail(email) {
+  if (!email || !email.includes('@')) {
+    return null;
+  }
+
+  const domain = email.split('@')[1].toLowerCase();
+
+  const results = await wixData.query('Companies')
+    .eq('domain', domain)
+    .find();
+
+  return results.items.length > 0 ? results.items[0] : null;
+}
+
+/**
+ * Create new company
+ * @param {string} name - Company name
+ * @param {string} domain - Email domain
+ * @returns {Promise<Object>} Created company
+ */
+export async function createCompany(name, domain) {
+  const company = await wixData.insert('Companies', {
+    name: name,
+    domain: domain.toLowerCase()
+  });
+
+  return company;
+}
+
+/**
+ * Find or create company by email
+ * @param {string} email
+ * @param {string} companyName
+ * @returns {Promise<Object>} Company
+ */
+export async function findOrCreateCompany(email, companyName) {
+  let company = await findCompanyByEmail(email);
+
+  if (!company) {
+    const domain = email.split('@')[1];
+    company = await createCompany(companyName, domain);
+  }
+
+  return company;
+}
+
+/**
+ * Submit new storage request
+ * @param {Object} requestData
+ * @returns {Promise<Object>} Created request with ID
+ */
+export async function submitStorageRequest(requestData) {
+  // Find or create company
+  const company = await findOrCreateCompany(
+    requestData.userId,
+    requestData.requestDetails.companyName
+  );
+
+  // Generate AI summary
+  const summary = await generateRequestSummary(
+    requestData.requestDetails.companyName,
+    requestData.userId,
+    requestData.referenceId,
+    requestData.requestDetails,
+    requestData.truckingInfo
+  );
+
+  // Insert request
+  const request = await wixData.insert('StorageRequests', {
+    companyId: company._id,
+    userId: requestData.userId.toLowerCase(),
+    referenceId: requestData.referenceId,
+    status: 'PENDING',
+    requestDetails: requestData.requestDetails,
+    truckingInfo: requestData.truckingInfo,
+    approvalSummary: summary,
+    assignedLocation: null,
+    assignedRackIds: null,
+    rejectionReason: null
+  });
+
+  return request;
+}
+
+/**
+ * Get all storage requests for a company
+ * @param {string} companyId
+ * @returns {Promise<Array>} Array of requests
+ */
+export async function getCompanyRequests(companyId) {
+  const results = await wixData.query('StorageRequests')
+    .eq('companyId', companyId)
+    .descending('_createdDate')
+    .find();
+
+  return results.items;
+}
+
+/**
+ * Get storage request by reference ID and email
+ * @param {string} email
+ * @param {string} referenceId
+ * @returns {Promise<Object|null>} Request or null
+ */
+export async function getRequestByReferenceId(email, referenceId) {
+  const results = await wixData.query('StorageRequests')
+    .eq('userId', email.toLowerCase())
+    .eq('referenceId', referenceId)
+    .find();
+
+  return results.items.length > 0 ? results.items[0] : null;
+}
+
+/**
+ * Get all pending requests (Admin only)
+ * @returns {Promise<Array>} Pending requests
+ */
+export async function getPendingRequests() {
+  const results = await wixData.query('StorageRequests')
+    .eq('status', 'PENDING')
+    .descending('_createdDate')
+    .find();
+
+  return results.items;
+}
+
+/**
+ * Approve storage request (Admin only)
+ * @param {string} requestId
+ * @param {string} assignedLocation - Human-readable location
+ * @param {Array<string>} assignedRackIds - Array of rack IDs
+ * @returns {Promise<Object>} Updated request
+ */
+export async function approveRequest(requestId, assignedLocation, assignedRackIds) {
+  const request = await wixData.update('StorageRequests', {
+    _id: requestId,
+    status: 'APPROVED',
+    assignedLocation: assignedLocation,
+    assignedRackIds: JSON.stringify(assignedRackIds)
+  });
+
+  // TODO: Send email notification
+
+  return request;
+}
+
+/**
+ * Reject storage request (Admin only)
+ * @param {string} requestId
+ * @param {string} reason - Rejection reason
+ * @returns {Promise<Object>} Updated request
+ */
+export async function rejectRequest(requestId, reason) {
+  const request = await wixData.update('StorageRequests', {
+    _id: requestId,
+    status: 'REJECTED',
+    rejectionReason: reason
+  });
+
+  // TODO: Send email notification
+
+  return request;
+}
+
+/**
+ * Get inventory for a company
+ * @param {string} companyId
+ * @returns {Promise<Array>} Inventory items
+ */
+export async function getCompanyInventory(companyId) {
+  const results = await wixData.query('Inventory')
+    .eq('companyId', companyId)
+    .find();
+
+  return results.items;
+}
+
+/**
+ * Get inventory for a specific project
+ * @param {string} companyId
+ * @param {string} referenceId
+ * @returns {Promise<Array>} Inventory items
+ */
+export async function getProjectInventory(companyId, referenceId) {
+  const results = await wixData.query('Inventory')
+    .eq('companyId', companyId)
+    .eq('referenceId', referenceId)
+    .find();
+
+  return results.items;
+}
+
+/**
+ * Add inventory item (Admin only)
+ * @param {Object} inventoryData
+ * @returns {Promise<Object>} Created inventory item
+ */
+export async function addInventoryItem(inventoryData) {
+  const item = await wixData.insert('Inventory', {
+    companyId: inventoryData.companyId,
+    referenceId: inventoryData.referenceId,
+    rackId: inventoryData.rackId,
+    status: 'STORED',
+    pipeData: inventoryData.pipeData,
+    pickUpTimestamp: null,
+    assignedUWI: null,
+    assignedWellName: null
+  });
+
+  return item;
+}
+
+/**
+ * Update inventory item status (pickup)
+ * @param {string} itemId
+ * @param {Object} updateData - Fields to update
+ * @returns {Promise<Object>} Updated item
+ */
+export async function updateInventoryItem(itemId, updateData) {
+  const item = await wixData.update('Inventory', {
+    _id: itemId,
+    ...updateData
+  });
+
+  return item;
+}
+
+/**
+ * Get all yards (Admin only)
+ * @returns {Promise<Array>} Yards
+ */
+export async function getYards() {
+  const results = await wixData.query('Yards')
+    .find();
+
+  return results.items;
+}
+
+/**
+ * Get all truck loads (Admin only)
+ * @returns {Promise<Array>} Truck loads
+ */
+export async function getTruckLoads() {
+  const results = await wixData.query('TruckLoads')
+    .descending('_createdDate')
+    .find();
+
+  return results.items;
+}
+
+/**
+ * Add truck load (Admin only)
+ * @param {Object} truckLoadData
+ * @returns {Promise<Object>} Created truck load
+ */
+export async function addTruckLoad(truckLoadData) {
+  const load = await wixData.insert('TruckLoads', {
+    loadNumber: truckLoadData.loadNumber,
+    truckDetails: truckLoadData.truckDetails,
+    status: truckLoadData.status || 'PENDING'
+  });
+
+  return load;
+}
+
+/**
+ * Validate authentication (check if user has access to project)
+ * @param {string} email
+ * @param {string} referenceId
+ * @returns {Promise<{valid: boolean, request: Object|null, company: Object|null}>}
+ */
+export async function validateAuth(email, referenceId) {
+  const request = await getRequestByReferenceId(email, referenceId);
+
+  if (!request) {
+    return { valid: false, request: null, company: null };
+  }
+
+  const company = await wixData.get('Companies', request.companyId);
+
+  return {
+    valid: true,
+    request: request,
+    company: company
+  };
+}

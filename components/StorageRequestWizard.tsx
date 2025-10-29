@@ -44,6 +44,7 @@ const WizardCard: React.FC<{ title: string; subtitle?: string; children: React.R
 const initialFormState: NewRequestDetails = {
     companyName: '',
     fullName: '',
+    contactEmail: '',
     contactNumber: '',
     itemType: 'Blank Pipe',
     sandControlScreenType: 'DWW',
@@ -119,11 +120,11 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
         };
 
         try {
-            const summary = await generateRequestSummary(formData.companyName, session, referenceId, formData, truckingInfo);
-            
+            const summary = await generateRequestSummary(formData.companyName, formData.contactEmail, referenceId, formData, truckingInfo);
+
             const newRequestData = {
                 companyId: session.company.id,
-                userId: session.userId,
+                userId: formData.contactEmail,
                 referenceId: referenceId,
                 status: 'PENDING' as RequestStatus,
                 requestDetails: formData,
@@ -172,8 +173,8 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
                             <Input id="fullName" type="text" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} required />
                         </div>
                         <div>
-                            <Label>Email</Label>
-                            <Input type="email" value={session.userId} disabled />
+                            <Label htmlFor="contactEmail">Contact Email</Label>
+                            <Input id="contactEmail" type="email" value={formData.contactEmail} onChange={e => setFormData({...formData, contactEmail: e.target.value})} required />
                         </div>
                         <div>
                             <Label htmlFor="contactNumber">Contact Number</Label>
@@ -266,7 +267,7 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
                          <div>
                             <Label htmlFor="connection">Connection</Label>
                             <Select id="connection" value={formData.connection} onChange={e => setFormData({...formData, connection: e.target.value as any})}>
-                                <option>NUE</option><option>EUE</option><option>BTC</option><option>Premium</option><option>Other</option>
+                                <option>NUE</option><option>EUE</option><option>BTC</option><option>Premium</option><option>Semi-Premium</option><option>Other</option>
                             </Select>
                         </div>
                         {formData.connection === 'Other' && (
@@ -307,6 +308,9 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
                         </div>
                         <div>
                             <Label htmlFor="referenceId">Project Reference Number</Label>
+                            <p className="text-xs text-yellow-400 mb-2">
+                                💡 This will act as your unique passcode to check status and make inquiries - make sure it's something you'll remember!
+                            </p>
                             <Input id="referenceId" type="text" placeholder="AFE, Project Name, etc." value={referenceId} onChange={e => setReferenceId(e.target.value)} required />
                         </div>
                     </fieldset>

@@ -44,6 +44,7 @@ export interface CasingSpec {
 export interface NewRequestDetails {
   companyName: string;
   fullName: string;
+  contactEmail: string;
   contactNumber: string;
   itemType: 'Blank Pipe' | 'Sand Control' | 'Flow Control' | 'Tools' | 'Other';
   itemTypeOther?: string;
@@ -52,7 +53,7 @@ export interface NewRequestDetails {
   casingSpec: CasingSpec | null;
   grade: 'H40' | 'J55' | 'L80' | 'N80' | 'C90' | 'T95' | 'P110' | 'Other';
   gradeOther?: string;
-  connection: 'NUE' | 'EUE' | 'BTC' | 'Premium' | 'Other';
+  connection: 'NUE' | 'EUE' | 'BTC' | 'Premium' | 'Semi-Premium' | 'Other';
   connectionOther?: string;
   threadType?: string;
   avgJointLength: number;

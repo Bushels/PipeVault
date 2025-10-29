@@ -2,11 +2,13 @@ import { GoogleGenAI, Chat } from '@google/genai';
 import type { ChatMessage, NewRequestDetails, Pipe, Session, TruckingInfo } from '../types';
 import { calculateDaysInStorage } from '../utils/dateUtils';
 
-if (!process.env.API_KEY) {
-    console.warn("API_KEY environment variable not set. Using a mock response for Gemini API.");
+const GEMINI_API_KEY = import.meta.env.VITE_GOOGLE_AI_API_KEY;
+
+if (!GEMINI_API_KEY) {
+    console.warn("VITE_GOOGLE_AI_API_KEY environment variable not set. Using a mock response for Gemini API.");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY || '' });
 
 const generateMockSummary = (details: NewRequestDetails, referenceId: string) => {
     const space = Math.ceil(details.totalJoints / 75);
@@ -27,7 +29,7 @@ export const generateRequestSummary = async (
     details: NewRequestDetails,
     truckingInfo: TruckingInfo,
 ): Promise<string> => {
-    if (!process.env.API_KEY) return generateMockSummary(details, referenceId);
+    if (!GEMINI_API_KEY) return generateMockSummary(details, referenceId);
 
     const itemDetailsLines = [
         `- Type: ${details.itemType === 'Other' ? details.itemTypeOther : details.itemType}`
@@ -116,7 +118,7 @@ export const getChatbotResponse = async (
     chatHistory: ChatMessage[],
     userMessage: string
 ): Promise<string> => {
-    if (!process.env.API_KEY) return getMockChatResponse(userMessage);
+    if (!GEMINI_API_KEY) return getMockChatResponse(userMessage);
 
     // Enrich inventory data with calculated days in storage
     const enrichedInventory = inventoryData.map(pipe => ({
