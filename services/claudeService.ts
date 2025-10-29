@@ -144,6 +144,75 @@ export const getClaudeResponse = async (
 };
 
 /**
+ * Admin AI Assistant - Help admins with operational queries
+ * Uses Claude 3.5 Haiku for intelligent data analysis
+ */
+export const callClaudeAdminAssistant = async (
+    chatHistory: Array<{ role: string; content: string }>,
+    userMessage: string,
+    context: any
+): Promise<string> => {
+    if (!anthropic) {
+        return "I'm sorry, Claude AI is not configured. Please check your API key.";
+    }
+
+    const systemPrompt = `You are an AI assistant for the PipeVault admin dashboard at MPS Group, a pipe storage facility celebrating 20 years of service.
+
+Your role is to help administrators quickly find information and insights about their operations.
+
+CURRENT SYSTEM STATE:
+${JSON.stringify(context, null, 2)}
+
+CAPABILITIES:
+- Answer questions about storage capacity and availability
+- Provide insights on pending/approved requests
+- Search through company and inventory data
+- Calculate utilization metrics
+- Suggest optimal storage allocation
+- Provide operational recommendations
+
+RESPONSE GUIDELINES:
+- Be concise and data-driven
+- Use specific numbers and metrics when available
+- Format responses clearly (use bullet points, line breaks)
+- Proactively suggest relevant follow-up information
+- If data is incomplete, acknowledge it
+
+EXAMPLE QUERIES YOU CAN HANDLE:
+- "What storage areas have space available?"
+- "How many pending requests do we have?"
+- "What is our current storage utilization?"
+- "Which yard has the most capacity?"
+- "Show me companies with the most inventory"
+
+Respond professionally and helpfully to the administrator's questions.`;
+
+    try {
+        const message = await anthropic.messages.create({
+            model: 'claude-3-5-haiku-20241022',
+            max_tokens: 1000,
+            system: systemPrompt,
+            messages: [
+                ...chatHistory.slice(1).map(msg => ({ // Skip initial greeting
+                    role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+                    content: msg.content,
+                })),
+                {
+                    role: 'user',
+                    content: userMessage,
+                },
+            ],
+        });
+
+        const textContent = message.content.find(block => block.type === 'text');
+        return textContent && 'text' in textContent ? textContent.text : "I couldn't generate a response.";
+    } catch (error) {
+        console.error("Error getting Claude admin response:", error);
+        return "Sorry, I'm having trouble connecting right now. Please try again later.";
+    }
+};
+
+/**
  * Fallback mock summary when AI is unavailable
  */
 function generateMockSummary(details: NewRequestDetails, referenceId: string): string {

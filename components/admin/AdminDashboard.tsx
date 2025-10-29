@@ -1,229 +1,15 @@
+/**
+ * Admin Dashboard - Complete Backend Management System
+ * Features: Approval workflow, global search, AI assistant, analytics
+ */
+
 import React, { useState, useMemo } from 'react';
-import type { AdminSession, StorageRequest, Company, Yard, YardArea, Rack, RequestStatus, TruckLoad, Pipe } from '../../types';
+import type { AdminSession, StorageRequest, Company, Yard, Pipe, TruckLoad, RequestStatus } from '../../types';
 import AdminHeader from './AdminHeader';
+import AdminAIAssistant from './AdminAIAssistant';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
-import { ChevronLeftIcon } from '../icons/Icons';
-import TruckLoadHistory from './TruckLoadHistory';
-import TruckReceiving from './TruckReceiving';
 
-// --- UTILITY FUNCTIONS ---
-const getCompanyName = (companyId: string, companies: Company[]) => {
-    return companies.find(c => c.id === companyId)?.name || 'Unknown Company';
-};
-
-const getRequiredJoints = (request: StorageRequest): number => {
-    return request.requestDetails?.totalJoints || 0;
-};
-
-// --- SUB-COMPONENTS ---
-const TabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
-    <button
-        onClick={onClick}
-        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-            active ? 'bg-red-600 text-white' : 'text-gray-300 hover:bg-gray-700'
-        }`}
-    >
-        {children}
-    </button>
-);
-
-const YardStatusView: React.FC<{ yards: Yard[] }> = ({ yards }) => {
-    const [expandedYards, setExpandedYards] = useState<string[]>([]);
-    const [expandedAreas, setExpandedAreas] = useState<string[]>([]);
-
-    const toggleYard = (yardId: string) => {
-        setExpandedYards(prev => prev.includes(yardId) ? prev.filter(id => id !== yardId) : [...prev, yardId]);
-    };
-    const toggleArea = (areaId: string) => {
-        setExpandedAreas(prev => prev.includes(areaId) ? prev.filter(id => id !== areaId) : [...prev, areaId]);
-    };
-
-    return (
-        <Card>
-            <h2 className="text-xl font-bold text-white mb-4">Yard Capacity Overview (by Total Length)</h2>
-            <div className="space-y-4">
-                {yards.map(yard => {
-                    const totalCapacity = yard.areas.reduce((acc, area) => acc + area.racks.reduce((a, r) => a + r.capacityMeters, 0), 0);
-                    const totalOccupied = yard.areas.reduce((acc, area) => acc + area.racks.reduce((a, r) => a + r.occupiedMeters, 0), 0);
-                    const percentage = totalCapacity > 0 ? (totalOccupied / totalCapacity) * 100 : 0;
-                    const isYardExpanded = expandedYards.includes(yard.id);
-
-                    return (
-                        <div key={yard.id} className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
-                            <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleYard(yard.id)}>
-                                <div className="flex-grow">
-                                    <div className="flex justify-between items-baseline mb-1">
-                                        <h3 className="font-semibold text-lg flex items-center gap-2">
-                                             <ChevronLeftIcon className={`w-5 h-5 transition-transform ${isYardExpanded ? '-rotate-90' : ''}`} />
-                                            {yard.name}
-                                        </h3>
-                                        <span className="text-sm text-gray-400 font-mono">{totalOccupied.toFixed(0)} / {totalCapacity.toFixed(0)} meters</span>
-                                    </div>
-                                    <div className="w-full bg-gray-700 rounded-full h-3">
-                                        <div className="bg-red-600 h-3 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }}></div>
-                                    </div>
-                                </div>
-                            </div>
-                            {isYardExpanded && (
-                                <div className="pl-6 mt-4 space-y-3">
-                                    {yard.areas.map(area => {
-                                        const areaCapacity = area.racks.reduce((acc, r) => acc + r.capacityMeters, 0);
-                                        const areaOccupied = area.racks.reduce((acc, r) => acc + r.occupiedMeters, 0);
-                                        const areaPercentage = areaCapacity > 0 ? (areaOccupied / areaCapacity) * 100 : 0;
-                                        const isAreaExpanded = expandedAreas.includes(area.id);
-
-                                        return (
-                                            <div key={area.id}>
-                                                <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleArea(area.id)}>
-                                                     <div className="flex-grow">
-                                                        <div className="flex justify-between items-baseline mb-1">
-                                                            <h4 className="font-medium flex items-center gap-2">
-                                                                <ChevronLeftIcon className={`w-4 h-4 transition-transform ${isAreaExpanded ? '-rotate-90' : ''}`} />
-                                                                {area.name} Area
-                                                            </h4>
-                                                            <span className="text-xs text-gray-400 font-mono">{areaOccupied.toFixed(0)} / {areaCapacity.toFixed(0)} meters</span>
-                                                        </div>
-                                                        <div className="w-full bg-gray-600 rounded-full h-2">
-                                                            <div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${areaPercentage}%` }}></div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                {isAreaExpanded && (
-                                                    <div className="pl-6 mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                                                        {area.racks.map(rack => (
-                                                            <div key={rack.id} className="bg-gray-900 p-2 rounded-md text-center">
-                                                                <p className="text-sm font-semibold">{rack.name}</p>
-                                                                <p className="text-xs font-mono text-gray-400">{rack.occupied} / {rack.capacity} joints</p>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-        </Card>
-    );
-};
-
-const PendingRequestCard: React.FC<{
-    request: StorageRequest;
-    companyName: string;
-    yards: Yard[];
-    onApprove: (requestId: string, assignedRackIds: string[], requiredJoints: number) => void;
-    onReject: (requestId: string, reason: string) => void;
-}> = ({ request, companyName, yards, onApprove, onReject }) => {
-    const [selectedRackIds, setSelectedRackIds] = useState<string[]>([]);
-    const requiredJoints = useMemo(() => getRequiredJoints(request), [request]);
-
-    const allRacks = useMemo(() => yards.flatMap(y => y.areas.flatMap(a => a.racks.map(r => ({
-        ...r,
-        yardName: y.name,
-        areaName: a.name,
-        available: r.capacity - r.occupied,
-    })))), [yards]);
-
-    const suggestedRacks = useMemo(() => {
-        if (requiredJoints === 0) return [];
-        
-        const availableRacks = allRacks
-            .filter(r => r.available > 0)
-            // Prioritize Yard A (Open Storage)
-            .sort((a, b) => {
-                if (a.id.startsWith('A-') && !b.id.startsWith('A-')) return -1;
-                if (!a.id.startsWith('A-') && b.id.startsWith('A-')) return 1;
-                return b.available - a.available; // Then by most available space
-            });
-
-        let jointsNeeded = requiredJoints;
-        const suggestions = [];
-        for (const rack of availableRacks) {
-            if (jointsNeeded <= 0) break;
-            suggestions.push(rack.id);
-            jointsNeeded -= rack.available;
-        }
-        return suggestions;
-    }, [requiredJoints, allRacks]);
-
-    React.useEffect(() => {
-        setSelectedRackIds(suggestedRacks);
-    }, [suggestedRacks]);
-
-    const handleToggleRack = (rackId: string) => {
-        setSelectedRackIds(prev => 
-            prev.includes(rackId) ? prev.filter(id => id !== rackId) : [...prev, rackId]
-        );
-    };
-
-    const handleReject = () => {
-        const reason = window.prompt("Please provide a reason for rejecting this request:");
-        if (reason && reason.trim() !== '') {
-            onReject(request.id, reason);
-        } else if (reason !== null) { // prompt was not cancelled
-            alert("A reason is required to reject a request.");
-        }
-    };
-
-    const totalSelectedCapacity = selectedRackIds.reduce((acc, rackId) => {
-        const rack = allRacks.find(r => r.id === rackId);
-        return acc + (rack?.available || 0);
-    }, 0);
-    
-    const canFulfill = totalSelectedCapacity >= requiredJoints;
-    const details = request.requestDetails;
-    if (!details) return null;
-
-    return (
-        <Card className="flex flex-col md:flex-row gap-6">
-            <div className="flex-grow space-y-4">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <h3 className="text-lg font-bold text-white">{details.companyName} - {request.referenceId}</h3>
-                        <p className="text-sm text-gray-400">Contact: {details.fullName} ({request.userId})</p>
-                    </div>
-                    <div className="text-right">
-                        <p className="font-mono text-xl text-red-500">{requiredJoints} joints</p>
-                        <p className="text-xs text-gray-400">Required</p>
-                    </div>
-                </div>
-                <div className="bg-gray-700/50 p-3 rounded-md border border-gray-600 text-sm">
-                    <p className="font-semibold mb-2">AI Summary:</p>
-                    <p className="text-gray-300 whitespace-pre-wrap">{request.approvalSummary}</p>
-                </div>
-                <div>
-                     <p className="text-sm font-medium text-gray-300 mb-2">Assign Storage (Suggested in <span className="text-red-400">Red</span>):</p>
-                     <div className="max-h-40 overflow-y-auto bg-gray-900 p-2 rounded-md border border-gray-700 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                         {allRacks.filter(r => r.available > 0.1 || selectedRackIds.includes(r.id)).map(rack => (
-                             <label key={rack.id} className={`flex items-center gap-2 p-2 rounded-md text-xs cursor-pointer ${selectedRackIds.includes(rack.id) ? 'bg-indigo-600' : 'bg-gray-800'}`}>
-                                 <input type="checkbox" checked={selectedRackIds.includes(rack.id)} onChange={() => handleToggleRack(rack.id)} className="form-checkbox bg-gray-700 border-gray-500 text-indigo-500 focus:ring-indigo-500" />
-                                 <div>
-                                     <span className={`font-bold ${suggestedRacks.includes(rack.id) ? 'text-red-400' : 'text-white'}`}>{rack.id}</span>
-                                     <span className="block text-gray-400">{(rack.available)} free</span>
-                                 </div>
-                             </label>
-                         ))}
-                     </div>
-                     <div className={`text-xs mt-2 text-right ${canFulfill ? 'text-green-400' : 'text-yellow-400'}`}>
-                        Selected Capacity: {totalSelectedCapacity} joints / {requiredJoints} joints
-                    </div>
-                </div>
-            </div>
-            <div className="flex-shrink-0 flex flex-row md:flex-col justify-end md:justify-start gap-2">
-                <Button variant="danger" onClick={handleReject} className="w-full md:w-auto">Reject</Button>
-                <Button onClick={() => onApprove(request.id, selectedRackIds, requiredJoints)} disabled={!canFulfill} className="w-full md:w-auto">Approve</Button>
-            </div>
-        </Card>
-    );
-};
-
-
-// --- MAIN COMPONENT ---
 interface AdminDashboardProps {
   session: AdminSession;
   onLogout: () => void;
@@ -234,9 +20,11 @@ interface AdminDashboardProps {
   truckLoads: TruckLoad[];
   approveRequest: (requestId: string, assignedRackIds: string[], requiredJoints: number) => void;
   rejectRequest: (requestId: string, reason: string) => void;
-  addTruckLoad: (truckLoad: Omit<TruckLoad, 'id'>, pipes?: Omit<Pipe, 'id'>[]) => void;
+  addTruckLoad: (truckLoad: Omit<TruckLoad, 'id'>) => void;
   pickUpPipes: (pipeIds: string[], uwi: string, wellName: string, truckLoadId?: string) => void;
 }
+
+type TabType = 'overview' | 'approvals' | 'requests' | 'companies' | 'inventory' | 'storage' | 'ai';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({
   session,
@@ -251,193 +39,603 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   addTruckLoad,
   pickUpPipes,
 }) => {
-    const [activeTab, setActiveTab] = useState<'pending' | 'all' | 'yards' | 'trucks'>('pending');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'ALL' | RequestStatus>('ALL');
-    const [showTruckReceiving, setShowTruckReceiving] = useState(false);
-    
-    const pendingRequests = requests.filter(r => r.status === 'PENDING');
-    
-    const sortedRequests = useMemo(() => 
-        [...requests].sort((a, b) => new Date(b.requestDetails?.storageStartDate || 0).getTime() - new Date(a.requestDetails?.storageStartDate || 0).getTime()), 
-    [requests]);
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [requestFilter, setRequestFilter] = useState<'ALL' | RequestStatus>('ALL');
 
-    const filteredRequests = useMemo(() => {
-        return sortedRequests.filter(req => {
-            const searchLower = searchTerm.toLowerCase();
-            const matchesSearch = searchLower === '' ||
-                (req.referenceId || '').toLowerCase().includes(searchLower) ||
-                (req.requestDetails?.companyName || '').toLowerCase().includes(searchLower) ||
-                (req.requestDetails?.fullName || '').toLowerCase().includes(searchLower) ||
-                (req.userId || '').toLowerCase().includes(searchLower);
+  // ===== ANALYTICS =====
+  const analytics = useMemo(() => {
+    const pending = requests.filter(r => r.status === 'PENDING').length;
+    const approved = requests.filter(r => r.status === 'APPROVED').length;
+    const completed = requests.filter(r => r.status === 'COMPLETED').length;
+    const rejected = requests.filter(r => r.status === 'REJECTED').length;
 
-            const matchesStatus = statusFilter === 'ALL' || req.status === statusFilter;
+    const totalCapacity = yards.reduce((sum, yard) =>
+      sum + yard.areas.reduce((asum, area) =>
+        asum + area.racks.reduce((rsum, rack) => rsum + rack.capacityMeters, 0), 0), 0);
+    const totalOccupied = yards.reduce((sum, yard) =>
+      sum + yard.areas.reduce((asum, area) =>
+        asum + area.racks.reduce((rsum, rack) => rsum + (rack.occupiedMeters || 0), 0), 0), 0);
+    const utilization = totalCapacity > 0 ? (totalOccupied / totalCapacity * 100) : 0;
 
-            return matchesSearch && matchesStatus;
-        });
-    }, [sortedRequests, searchTerm, statusFilter]);
-
-    const renderContent = () => {
-        switch (activeTab) {
-            case 'pending':
-                return (
-                    <div className="space-y-6">
-                        {pendingRequests.length > 0 ? (
-                            pendingRequests.map(req => (
-                                <PendingRequestCard 
-                                    key={req.id}
-                                    request={req}
-                                    companyName={getCompanyName(req.companyId, companies)}
-                                    yards={yards}
-                                    onApprove={approveRequest}
-                                    onReject={rejectRequest}
-                                />
-                            ))
-                        ) : (
-                            <Card className="text-center py-12">
-                                <h3 className="text-lg font-medium">No Pending Requests</h3>
-                                <p className="text-gray-400 mt-1">All incoming storage requests have been handled.</p>
-                            </Card>
-                        )}
-                    </div>
-                );
-            case 'all':
-                return (
-                     <Card className="overflow-hidden">
-                        <div className="flex flex-col sm:flex-row gap-4 mb-4">
-                            <input 
-                                type="text" 
-                                placeholder="Search by company, ref ID, contact..." 
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                className="w-full sm:w-2/3 bg-gray-800 text-white placeholder-gray-400 border border-gray-600 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-red-500"
-                            />
-                            <select
-                                value={statusFilter}
-                                onChange={e => setStatusFilter(e.target.value as any)}
-                                className="w-full sm:w-1/3 bg-gray-800 text-white border border-gray-600 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-red-500"
-                            >
-                                <option value="ALL">All Statuses</option>
-                                <option value="PENDING">Pending</option>
-                                <option value="APPROVED">Approved</option>
-                                <option value="COMPLETED">Completed</option>
-                                <option value="REJECTED">Rejected</option>
-                                <option value="DRAFT">Draft</option>
-                            </select>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-700">
-                                <thead className="bg-gray-800">
-                                    <tr>
-                                        <th className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-300 sm:pl-6">Status</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-300">Customer / Project</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-300">Item Details</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-300">Quantity</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-300">Storage Dates</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-300">Trucking</th>
-                                        <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-300">Location / Note</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-800 bg-gray-900">
-                                    {filteredRequests.map(req => {
-                                        const details = req.requestDetails;
-                                        const statusColors = {
-                                            PENDING: 'bg-yellow-500/20 text-yellow-400',
-                                            APPROVED: 'bg-green-500/20 text-green-400',
-                                            COMPLETED: 'bg-blue-500/20 text-blue-400',
-                                            REJECTED: 'bg-red-500/20 text-red-400',
-                                            DRAFT: 'bg-gray-500/20 text-gray-400'
-                                        };
-                                        return (
-                                            <tr key={req.id} className="hover:bg-gray-800/50">
-                                                <td className="py-4 pl-4 pr-3 text-sm font-medium sm:pl-6">
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[req.status]}`}>
-                                                        {req.status}
-                                                    </span>
-                                                </td>
-                                                 <td className="px-3 py-4 text-sm text-gray-300 whitespace-nowrap">
-                                                    <div className="font-semibold text-white">{details?.companyName || getCompanyName(req.companyId, companies)}</div>
-                                                    <div className="text-gray-400">{req.referenceId}</div>
-                                                    <div className="text-gray-500 text-xs mt-1">{details?.fullName} ({req.userId})</div>
-                                                </td>
-                                                <td className="px-3 py-4 text-sm text-gray-300 whitespace-nowrap">
-                                                    <div className="font-semibold text-white">{details?.itemType === 'Other' ? details.itemTypeOther : details?.itemType}</div>
-                                                    {details?.casingSpec && (
-                                                        <div className="text-gray-400 text-xs mt-1 font-mono">
-                                                            OD: {details.casingSpec.size_in}" | Wt: {details.casingSpec.weight_lbs_ft}#
-                                                        </div>
-                                                    )}
-                                                    <div className="text-gray-400 text-xs mt-1">
-                                                        Grade: {details?.grade === 'Other' ? details.gradeOther : details?.grade} | Conn: {details?.connection === 'Other' ? details.connectionOther : details?.connection}
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 py-4 text-sm text-center text-white font-mono">{getRequiredJoints(req) || 'N/A'}</td>
-                                                <td className="px-3 py-4 text-sm text-gray-300 whitespace-nowrap">{details?.storageStartDate} to {details?.storageEndDate}</td>
-                                                <td className="px-3 py-4 text-sm text-gray-300 capitalize">{req.truckingInfo?.truckingType}</td>
-                                                <td className="px-3 py-4 text-sm text-gray-300 max-w-xs truncate">{req.assignedLocation || req.rejectionReason || '-'}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                     </Card>
-                );
-            case 'yards':
-                return <YardStatusView yards={yards} />;
-            case 'trucks':
-                return <TruckLoadHistory truckLoads={truckLoads} />;
-        }
+    return {
+      requests: { total: requests.length, pending, approved, completed, rejected },
+      storage: { totalCapacity, totalOccupied, available: totalCapacity - totalOccupied, utilization },
+      companies: companies.length,
+      inventory: { total: inventory.length, inStorage: inventory.filter(p => p.status === 'IN_STORAGE').length },
     };
+  }, [requests, yards, companies, inventory]);
 
-    const handleTruckLoadSubmit = (truckLoad: Omit<TruckLoad, 'id'>, pipes?: Omit<Pipe, 'id'>[]) => {
-        const newTruckLoad = addTruckLoad(truckLoad, pipes);
+  // ===== GLOBAL SEARCH =====
+  const searchResults = useMemo(() => {
+    if (!globalSearch.trim()) return null;
 
-        // If it's a pickup, update the pipe status
-        if (truckLoad.type === 'PICKUP' && truckLoad.assignedUWI && truckLoad.assignedWellName) {
-            pickUpPipes(truckLoad.relatedPipeIds, truckLoad.assignedUWI, truckLoad.assignedWellName, newTruckLoad.id);
-        }
-    };
-    
-    return (
-        <div className="flex flex-col min-h-screen">
-            <AdminHeader session={session} onLogout={onLogout} />
-            <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
-                    <div className="flex items-center gap-2 p-1 bg-gray-800 rounded-lg">
-                        <TabButton active={activeTab === 'pending'} onClick={() => setActiveTab('pending')}>Pending ({pendingRequests.length})</TabButton>
-                        <TabButton active={activeTab === 'all'} onClick={() => setActiveTab('all')}>All Requests</TabButton>
-                        <TabButton active={activeTab === 'trucks'} onClick={() => setActiveTab('trucks')}>Truck Loads</TabButton>
-                        <TabButton active={activeTab === 'yards'} onClick={() => setActiveTab('yards')}>Yard Status</TabButton>
-                    </div>
-                </div>
-                {renderContent()}
-
-                {/* Floating Action Button for Truck Receiving */}
-                <button
-                    onClick={() => setShowTruckReceiving(true)}
-                    className="fixed bottom-8 right-8 bg-red-600 hover:bg-red-700 text-white rounded-full w-16 h-16 flex items-center justify-center shadow-lg transition-all hover:scale-110 z-40"
-                    title="Log Truck Load"
-                >
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                </button>
-
-                {/* Truck Receiving Modal */}
-                {showTruckReceiving && (
-                    <TruckReceiving
-                        requests={requests}
-                        inventory={inventory}
-                        yards={yards}
-                        onSubmit={handleTruckLoadSubmit}
-                        onClose={() => setShowTruckReceiving(false)}
-                    />
-                )}
-            </main>
-        </div>
+    const term = globalSearch.toLowerCase();
+    const matchedRequests = requests.filter(r =>
+      r.referenceId.toLowerCase().includes(term) ||
+      r.userId.toLowerCase().includes(term) ||
+      r.requestDetails?.companyName.toLowerCase().includes(term)
     );
+    const matchedCompanies = companies.filter(c =>
+      c.name.toLowerCase().includes(term) ||
+      c.domain.toLowerCase().includes(term)
+    );
+    const matchedInventory = inventory.filter(p =>
+      p.referenceId?.toLowerCase().includes(term) ||
+      p.assignedWellName?.toLowerCase().includes(term)
+    );
+
+    return { requests: matchedRequests, companies: matchedCompanies, inventory: matchedInventory };
+  }, [globalSearch, requests, companies, inventory]);
+
+  // ===== TAB NAVIGATION =====
+  const tabs: Array<{ id: TabType; label: string; badge?: number }> = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'approvals', label: 'Approvals', badge: analytics.requests.pending },
+    { id: 'requests', label: 'All Requests', badge: requests.length },
+    { id: 'companies', label: 'Companies', badge: companies.length },
+    { id: 'inventory', label: 'Inventory', badge: inventory.length },
+    { id: 'storage', label: 'Storage', badge: yards.length },
+    { id: 'ai', label: 'AI Assistant' },
+  ];
+
+  // ===== RENDER FUNCTIONS =====
+  const renderOverview = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-white">Dashboard Overview</h2>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="p-6">
+          <h3 className="text-sm text-gray-400 mb-2">Pending Approvals</h3>
+          <div className="flex items-end justify-between">
+            <p className="text-4xl font-bold text-yellow-500">{analytics.requests.pending}</p>
+            <Button
+              onClick={() => setActiveTab('approvals')}
+              className="text-sm px-3 py-1 bg-yellow-600 hover:bg-yellow-700"
+            >
+              Review
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="text-sm text-gray-400 mb-2">Storage Utilization</h3>
+          <p className="text-4xl font-bold text-blue-500">{analytics.storage.utilization.toFixed(1)}%</p>
+          <div className="w-full bg-gray-700 rounded-full h-2 mt-3">
+            <div
+              className="bg-blue-500 h-2 rounded-full"
+              style={{ width: `${analytics.storage.utilization}%` }}
+            ></div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="text-sm text-gray-400 mb-2">Total Requests</h3>
+          <p className="text-4xl font-bold text-white">{analytics.requests.total}</p>
+          <p className="text-xs text-gray-500 mt-2">
+            {analytics.requests.approved} approved, {analytics.requests.completed} completed
+          </p>
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="text-sm text-gray-400 mb-2">Available Space</h3>
+          <p className="text-4xl font-bold text-green-500">
+            {analytics.storage.available.toFixed(0)}m
+          </p>
+          <p className="text-xs text-gray-500 mt-2">
+            {analytics.storage.totalCapacity.toFixed(0)}m total capacity
+          </p>
+        </Card>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Request Status Breakdown</h3>
+          <div className="space-y-3">
+            {[
+              { label: 'Pending', count: analytics.requests.pending, color: 'yellow' },
+              { label: 'Approved', count: analytics.requests.approved, color: 'green' },
+              { label: 'Completed', count: analytics.requests.completed, color: 'blue' },
+              { label: 'Rejected', count: analytics.requests.rejected, color: 'red' },
+            ].map(({ label, count, color }) => (
+              <div key={label} className="flex items-center justify-between">
+                <span className="text-gray-300">{label}</span>
+                <span className={`text-${color}-500 font-semibold`}>{count}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Storage by Yard</h3>
+          <div className="space-y-3">
+            {yards.map(yard => {
+              const capacity = yard.areas.reduce((sum, a) =>
+                sum + a.racks.reduce((s, r) => s + r.capacityMeters, 0), 0);
+              const occupied = yard.areas.reduce((sum, a) =>
+                sum + a.racks.reduce((s, r) => s + (r.occupiedMeters || 0), 0), 0);
+              const util = capacity > 0 ? (occupied / capacity * 100) : 0;
+
+              return (
+                <div key={yard.id}>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-gray-300 text-sm">{yard.name}</span>
+                    <span className="text-xs text-gray-500">{util.toFixed(0)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div className="bg-red-500 h-2 rounded-full" style={{ width: `${util}%` }}></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+
+      {/* Recent Activity */}
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">Recent Requests</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-gray-700">
+              <tr>
+                <th className="text-left py-2 text-gray-400">Reference ID</th>
+                <th className="text-left py-2 text-gray-400">Company</th>
+                <th className="text-left py-2 text-gray-400">Status</th>
+                <th className="text-left py-2 text-gray-400">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {requests.slice(0, 5).map(req => (
+                <tr key={req.id} className="border-b border-gray-800">
+                  <td className="py-3 text-gray-300">{req.referenceId}</td>
+                  <td className="py-3 text-gray-300">
+                    {companies.find(c => c.id === req.companyId)?.name || 'Unknown'}
+                  </td>
+                  <td className="py-3">
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      req.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400' :
+                      req.status === 'APPROVED' ? 'bg-green-500/20 text-green-400' :
+                      req.status === 'COMPLETED' ? 'bg-blue-500/20 text-blue-400' :
+                      'bg-red-500/20 text-red-400'
+                    }`}>
+                      {req.status}
+                    </span>
+                  </td>
+                  <td className="py-3 text-gray-500 text-xs">
+                    {req.requestDetails?.storageStartDate || 'N/A'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+
+  const renderApprovals = () => {
+    const pendingRequests = requests.filter(r => r.status === 'PENDING');
+
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-white">Pending Approvals</h2>
+          <span className="text-gray-400">{pendingRequests.length} pending</span>
+        </div>
+
+        {pendingRequests.length === 0 ? (
+          <Card className="p-12 text-center">
+            <h3 className="text-lg font-medium text-gray-400">No Pending Approvals</h3>
+            <p className="text-sm text-gray-500 mt-2">All requests have been processed!</p>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {pendingRequests.map(request => (
+              <ApprovalCard
+                key={request.id}
+                request={request}
+                company={companies.find(c => c.id === request.companyId)}
+                yards={yards}
+                onApprove={approveRequest}
+                onReject={rejectRequest}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderRequests = () => {
+    const filteredRequests = requests.filter(r =>
+      requestFilter === 'ALL' || r.status === requestFilter
+    );
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row gap-4 justify-between">
+          <h2 className="text-2xl font-bold text-white">All Requests</h2>
+          <select
+            value={requestFilter}
+            onChange={e => setRequestFilter(e.target.value as any)}
+            className="bg-gray-800 text-white border border-gray-600 rounded-md px-4 py-2 focus:ring-2 focus:ring-red-500"
+          >
+            <option value="ALL">All Statuses ({requests.length})</option>
+            <option value="PENDING">Pending ({analytics.requests.pending})</option>
+            <option value="APPROVED">Approved ({analytics.requests.approved})</option>
+            <option value="COMPLETED">Completed ({analytics.requests.completed})</option>
+            <option value="REJECTED">Rejected ({analytics.requests.rejected})</option>
+          </select>
+        </div>
+
+        <Card className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-gray-700">
+              <tr>
+                <th className="text-left py-3 px-4 text-gray-400">Reference ID</th>
+                <th className="text-left py-3 px-4 text-gray-400">Company</th>
+                <th className="text-left py-3 px-4 text-gray-400">Contact</th>
+                <th className="text-left py-3 px-4 text-gray-400">Item Type</th>
+                <th className="text-left py-3 px-4 text-gray-400">Quantity</th>
+                <th className="text-left py-3 px-4 text-gray-400">Status</th>
+                <th className="text-left py-3 px-4 text-gray-400">Location</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRequests.map(req => (
+                <tr key={req.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                  <td className="py-3 px-4 font-medium text-white">{req.referenceId}</td>
+                  <td className="py-3 px-4 text-gray-300">
+                    {companies.find(c => c.id === req.companyId)?.name || 'Unknown'}
+                  </td>
+                  <td className="py-3 px-4 text-gray-400 text-xs">{req.userId}</td>
+                  <td className="py-3 px-4 text-gray-300">{req.requestDetails?.itemType || 'N/A'}</td>
+                  <td className="py-3 px-4 text-gray-300">{req.requestDetails?.totalJoints || 0} joints</td>
+                  <td className="py-3 px-4">
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      req.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400' :
+                      req.status === 'APPROVED' ? 'bg-green-500/20 text-green-400' :
+                      req.status === 'COMPLETED' ? 'bg-blue-500/20 text-blue-400' :
+                      'bg-red-500/20 text-red-400'
+                    }`}>
+                      {req.status}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-gray-400 text-xs">{req.assignedLocation || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+    );
+  };
+
+  const renderCompanies = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-white">Companies</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {companies.map(company => {
+          const companyRequests = requests.filter(r => r.companyId === company.id);
+          const companyInventory = inventory.filter(i => i.companyId === company.id);
+
+          return (
+            <Card key={company.id} className="p-6">
+              <h3 className="text-lg font-semibold text-white mb-2">{company.name}</h3>
+              <p className="text-sm text-gray-400 mb-4">{company.domain}</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Requests:</span>
+                  <span className="text-white font-medium">{companyRequests.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Inventory:</span>
+                  <span className="text-white font-medium">{companyInventory.length} pipes</span>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderInventory = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-white">Inventory</h2>
+      <Card className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-gray-700">
+            <tr>
+              <th className="text-left py-3 px-4 text-gray-400">Pipe ID</th>
+              <th className="text-left py-3 px-4 text-gray-400">Company</th>
+              <th className="text-left py-3 px-4 text-gray-400">Reference ID</th>
+              <th className="text-left py-3 px-4 text-gray-400">Rack</th>
+              <th className="text-left py-3 px-4 text-gray-400">Status</th>
+              <th className="text-left py-3 px-4 text-gray-400">Well Name</th>
+            </tr>
+          </thead>
+          <tbody>
+            {inventory.slice(0, 50).map(pipe => (
+              <tr key={pipe.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                <td className="py-3 px-4 font-mono text-xs text-gray-400">{pipe.id}</td>
+                <td className="py-3 px-4 text-gray-300">
+                  {companies.find(c => c.id === pipe.companyId)?.name || 'Unknown'}
+                </td>
+                <td className="py-3 px-4 text-white font-medium">{pipe.referenceId}</td>
+                <td className="py-3 px-4 text-gray-400">{pipe.rackId || '-'}</td>
+                <td className="py-3 px-4">
+                  <span className={`px-2 py-1 rounded text-xs ${
+                    pipe.status === 'IN_STORAGE' ? 'bg-green-500/20 text-green-400' :
+                    'bg-blue-500/20 text-blue-400'
+                  }`}>
+                    {pipe.status}
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-gray-400">{pipe.assignedWellName || '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+
+  const renderStorage = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-white">Storage Overview</h2>
+      {yards.map(yard => {
+        const yardCapacity = yard.areas.reduce((sum, a) =>
+          sum + a.racks.reduce((s, r) => s + r.capacityMeters, 0), 0);
+        const yardOccupied = yard.areas.reduce((sum, a) =>
+          sum + a.racks.reduce((s, r) => s + (r.occupiedMeters || 0), 0), 0);
+        const yardUtil = yardCapacity > 0 ? (yardOccupied / yardCapacity * 100) : 0;
+
+        return (
+          <Card key={yard.id} className="p-6">
+            <h3 className="text-xl font-bold text-white mb-4">{yard.name}</h3>
+            <div className="mb-4">
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-gray-400">Utilization: {yardUtil.toFixed(1)}%</span>
+                <span className="text-gray-400">
+                  {yardOccupied.toFixed(0)} / {yardCapacity.toFixed(0)} meters
+                </span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-3">
+                <div className="bg-red-500 h-3 rounded-full" style={{ width: `${yardUtil}%` }}></div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {yard.areas.map(area => {
+                const areaCapacity = area.racks.reduce((s, r) => s + r.capacityMeters, 0);
+                const areaOccupied = area.racks.reduce((s, r) => s + (r.occupiedMeters || 0), 0);
+                const areaUtil = areaCapacity > 0 ? (areaOccupied / areaCapacity * 100) : 0;
+
+                return (
+                  <div key={area.id} className="pl-4">
+                    <h4 className="text-sm font-semibold text-gray-300 mb-2">{area.name} Area</h4>
+                    <div className="flex justify-between text-xs mb-2">
+                      <span className="text-gray-500">{areaUtil.toFixed(1)}% full</span>
+                      <span className="text-gray-500">{area.racks.length} racks</span>
+                    </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
+                      {area.racks.map(rack => {
+                        const rackUtil = rack.capacity > 0 ? (rack.occupied / rack.capacity * 100) : 0;
+                        return (
+                          <div
+                            key={rack.id}
+                            className="bg-gray-800 p-2 rounded text-center border-2"
+                            style={{
+                              borderColor: rackUtil > 90 ? '#ef4444' : rackUtil > 50 ? '#eab308' : '#22c55e'
+                            }}
+                          >
+                            <p className="text-xs font-semibold text-white">{rack.name}</p>
+                            <p className="text-xs text-gray-400">{rack.occupied}/{rack.capacity}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+
+  const renderAI = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-white">AI Assistant</h2>
+      <AdminAIAssistant requests={requests} companies={companies} yards={yards} inventory={inventory} />
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-900">
+      <AdminHeader session={session} onLogout={onLogout} />
+
+      <div className="container mx-auto p-6 space-y-6">
+        {/* Global Search */}
+        <Card className="p-4">
+          <input
+            type="text"
+            value={globalSearch}
+            onChange={e => setGlobalSearch(e.target.value)}
+            placeholder="🔍 Global search: requests, companies, inventory..."
+            className="w-full bg-gray-800 text-white placeholder-gray-500 border border-gray-700 rounded-md py-3 px-4 focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+          {searchResults && (
+            <div className="mt-4 space-y-2 text-sm">
+              <p className="text-gray-400">
+                Found: {searchResults.requests.length} requests, {searchResults.companies.length} companies,{' '}
+                {searchResults.inventory.length} inventory items
+              </p>
+            </div>
+          )}
+        </Card>
+
+        {/* Tab Navigation */}
+        <div className="flex flex-wrap gap-2">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-red-600 text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
+            >
+              {tab.label}
+              {tab.badge !== undefined && (
+                <span className="ml-2 px-2 py-0.5 bg-gray-900 rounded-full text-xs">{tab.badge}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'overview' && renderOverview()}
+        {activeTab === 'approvals' && renderApprovals()}
+        {activeTab === 'requests' && renderRequests()}
+        {activeTab === 'companies' && renderCompanies()}
+        {activeTab === 'inventory' && renderInventory()}
+        {activeTab === 'storage' && renderStorage()}
+        {activeTab === 'ai' && renderAI()}
+      </div>
+    </div>
+  );
+};
+
+// Approval Card Component
+const ApprovalCard: React.FC<{
+  request: StorageRequest;
+  company?: Company;
+  yards: Yard[];
+  onApprove: (requestId: string, rackIds: string[], requiredJoints: number) => void;
+  onReject: (requestId: string, reason: string) => void;
+}> = ({ request, company, yards, onApprove, onReject }) => {
+  const [selectedRacks, setSelectedRacks] = useState<string[]>([]);
+  const requiredJoints = request.requestDetails?.totalJoints || 0;
+
+  const handleApprove = () => {
+    if (selectedRacks.length === 0) {
+      alert('Please select at least one rack');
+      return;
+    }
+    onApprove(request.id, selectedRacks, requiredJoints);
+  };
+
+  const handleReject = () => {
+    const reason = prompt('Rejection reason:');
+    if (reason) {
+      onReject(request.id, reason);
+    }
+  };
+
+  const availableRacks = yards.flatMap(y =>
+    y.areas.flatMap(a =>
+      a.racks
+        .filter(r => r.capacity - r.occupied > 0)
+        .map(r => ({ ...r, yard: y.name, area: a.name }))
+    )
+  );
+
+  return (
+    <Card className="p-6">
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h3 className="text-xl font-bold text-white">{request.referenceId}</h3>
+          <p className="text-sm text-gray-400">{company?.name || 'Unknown Company'}</p>
+        </div>
+        <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded text-sm">PENDING</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+        <div>
+          <span className="text-gray-400">Contact:</span> <span className="text-white">{request.userId}</span>
+        </div>
+        <div>
+          <span className="text-gray-400">Item Type:</span>{' '}
+          <span className="text-white">{request.requestDetails?.itemType}</span>
+        </div>
+        <div>
+          <span className="text-gray-400">Quantity:</span>{' '}
+          <span className="text-white">{requiredJoints} joints</span>
+        </div>
+        <div>
+          <span className="text-gray-400">Duration:</span>{' '}
+          <span className="text-white">
+            {request.requestDetails?.storageStartDate} to {request.requestDetails?.storageEndDate}
+          </span>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <h4 className="text-sm font-semibold text-white mb-2">Select Storage Racks:</h4>
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 max-h-48 overflow-y-auto">
+          {availableRacks.map(rack => (
+            <button
+              key={rack.id}
+              onClick={() =>
+                setSelectedRacks(prev =>
+                  prev.includes(rack.id) ? prev.filter(id => id !== rack.id) : [...prev, rack.id]
+                )
+              }
+              className={`p-2 rounded text-xs text-center ${
+                selectedRacks.includes(rack.id)
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
+            >
+              <div className="font-semibold">{rack.name}</div>
+              <div className="text-xs opacity-75">
+                {rack.yard} - {rack.area}
+              </div>
+              <div className="text-xs">
+                {rack.capacity - rack.occupied} free
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <Button onClick={handleApprove} className="flex-1 bg-green-600 hover:bg-green-700">
+          Approve
+        </Button>
+        <Button onClick={handleReject} className="flex-1 bg-red-600 hover:bg-red-700">
+          Reject
+        </Button>
+      </div>
+    </Card>
+  );
 };
 
 export default AdminDashboard;
