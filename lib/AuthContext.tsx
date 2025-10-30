@@ -66,14 +66,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     try {
-      // Method 1: Check user metadata
+      // Method 1: Hardcoded admin email (for testing/initial setup)
+      // TODO: Remove this after setting up proper admin in Supabase
+      const adminEmails = ['admin@mpsgroup.com', 'kyle@bushels.com', 'admin@bushels.com'];
+      if (user.email && adminEmails.includes(user.email.toLowerCase())) {
+        setIsAdmin(true);
+        return;
+      }
+
+      // Method 2: Check user metadata
       const userMetadata = user.app_metadata;
       if (userMetadata?.role === 'admin') {
         setIsAdmin(true);
         return;
       }
 
-      // Method 2: Check admin_users table
+      // Method 3: Check admin_users table
       const { data, error } = await supabase
         .from('admin_users')
         .select('user_id')
