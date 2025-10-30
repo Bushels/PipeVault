@@ -68,7 +68,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // Method 1: Hardcoded admin email (for testing/initial setup)
       // TODO: Remove this after setting up proper admin in Supabase
-      const adminEmails = ['admin@mpsgroup.com', 'kyle@bushels.com', 'admin@bushels.com'];
+      const adminEmails = [
+        'admin@mpsgroup.com',
+        'kyle@bushels.com',
+        'admin@bushels.com',
+        'kylegronning@mpsgroup.ca'
+      ];
       if (user.email && adminEmails.includes(user.email.toLowerCase())) {
         setIsAdmin(true);
         return;
