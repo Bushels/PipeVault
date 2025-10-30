@@ -1,6 +1,7 @@
 /**
  * Form Helper Chatbot
  * Provides AI assistance for filling out the storage request form
+ * Powered by Gemini 2.0 Flash (FREE tier for basic usage!)
  */
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -9,79 +10,17 @@ import Button from './ui/Button';
 import Card from './ui/Card';
 import { SendIcon, BotIcon, UserIcon } from './icons/Icons';
 import Spinner from './ui/Spinner';
-import Anthropic from '@anthropic-ai/sdk';
+import { callGeminiFormHelper } from '../services/geminiService';
 
 interface FormHelperChatbotProps {
   companyName: string;
 }
 
-const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
-
-const FORM_HELPER_SYSTEM_PROMPT = `You are a helpful assistant for MPS Group's PipeVault storage facility. You're helping customers fill out the FREE pipe storage request form as part of MPS's 20 Year Anniversary celebration.
-
-**YOUR ROLE**: Answer questions about the form fields and help customers understand what information is needed.
-
-**YOU CAN HELP WITH**:
-
-1. **What is a project reference?**
-   - It's a unique identifier for their project (AFE number, well name, project code, etc.)
-   - IMPORTANT: This acts as their passcode to check status and make inquiries later
-   - They should choose something memorable
-
-2. **Pipe Types**:
-   - Blank Pipe: Standard pipe without special features
-   - Sand Control: Pipe with screens for sand management
-   - Flow Control: Pipe with flow regulation features
-   - Tools: Downhole tools and equipment
-   - Other: Any other tubular goods
-
-3. **Connection Types**:
-   - NUE (Non-Upset End): Basic threaded connection
-   - EUE (External Upset End): Externally thickened connection
-   - BTC (Buttress Thread Casing): Standard API buttress threads
-   - Premium: High-end proprietary connections
-   - Semi-Premium: Mid-tier enhanced connections
-   - Other: Custom or specialty connections
-
-4. **Grade Information**:
-   - H40, J55, L80, N80, C90, T95, P110: API steel grades
-   - Higher numbers = higher strength
-   - L80/N80 are most common for oil & gas
-
-5. **Casing Specifications**:
-   - OD (Outer Diameter): Outside diameter in inches
-   - Weight: Weight per foot in lbs/ft
-   - ID (Inner Diameter): Calculated based on OD and weight
-   - Drift ID: Minimum guaranteed inner diameter
-
-6. **Screen Types** (for Sand Control):
-   - DWW: Direct Wire Wrap
-   - PPS: Premium Packing Screen
-   - SL: Slotted Liner
-   - Other: Specialty screens
-
-7. **Trucking Options**:
-   - Request a Quote: MPS will arrange and quote trucking
-   - Will Provide Trucking: Customer handles their own transportation
-
-8. **General Information**:
-   - This is FREE storage as part of 20 Year Anniversary promotion!
-   - Storage duration is flexible
-   - Requests go to admin for approval
-   - They'll receive email notification upon approval
-
-**CONVERSATION STYLE**:
-- Friendly and helpful
-- Keep answers concise and clear
-- If you don't know something specific, acknowledge it
-- Encourage them to contact support for complex technical questions
-- Remind them about the FREE storage promotion when appropriate`;
-
 const FormHelperChatbot: React.FC<FormHelperChatbotProps> = ({ companyName }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'model',
-      content: `Hi! I'm here to help you fill out the storage request form.
+      content: `Hi! I'm your Gemini-powered form assistant, here to help you complete the storage request.
 
 💡 **Celebrating 20 Years of MPS!** You're getting FREE pipe storage as part of our anniversary promotion.
 
@@ -104,37 +43,12 @@ Ask me anything about the form fields - what is a project reference, connection 
 
     const userMessage: ChatMessage = { role: 'user', content: input };
     setMessages((prev) => [...prev, userMessage]);
+    const currentInput = input;
     setInput('');
     setIsLoading(true);
 
     try {
-      if (!CLAUDE_API_KEY) {
-        throw new Error('Claude API key not configured');
-      }
-
-      const anthropic = new Anthropic({
-        apiKey: CLAUDE_API_KEY,
-        dangerouslyAllowBrowser: true,
-      });
-
-      const response = await anthropic.messages.create({
-        model: 'claude-3-5-haiku-20241022',
-        max_tokens: 500,
-        system: FORM_HELPER_SYSTEM_PROMPT,
-        messages: [
-          ...messages.map((msg) => ({
-            role: msg.role === 'model' ? ('assistant' as const) : msg.role,
-            content: msg.content,
-          })),
-          {
-            role: 'user',
-            content: input,
-          },
-        ],
-      });
-
-      const textContent = response.content.find((block) => block.type === 'text');
-      const aiResponse = textContent && 'text' in textContent ? textContent.text : "I couldn't process that.";
+      const aiResponse = await callGeminiFormHelper(messages, currentInput);
 
       const modelMessage: ChatMessage = {
         role: 'model',

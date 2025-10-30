@@ -1,12 +1,12 @@
 /**
  * Admin AI Assistant - Help admins find answers quickly
- * Powered by Claude 3.5 Haiku for fast, intelligent responses
+ * Powered by Gemini 2.0 Flash (FREE tier for basic usage!)
  */
 
 import React, { useState, useRef, useEffect } from 'react';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
-import { callClaudeAdminAssistant } from '../../services/claudeService';
+import { callGeminiAdminAssistant } from '../../services/geminiService';
 import type { StorageRequest, Company, Yard, Pipe } from '../../types';
 
 interface AdminAIAssistantProps {
@@ -24,7 +24,7 @@ interface Message {
 const AdminAIAssistant: React.FC<AdminAIAssistantProps> = ({ requests, companies, yards, inventory }) => {
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
-    content: 'Hi! I\'m your PipeVault admin assistant. I can help you with:\n\n• Storage capacity and availability\n• Request status and analytics\n• Company information\n• Inventory queries\n• Operational insights\n\nWhat would you like to know?'
+    content: 'Hi! I\'m your PipeVault admin assistant powered by Gemini 2.0 Flash. I can help you with:\n\n• Storage capacity and availability\n• Request status and analytics\n• Company information\n• Inventory queries\n• Operational insights\n\nWhat would you like to know?'
   }]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -103,7 +103,7 @@ const AdminAIAssistant: React.FC<AdminAIAssistantProps> = ({ requests, companies
 
     try {
       const context = buildContextSummary();
-      const response = await callClaudeAdminAssistant(messages, userMessage, context);
+      const response = await callGeminiAdminAssistant(messages, userMessage, context);
       setMessages(prev => [...prev, { role: 'assistant', content: response }]);
     } catch (error) {
       console.error('AI Assistant error:', error);

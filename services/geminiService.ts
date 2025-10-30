@@ -165,3 +165,128 @@ ${inventoryJson}
         return "Sorry, I'm having trouble connecting right now. Please try again later.";
     }
 };
+
+/**
+ * Admin AI Assistant - Help admins with operational queries
+ * Uses Gemini 2.0 Flash (FREE for basic usage!)
+ */
+export const callGeminiAdminAssistant = async (
+    chatHistory: Array<{ role: string; content: string }>,
+    userMessage: string,
+    context: any
+): Promise<string> => {
+    if (!GEMINI_API_KEY) {
+        return "I'm sorry, Gemini AI is not configured. Please check your API key.";
+    }
+
+    const systemInstruction = `You are an AI assistant for the PipeVault admin dashboard at MPS Group, a pipe storage facility celebrating 20 years of service.
+
+Your role is to help administrators quickly find information and insights about their operations.
+
+CURRENT SYSTEM STATE:
+${JSON.stringify(context, null, 2)}
+
+CAPABILITIES:
+- Answer questions about storage capacity and availability
+- Provide insights on pending/approved requests
+- Search through company and inventory data
+- Calculate utilization metrics
+- Suggest optimal storage allocation
+- Provide operational recommendations
+
+RESPONSE GUIDELINES:
+- Be concise and data-driven
+- Use specific numbers and metrics when available
+- Format responses clearly (use bullet points, line breaks)
+- Proactively suggest relevant follow-up information
+- If data is incomplete, acknowledge it
+
+EXAMPLE QUERIES YOU CAN HANDLE:
+- "What storage areas have space available?"
+- "How many pending requests do we have?"
+- "What is our current storage utilization?"
+- "Which yard has the most capacity?"
+- "Show me companies with the most inventory"
+
+Respond professionally and helpfully to the administrator's questions.`;
+
+    try {
+        const chat: Chat = ai.chats.create({
+            model: 'gemini-2.5-flash',
+            config: { systemInstruction },
+            history: chatHistory.slice(1).map(msg => ({ // Skip initial greeting
+                role: msg.role === 'user' ? 'user' : 'model',
+                parts: [{ text: msg.content }]
+            }))
+        });
+
+        const response = await chat.sendMessage({ message: userMessage });
+        return response.text;
+    } catch (error) {
+        console.error("Error getting Gemini admin response:", error);
+        return "Sorry, I'm having trouble connecting right now. Please try again later.";
+    }
+};
+
+/**
+ * Form Helper Chatbot - Help users with storage request form
+ * Uses Gemini 2.0 Flash (FREE for basic usage!)
+ */
+export const callGeminiFormHelper = async (
+    chatHistory: Array<{ role: string; content: string }>,
+    userMessage: string
+): Promise<string> => {
+    if (!GEMINI_API_KEY) {
+        return "I'm sorry, Gemini AI is not configured. Please check your API key.";
+    }
+
+    const systemInstruction = `You are a helpful assistant for MPS Group's PipeVault storage request form.
+
+**YOUR ROLE**: Help users complete the storage request form by answering questions about:
+- What information is needed
+- What each field means
+- Industry terminology
+- Storage options
+
+**YOU CAN HELP WITH**:
+1. What is a project reference? - Acts as passcode, unique identifier for their project (AFE number, project name, etc.)
+2. Pipe Types - Blank, Sand Control, Flow Control, Tools
+3. Connection Types - NUE, EUE, BTC, Premium, Semi-Premium, Other
+4. Thread Types - Common types explained
+5. Trucking options - Quote vs. Customer-provided
+6. Storage duration requirements
+
+**IMPORTANT GUIDELINES**:
+- Be concise and friendly
+- Use simple language
+- Provide examples when helpful
+- If unsure, suggest contacting MPS directly
+- Do not make up technical specifications
+- Keep responses under 3 sentences when possible
+
+**EXAMPLE INTERACTIONS**:
+User: "What is a project reference?"
+You: "A project reference is your unique identifier for this storage request - like an AFE number or project name. This will also act as your passcode to check status and make inquiries later, so make it memorable!"
+
+User: "What's the difference between NUE and EUE?"
+You: "NUE (Non-Upset End) has threads that are the same diameter as the pipe body. EUE (External Upset End) has a slightly larger diameter at the threaded end for added strength. EUE is more common for higher pressure applications."
+
+Respond helpfully to the user's question about the storage request form.`;
+
+    try {
+        const chat: Chat = ai.chats.create({
+            model: 'gemini-2.5-flash',
+            config: { systemInstruction },
+            history: chatHistory.slice(1).map(msg => ({ // Skip initial greeting
+                role: msg.role === 'user' ? 'user' : 'model',
+                parts: [{ text: msg.content }]
+            }))
+        });
+
+        const response = await chat.sendMessage({ message: userMessage });
+        return response.text;
+    } catch (error) {
+        console.error("Error getting Gemini form helper response:", error);
+        return "Sorry, I'm having trouble connecting right now. Please try again later.";
+    }
+};
