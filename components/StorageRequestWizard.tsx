@@ -69,7 +69,7 @@ const initialTruckingDetails: ProvidedTruckingDetails = {
 };
 
 const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, session, updateRequest, addRequest }) => {
-    const { signUpWithEmail, signInWithEmail } = useAuth();
+    const { signUpWithEmail, signInWithEmail, signOut } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [wizardStep, setWizardStep] = useState<'details' | 'trucking' | 'submitted'>('details');
     
@@ -392,6 +392,11 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
         );
     }
     
+    const handleLogout = async () => {
+        await signOut();
+        window.location.reload(); // Refresh to go back to auth screen
+    };
+
     const renderSubmitted = () => (
          <WizardCard title="Thank You For Your Request!">
             <div className="text-center space-y-4">
@@ -409,6 +414,16 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
                 </div>
 
                 <p className="text-red-500 font-semibold mt-4">MPS Celebrating 20 Years</p>
+
+                <div className="mt-6 pt-6 border-t border-gray-700">
+                    <p className="text-sm text-gray-400 mb-3">You are now signed in to PipeVault</p>
+                    <Button
+                        onClick={handleLogout}
+                        className="w-full py-3 bg-gray-700 hover:bg-gray-600"
+                    >
+                        Logout
+                    </Button>
+                </div>
             </div>
         </WizardCard>
     )

@@ -37,6 +37,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   const [referenceId, setReferenceId] = useState('');
   const [email, setEmail] = useState('');
   const [authError, setAuthError] = useState('');
+  const [authenticatedRequest, setAuthenticatedRequest] = useState<StorageRequest | null>(null);
 
   const handleAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,8 +64,8 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       return;
     }
 
-    // TODO: Set session and navigate to appropriate flow
-    alert(`Authentication successful! Feature coming soon for: ${selectedOption}`);
+    // Set the authenticated request for display
+    setAuthenticatedRequest(request);
   };
 
   const renderMenu = () => (
@@ -216,7 +217,102 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
     );
   };
 
+  const renderInquiryStatus = () => {
+    if (!authenticatedRequest) return null;
+
+    const statusColors = {
+      PENDING: 'bg-yellow-500/20 text-yellow-400 border-yellow-500',
+      APPROVED: 'bg-green-500/20 text-green-400 border-green-500',
+      REJECTED: 'bg-red-500/20 text-red-400 border-red-500',
+      COMPLETED: 'bg-blue-500/20 text-blue-400 border-blue-500',
+      DRAFT: 'bg-gray-500/20 text-gray-400 border-gray-500',
+    };
+
+    const statusMessages = {
+      PENDING: 'Your Pipe Request is Pending Approval',
+      APPROVED: 'Your Request Has Been Approved!',
+      REJECTED: 'Your Request Was Rejected',
+      COMPLETED: 'Your Request is Completed',
+      DRAFT: 'Your Request is in Draft Status',
+    };
+
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card className="p-8">
+          <Button
+            onClick={() => {
+              setSelectedOption('menu');
+              setEmail('');
+              setReferenceId('');
+              setAuthError('');
+              setAuthenticatedRequest(null);
+            }}
+            className="mb-4 bg-gray-700 hover:bg-gray-600"
+          >
+            ← Back to Menu
+          </Button>
+
+          <h2 className="text-2xl font-bold text-white text-center mb-6">Request Status</h2>
+
+          <div className={`p-6 rounded-lg border-2 mb-6 ${statusColors[authenticatedRequest.status]}`}>
+            <p className="text-2xl font-bold text-center">{statusMessages[authenticatedRequest.status]}</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-gray-400">Reference ID:</p>
+                <p className="text-white font-semibold">{authenticatedRequest.referenceId}</p>
+              </div>
+              <div>
+                <p className="text-gray-400">Status:</p>
+                <p className="text-white font-semibold">{authenticatedRequest.status}</p>
+              </div>
+              <div>
+                <p className="text-gray-400">Company:</p>
+                <p className="text-white font-semibold">
+                  {companies.find(c => c.id === authenticatedRequest.companyId)?.name || 'Unknown'}
+                </p>
+              </div>
+              <div>
+                <p className="text-gray-400">Contact:</p>
+                <p className="text-white font-semibold">{authenticatedRequest.userId}</p>
+              </div>
+            </div>
+
+            {authenticatedRequest.status === 'APPROVED' && authenticatedRequest.assignedLocation && (
+              <div className="p-4 bg-green-900/20 border border-green-700 rounded-md mt-4">
+                <p className="text-sm text-gray-400 mb-1">Assigned Location:</p>
+                <p className="text-lg font-bold text-green-400">{authenticatedRequest.assignedLocation}</p>
+              </div>
+            )}
+
+            {authenticatedRequest.status === 'PENDING' && (
+              <div className="p-4 bg-yellow-900/20 border border-yellow-700 rounded-md mt-4">
+                <p className="text-sm text-yellow-200">
+                  ⏱️ Your request is being reviewed by our team. You will receive an email notification once it has been approved.
+                </p>
+              </div>
+            )}
+
+            {authenticatedRequest.status === 'REJECTED' && authenticatedRequest.rejectionReason && (
+              <div className="p-4 bg-red-900/20 border border-red-700 rounded-md mt-4">
+                <p className="text-sm text-gray-400 mb-1">Rejection Reason:</p>
+                <p className="text-red-200">{authenticatedRequest.rejectionReason}</p>
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+    );
+  };
+
   const renderAuthFlow = () => {
+    // If authenticated and inquiring, show status
+    if (authenticatedRequest && selectedOption === 'inquire') {
+      return renderInquiryStatus();
+    }
+
     const titles = {
       'delivery-in': 'Schedule Delivery to MPS',
       'delivery-out': 'Schedule Delivery to Worksite',
@@ -232,6 +328,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
               setEmail('');
               setReferenceId('');
               setAuthError('');
+              setAuthenticatedRequest(null);
             }}
             className="mb-4 bg-gray-700 hover:bg-gray-600"
           >
