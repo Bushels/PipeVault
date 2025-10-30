@@ -36,6 +36,11 @@ jobs:
         env:
           # This tells Vite to use correct base path for GitHub Pages
           VITE_GITHUB_PAGES: 'true'
+          # Environment variables for runtime (embedded in build)
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
+          VITE_GOOGLE_AI_API_KEY: ${{ secrets.VITE_GOOGLE_AI_API_KEY }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
