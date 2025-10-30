@@ -21,7 +21,7 @@ interface AuthProps {
 }
 
 const Auth: React.FC<AuthProps> = ({ onGuestAccess }) => {
-  const { signInWithEmail } = useAuth();
+  const { signInWithEmail, signUpWithEmail } = useAuth();
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [referenceId, setReferenceId] = useState('');
@@ -64,9 +64,39 @@ const Auth: React.FC<AuthProps> = ({ onGuestAccess }) => {
       await signInWithEmail(adminEmail, adminPassword);
     } catch (err: any) {
       if (err.message?.includes('Invalid login credentials')) {
-        setError('Invalid admin credentials');
+        setError('Invalid admin credentials. Make sure your account exists or create one below.');
       } else {
         setError(err.message || 'An error occurred during admin sign in');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateAdminAccount = async () => {
+    if (!adminEmail || !adminPassword) {
+      setError('Please enter email and password first');
+      return;
+    }
+
+    if (adminPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      // Create the account
+      await signUpWithEmail(adminEmail, adminPassword);
+      // Try to sign in
+      await signInWithEmail(adminEmail, adminPassword);
+    } catch (err: any) {
+      if (err.message?.includes('already registered')) {
+        setError('Account already exists. Try signing in with your password.');
+      } else {
+        setError(err.message || 'Error creating admin account');
       }
     } finally {
       setLoading(false);
@@ -166,6 +196,20 @@ const Auth: React.FC<AuthProps> = ({ onGuestAccess }) => {
                   )}
                 </Button>
               </form>
+
+              <div className="mt-4">
+                <Button
+                  type="button"
+                  onClick={handleCreateAdminAccount}
+                  disabled={loading}
+                  className="w-full py-2 bg-gray-700 hover:bg-gray-600 text-sm"
+                >
+                  Create Admin Account
+                </Button>
+                <p className="text-xs text-gray-500 text-center mt-2">
+                  First time? Create an admin account with your email above
+                </p>
+              </div>
 
               <div className="mt-4 text-center">
                 <button
