@@ -34,11 +34,34 @@ const StorageRequestMenu: React.FC<StorageRequestMenuProps> = ({
   const [weather, setWeather] = useState(getFallbackWeather());
 
   useEffect(() => {
-    // Fetch weather data on component mount
+    // Fetch weather data using user's geolocation
     const loadWeather = async () => {
-      const weatherData = await fetchWeather();
-      if (weatherData) {
-        setWeather(weatherData);
+      // Try to get user's current location
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            // Success - use user's location
+            const { latitude, longitude } = position.coords;
+            const weatherData = await fetchWeather(latitude, longitude);
+            if (weatherData) {
+              setWeather(weatherData);
+            }
+          },
+          async (error) => {
+            // Error or denied - fall back to Calgary (MPS location)
+            console.log('Geolocation denied, using MPS location (Calgary):', error.message);
+            const weatherData = await fetchWeather(); // Uses default Calgary coordinates
+            if (weatherData) {
+              setWeather(weatherData);
+            }
+          }
+        );
+      } else {
+        // Geolocation not supported - fall back to Calgary
+        const weatherData = await fetchWeather();
+        if (weatherData) {
+          setWeather(weatherData);
+        }
       }
     };
 
