@@ -10,6 +10,7 @@ PipeVault is MPS Group's portal for running the 20-year anniversary "Free Pipe S
 - [Local Development](#local-development)
 - [Supabase Configuration](#supabase-configuration)
 - [AI Configuration](#ai-configuration)
+- [Slack Integration](#slack-integration)
 - [Operational Playbooks](#operational-playbooks)
 - [Current Gaps & Follow-ups](#current-gaps--follow-ups)
 - [Deployment Notes](#deployment-notes)
@@ -121,6 +122,65 @@ npm run preview     # test the production build locally
 - `services/geminiService.ts` contains all prompts for Roughneck, Roughneck Ops, request summaries, and the form helper.
 - Adjust tone/behaviour by editing the prompt strings or `services/conversationScripts.ts`.
 - Chat history is trimmed in the client to stay within free-tier token limits.
+
+## Slack Integration
+
+PipeVault sends real-time notifications to your Slack workspace for all critical events using **Supabase Database Webhooks** (server-side, secure).
+
+### Notification Events
+
+The system automatically notifies your team when:
+1. **New User Signups** - customer creates account with name, email, company
+2. **New Storage Requests** - customer submits pipe storage request
+3. **Delivery Bookings** - truck scheduled to deliver pipe to MPS facility
+4. **Pickup Bookings** - truck scheduled to pick up pipe from MPS to well site
+
+### Setup Instructions
+
+**Prerequisites:**
+- Slack workspace with admin access
+- Supabase project with database access
+
+**Steps:**
+1. **Create Slack Incoming Webhook**
+   - Go to https://api.slack.com/apps
+   - Create new app: "PipeVault Notifications"
+   - Enable **Incoming Webhooks**
+   - Add webhook to your `#pipevault-notifications` channel
+   - Copy the webhook URL (you'll need this for each webhook config)
+
+2. **Enable pg_net Extension** (for user signup trigger)
+   ```sql
+   -- Run in Supabase SQL Editor:
+   CREATE EXTENSION IF NOT EXISTS pg_net;
+   ```
+
+3. **Configure Database Webhooks**
+   - Open `supabase/SETUP_SLACK_WEBHOOKS_COMPLETE.sql` in your project
+   - Follow the detailed setup instructions for all 4 webhooks:
+     - **slack-new-user-signup** (database trigger on `auth.users`)
+     - **slack-new-storage-request** (webhook on `storage_requests` INSERT with `status.eq.PENDING` filter)
+     - **slack-delivery-booking** (webhook on `truck_loads` INSERT with `type.eq.DELIVERY` filter)
+     - **slack-pickup-booking** (webhook on `truck_loads` INSERT with `type.eq.PICKUP` filter)
+   - Each webhook uses Slack Block Kit for rich, interactive notifications
+   - All notifications include direct links to PipeVault admin dashboard
+
+4. **Test Webhooks**
+   - Submit test storage request → verify Slack notification
+   - Create test delivery booking → verify Slack notification
+   - Create test pickup booking → verify Slack notification
+   - Check Supabase webhook logs for delivery confirmation
+
+**Architecture Benefits:**
+- ✅ **Secure** - Slack webhook URL never exposed in frontend code
+- ✅ **Reliable** - Server-side execution with automatic retries
+- ✅ **Guaranteed** - Notifications sent even if user closes browser
+- ✅ **Logged** - All webhook executions visible in Supabase Dashboard
+
+**Reference Files:**
+- [supabase/SETUP_SLACK_WEBHOOKS_COMPLETE.sql](supabase/SETUP_SLACK_WEBHOOKS_COMPLETE.sql) - Complete webhook setup with payload templates
+- [SLACK_INTEGRATION_MIGRATION.md](SLACK_INTEGRATION_MIGRATION.md) - Migration from client-side to Supabase webhooks
+- [NOTIFICATION_SERVICES_SETUP.md](NOTIFICATION_SERVICES_SETUP.md) - Email + Slack notification guide
 
 ## Technical Troubleshooting & Issue Resolution
 
