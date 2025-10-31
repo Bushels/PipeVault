@@ -3,8 +3,7 @@ import Header from './Header';
 import StorageRequestWizard from './StorageRequestWizard';
 import StorageRequestMenu from './StorageRequestMenu';
 import FormHelperChatbot from './FormHelperChatbot';
-import Chatbot from './Chatbot';
-import type { Session, StorageRequest, Pipe, StorageDocument } from '../types';
+import type { Session, StorageRequest, Pipe } from '../types';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import { useAuth } from '../lib/AuthContext';
@@ -16,18 +15,16 @@ interface DashboardProps {
   requests: StorageRequest[];
   projectInventory: Pipe[];
   allCompanyInventory: Pipe[];
-  documents: StorageDocument[];
+  documents: any[];
   updateRequest: (request: StorageRequest) => Promise<StorageRequest | void> | StorageRequest | void;
   addRequest: (request: Omit<StorageRequest, 'id'>) => Promise<StorageRequest>;
 }
 
 type SelectedOption = 'menu' | 'new-storage' | 'delivery-in' | 'delivery-out' | 'chat';
 
-const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, projectInventory, allCompanyInventory, documents, updateRequest, addRequest }) => {
+const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, projectInventory, updateRequest, addRequest }) => {
   const { user } = useAuth();
   const [selectedOption, setSelectedOption] = useState<Omit<SelectedOption, 'chat'> | 'menu'>('menu');
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isChatExpanded, setIsChatExpanded] = useState(false);
   const [archivingRequestId, setArchivingRequestId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<StorageRequest | null>(null);
 
@@ -37,9 +34,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, proj
 
   const handleSelectOption = (option: SelectedOption) => {
     if (option === 'chat') {
-      setIsChatOpen(true);
+      // Chat is now handled within the StorageRequestMenu tile
+      return;
     } else {
-      setIsChatOpen(false);
       setSelectedOption(option);
     }
   };
@@ -47,7 +44,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, proj
   const handleScheduleDelivery = (request: StorageRequest) => {
     setSelectedRequest(request);
     setSelectedOption('delivery-in');
-    setIsChatOpen(false);
   };
 
   const handleArchiveRequest = async (request: StorageRequest, shouldArchive: boolean) => {
@@ -183,19 +179,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, proj
         <WelcomeMessage />
         {renderContent()}
       </main>
-      {isChatOpen && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <Chatbot
-            companyName={session.company.name}
-            inventoryData={allCompanyInventory}
-            requests={requests}
-            documents={documents}
-            onClose={() => setIsChatOpen(false)}
-            onToggleExpand={() => setIsChatExpanded(prev => !prev)}
-            isExpanded={isChatExpanded}
-          />
-        </div>
-      )}
     </div>
   );
 };

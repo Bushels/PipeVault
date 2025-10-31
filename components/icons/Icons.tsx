@@ -80,6 +80,14 @@ export const ChatIcon: React.FC<{ className?: string }> = (props) => (
     </svg>
 );
 
+export const HardhatIcon: React.FC<{ className?: string }> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M2 18h20v2H2z"/>
+        <path d="M4 18V12c0-4.418 3.582-8 8-8s8 3.582 8 8v6"/>
+        <path d="M12 4V2"/>
+    </svg>
+);
+
 export const CloseIcon: React.FC<{ className?: string }> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
         <line x1="18" y1="6" x2="6" y2="18" />

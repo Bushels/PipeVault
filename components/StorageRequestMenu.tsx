@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import Card from './ui/Card';
 import Button from './ui/Button';
-import { PlusIcon, PackageIcon, TruckIcon, ChatIcon } from './icons/Icons';
+import { PlusIcon, PackageIcon, TruckIcon, ChatIcon, HardhatIcon } from './icons/Icons';
 import type { StorageRequest } from '../types';
 import RequestSummaryPanel from './RequestSummaryPanel';
 import { fetchWeather, getFallbackWeather } from '../services/weatherService';
@@ -92,7 +92,7 @@ const StorageRequestMenu: React.FC<StorageRequestMenuProps> = ({
               {/* Header */}
               <div className="flex items-center gap-3 pb-4 border-b border-gray-700/50">
                 <div className="w-12 h-12 bg-orange-600/30 rounded-full flex items-center justify-center shadow-lg">
-                  <ChatIcon className="h-6 w-6 text-orange-300" />
+                  <HardhatIcon className="h-6 w-6 text-orange-300" />
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-white">Roughneck</h3>
