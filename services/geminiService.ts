@@ -1,5 +1,13 @@
 import { GoogleGenAI, Chat } from '@google/genai';
-import type { ChatMessage, NewRequestDetails, Pipe, Session, TruckingInfo } from '../types';
+import type {
+    ChatMessage,
+    NewRequestDetails,
+    Pipe,
+    Session,
+    TruckingInfo,
+    StorageRequest,
+    StorageDocument,
+} from '../types';
 import { calculateDaysInStorage } from '../utils/dateUtils';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GOOGLE_AI_API_KEY;
@@ -99,22 +107,24 @@ ${itemDetailsLines.join('\n    ')}
 
 const getMockChatResponse = (userMessage: string) => {
     const lowerMessage = userMessage.toLowerCase();
-    if(lowerMessage.includes('shipping') || lowerMessage.includes('ship')) {
-        return Promise.resolve("A shipping request has been logged and our team will contact you shortly with a quote and schedule.");
+    if (lowerMessage.includes('shipping') || lowerMessage.includes('ship')) {
+        return Promise.resolve("Got it. A shipping request is now logged and the yard crew will reach out with a quote and schedule.");
     }
-    if(lowerMessage.includes('where') || lowerMessage.includes('location')) {
-        return Promise.resolve("Your pipes are currently stored in Yard B, Row 14.");
+    if (lowerMessage.includes('where') || lowerMessage.includes('location')) {
+        return Promise.resolve("Those joints are staged in Yard B, Row 14 — ready when you are.");
     }
-    if(lowerMessage.includes('how many') || lowerMessage.includes('quantity')) {
-        return Promise.resolve("You have two types of pipes stored: 150 joints of L80 Casing and 300 joints of S135 Drill Pipe.");
+    if (lowerMessage.includes('how many') || lowerMessage.includes('quantity')) {
+        return Promise.resolve("Current tally shows 150 joints of L80 casing and 300 joints of S135 drill pipe on hand.");
     }
-    return Promise.resolve("I can help with that. Please provide more details about your pipes.");
-}
+    return Promise.resolve("Roughneck here — give me a few more details and I'll get you the right info.");
+};
 
 
 export const getChatbotResponse = async (
     companyName: string,
     inventoryData: Pipe[],
+    requests: StorageRequest[],
+    documents: StorageDocument[],
     chatHistory: ChatMessage[],
     userMessage: string
 ): Promise<string> => {
@@ -128,24 +138,59 @@ export const getChatbotResponse = async (
         pickUpDate: pipe.pickUpTimestamp ? new Date(pipe.pickUpTimestamp).toLocaleDateString() : null,
     }));
 
+    const requestById = new Map(requests.map((req) => [req.id, req]));
+    const requestSummaries = requests.map((req) => ({
+        referenceId: req.referenceId,
+        status: req.status,
+        assignedLocation: req.assignedLocation ?? null,
+        storageStartDate: req.requestDetails?.storageStartDate ?? null,
+        storageEndDate: req.requestDetails?.storageEndDate ?? null,
+        truckingType: req.truckingInfo?.truckingType ?? null,
+        submittedBy: req.userId,
+        lastUpdated: req.updatedAt ?? req.createdAt ?? null,
+        approvalSummary: req.approvalSummary ?? null,
+        rejectionReason: req.rejectionReason ?? null,
+    }));
+
+    const documentSummaries = documents.map((doc) => {
+        const linkedRequest = doc.requestId ? requestById.get(doc.requestId) : undefined;
+        return {
+            fileName: doc.fileName,
+            fileType: doc.fileType,
+            fileSize: doc.fileSize,
+            uploadedAt: doc.uploadedAt,
+            requestReferenceId: linkedRequest?.referenceId ?? null,
+            requestStatus: linkedRequest?.status ?? null,
+            storagePath: doc.storagePath,
+            extractedData: doc.extractedData ?? null,
+        };
+    });
+
     const inventoryJson = JSON.stringify(enrichedInventory, null, 2);
-    const systemInstruction = `You are a helpful inventory assistant for PipeVault.
+    const requestsJson = JSON.stringify(requestSummaries, null, 2);
+    const documentsJson = JSON.stringify(documentSummaries, null, 2);
+
+    const systemInstruction = `You are Roughneck, an oilfield-savvy PipeVault assistant supporting "${companyName}".
 You are speaking with a representative from "${companyName}".
-You can ONLY answer questions based on their pipe inventory provided below.
-Do not make up information. If the user asks about something not in the data, or about another company, politely state that you do not have access to that information.
+You can answer questions using the storage request data, uploaded documents, and inventory provided below.
+If the user asks about something not in these datasets, politely explain that you do not have access to that information.
 
-The inventory data includes:
-- Current status (IN_STORAGE, PICKED_UP, etc.)
-- Days in storage (calculated from drop-off to pickup or current date)
-- Drop-off dates (when pipe arrived at facility)
-- Pick-up dates (when pipe was picked up, if applicable)
-- Well assignments (UWI and well name for picked up pipes)
-- Storage locations (rack/area where pipe is stored)
+STORAGE REQUESTS (status, locations, dates):
+${requestsJson}
 
-When asked to schedule shipping, confirm the details based on the inventory and then respond ONLY with: "A shipping request has been logged and our team will contact you shortly with a quote and schedule."
+UPLOADED DOCUMENTS (files linked to their projects):
+${documentsJson}
 
-Their Inventory Data:
+INVENTORY (current pipe status and counts):
 ${inventoryJson}
+
+Guidelines:
+- Never reference or speculate about data outside of the datasets provided.
+- Use a calm, experienced field-hand tone with clear, practical guidance.
+- Reference the relevant request reference ID when discussing status.
+- If a document exists for a request, mention the file name and type.
+- When asked to schedule shipping, confirm details and then respond ONLY with: "A shipping request has been logged and our team will contact you shortly with a quote and schedule."
+- If data is missing, acknowledge the gap and suggest contacting the MPS team.
 `;
 
     try {
@@ -179,7 +224,7 @@ export const callGeminiAdminAssistant = async (
         return "I'm sorry, Gemini AI is not configured. Please check your API key.";
     }
 
-    const systemInstruction = `You are an AI assistant for the PipeVault admin dashboard at MPS Group, a pipe storage facility celebrating 20 years of service.
+    const systemInstruction = `You are Roughneck Ops, the oilfield operations assistant for the PipeVault admin desk at MPS Group.
 
 Your role is to help administrators quickly find information and insights about their operations.
 
@@ -195,11 +240,13 @@ CAPABILITIES:
 - Provide operational recommendations
 
 RESPONSE GUIDELINES:
-- Be concise and data-driven
-- Use specific numbers and metrics when available
-- Format responses clearly (use bullet points, line breaks)
-- Proactively suggest relevant follow-up information
-- If data is incomplete, acknowledge it
+- Maintain a Roughneck Ops tone: direct, practical, and oilfield-savvy.
+- Stay within the provided context; do not speculate about missing data.
+- Be concise and data-driven.
+- Use specific numbers and metrics when available.
+- Format responses clearly (bullet points, line breaks).
+- Proactively suggest relevant follow-up information.
+- If data is incomplete, acknowledge it.
 
 EXAMPLE QUERIES YOU CAN HANDLE:
 - "What storage areas have space available?"
@@ -249,7 +296,7 @@ export const callGeminiFormHelper = async (
 - Storage options
 
 **YOU CAN HELP WITH**:
-1. What is a project reference? - Acts as passcode, unique identifier for their project (AFE number, project name, etc.)
+1. What is a project reference? - Unique identifier for their project (AFE number, project name, etc.)
 2. Pipe Types - Blank, Sand Control, Flow Control, Tools
 3. Connection Types - NUE, EUE, BTC, Premium, Semi-Premium, Other
 4. Thread Types - Common types explained
@@ -266,7 +313,7 @@ export const callGeminiFormHelper = async (
 
 **EXAMPLE INTERACTIONS**:
 User: "What is a project reference?"
-You: "A project reference is your unique identifier for this storage request - like an AFE number or project name. This will also act as your passcode to check status and make inquiries later, so make it memorable!"
+You: "A project reference is your unique identifier for this storage request - like an AFE number or project name. You'll use it to check status and chat with the MPS team later, so make it memorable!"
 
 User: "What's the difference between NUE and EUE?"
 You: "NUE (Non-Upset End) has threads that are the same diameter as the pipe body. EUE (External Upset End) has a slightly larger diameter at the threaded end for added strength. EUE is more common for higher pressure applications."
@@ -290,3 +337,4 @@ Respond helpfully to the user's question about the storage request form.`;
         return "Sorry, I'm having trouble connecting right now. Please try again later.";
     }
 };
+

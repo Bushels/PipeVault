@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import Header from './Header';
-import Chatbot from './Chatbot';
-import InventoryDisplay from './InventoryDisplay';
 import StorageRequestWizard from './StorageRequestWizard';
 import StorageRequestMenu from './StorageRequestMenu';
 import FormHelperChatbot from './FormHelperChatbot';
-import type { Session, StorageRequest, Pipe } from '../types';
+import Chatbot from './Chatbot';
+import type { Session, StorageRequest, Pipe, StorageDocument } from '../types';
 import Card from './ui/Card';
 import Button from './ui/Button';
+import { useAuth } from '../lib/AuthContext';
+import { resolveCustomerIdentity } from '../utils/customerIdentity';
 
 interface DashboardProps {
   session: Session;
@@ -15,34 +16,67 @@ interface DashboardProps {
   requests: StorageRequest[];
   projectInventory: Pipe[];
   allCompanyInventory: Pipe[];
-  updateRequest: (request: StorageRequest) => void;
+  documents: StorageDocument[];
+  updateRequest: (request: StorageRequest) => Promise<StorageRequest | void> | StorageRequest | void;
   addRequest: (request: Omit<StorageRequest, 'id'>) => Promise<StorageRequest>;
 }
 
-type SelectedOption = 'menu' | 'new-storage' | 'delivery-in' | 'delivery-out' | 'inquire';
+type SelectedOption = 'menu' | 'new-storage' | 'delivery-in' | 'delivery-out' | 'chat';
 
-const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, projectInventory, allCompanyInventory, updateRequest, addRequest }) => {
-  const [selectedOption, setSelectedOption] = useState<SelectedOption>('menu');
-
-  // Find the request associated with the login
-  const relevantRequest = session.referenceId
-    ? requests.find(r => r.referenceId === session.referenceId)
-    : null;
+const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, projectInventory, allCompanyInventory, documents, updateRequest, addRequest }) => {
+  const { user } = useAuth();
+  const [selectedOption, setSelectedOption] = useState<Omit<SelectedOption, 'chat'> | 'menu'>('menu');
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
+  const [archivingRequestId, setArchivingRequestId] = useState<string | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<StorageRequest | null>(null);
 
   // Check if user has any approved requests
   const hasActiveRequest = requests.some(r => r.companyId === session.company.id && r.status === 'APPROVED');
+  const currentUserEmail = session.userId;
+
+  const handleSelectOption = (option: SelectedOption) => {
+    if (option === 'chat') {
+      setIsChatOpen(true);
+    } else {
+      setIsChatOpen(false);
+      setSelectedOption(option);
+    }
+  };
+
+  const handleScheduleDelivery = (request: StorageRequest) => {
+    setSelectedRequest(request);
+    setSelectedOption('delivery-in');
+    setIsChatOpen(false);
+  };
+
+  const handleArchiveRequest = async (request: StorageRequest, shouldArchive: boolean) => {
+    setArchivingRequestId(request.id);
+    try {
+      await Promise.resolve(
+        updateRequest({
+          ...request,
+          archivedAt: shouldArchive ? new Date().toISOString() : null,
+        })
+      );
+    } catch (error) {
+      console.error('Failed to toggle archive state for request', error);
+    } finally {
+      setArchivingRequestId(null);
+    }
+  };
 
   const renderContent = () => {
-    switch (selectedOption) {
-      case 'new-storage':
-        return (
-          <div className="relative">
-            <Button
-              onClick={() => setSelectedOption('menu')}
-              className="mb-4 bg-gray-700 hover:bg-gray-600"
-            >
-              ← Back to Menu
-            </Button>
+    if (selectedOption !== 'menu') {
+      return (
+        <div className="relative">
+          <Button
+            onClick={() => setSelectedOption('menu')}
+            className="mb-4 bg-gray-700 hover:bg-gray-600"
+          >
+            &lt; Back to Menu
+          </Button>
+          {selectedOption === 'new-storage' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
               <div className="lg:col-span-2">
                 <StorageRequestWizard
@@ -56,142 +90,123 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, proj
                 <FormHelperChatbot companyName={session.company.name} />
               </div>
             </div>
-          </div>
-        );
-
-      case 'delivery-in':
-        return (
-          <div className="relative">
-            <Button
-              onClick={() => setSelectedOption('menu')}
-              className="mb-4 bg-gray-700 hover:bg-gray-600"
-            >
-              ← Back to Menu
-            </Button>
+          )}
+          {selectedOption === 'delivery-in' && selectedRequest && (
             <Card className="p-6">
               <h2 className="text-2xl font-bold mb-4">Schedule Delivery to MPS</h2>
-              <p className="text-gray-400 mb-6">
-                AI-powered delivery scheduling coming soon...
-              </p>
-              <p className="text-sm text-gray-500">
-                This will guide you through scheduling pipe delivery to our facility,
-                including trucking options and document uploads.
-              </p>
+              <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-6">
+                <h3 className="text-lg font-semibold text-white mb-2">
+                  Request: {selectedRequest.referenceId}
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-500">Item Type</p>
+                    <p className="text-gray-200">{selectedRequest.requestDetails?.itemType || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Quantity</p>
+                    <p className="text-gray-200">
+                      {selectedRequest.requestDetails?.totalJoints || 0} joints
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Storage Start</p>
+                    <p className="text-gray-200">
+                      {selectedRequest.requestDetails?.storageStartDate
+                        ? new Date(selectedRequest.requestDetails.storageStartDate).toLocaleDateString()
+                        : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Storage Location</p>
+                    <p className="text-green-300 font-semibold">
+                      {selectedRequest.assignedLocation || 'To be assigned'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-gray-400 mb-6">AI-powered delivery scheduling coming soon...</p>
+              <p className="text-sm text-gray-500">This will guide you through scheduling pipe delivery to our facility, including trucking options and document uploads.</p>
             </Card>
-          </div>
-        );
-
-      case 'delivery-out':
-        return (
-          <div className="relative">
-            <Button
-              onClick={() => setSelectedOption('menu')}
-              className="mb-4 bg-gray-700 hover:bg-gray-600"
-            >
-              ← Back to Menu
-            </Button>
+          )}
+          {selectedOption === 'delivery-out' && (
             <Card className="p-6">
               <h2 className="text-2xl font-bold mb-4">Schedule Delivery to Worksite</h2>
-              <p className="text-gray-400 mb-6">
-                AI-powered worksite delivery scheduling coming soon...
-              </p>
-              <p className="text-sm text-gray-500">
-                This will help you arrange pickup from MPS and delivery to your well site.
-              </p>
+              <p className="text-gray-400 mb-6">AI-powered worksite delivery scheduling coming soon...</p>
+              <p className="text-sm text-gray-500">This will help you arrange pickup from MPS and delivery to your well site.</p>
             </Card>
-          </div>
-        );
-
-      case 'inquire':
-        return (
-          <div className="relative">
-            <Button
-              onClick={() => setSelectedOption('menu')}
-              className="mb-4 bg-gray-700 hover:bg-gray-600"
-            >
-              ← Back to Menu
-            </Button>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-              <div className="lg:col-span-2 flex flex-col gap-6">
-                <Card>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold text-white">
-                      Your Requests & Inventory
-                    </h2>
-                  </div>
-                  {requests.length > 0 && (
-                    <div className="mb-6">
-                      <h3 className="text-lg font-semibold mb-3">Storage Requests</h3>
-                      <div className="space-y-3">
-                        {requests.map((request) => (
-                          <div
-                            key={request.id}
-                            className="border border-gray-700 rounded-lg p-3 bg-gray-800"
-                          >
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h4 className="font-semibold">{request.referenceId}</h4>
-                                <p className="text-xs text-gray-400">
-                                  {request.requestDetails?.fullName}
-                                </p>
-                              </div>
-                              <span
-                                className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                  request.status === 'APPROVED'
-                                    ? 'bg-green-900 text-green-200'
-                                    : request.status === 'PENDING'
-                                    ? 'bg-yellow-900 text-yellow-200'
-                                    : request.status === 'REJECTED'
-                                    ? 'bg-red-900 text-red-200'
-                                    : 'bg-gray-700 text-gray-300'
-                                }`}
-                              >
-                                {request.status}
-                              </span>
-                            </div>
-                            {request.status === 'APPROVED' && request.assignedLocation && (
-                              <p className="text-xs text-green-400 mt-1">
-                                📍 {request.assignedLocation}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">Inventory</h3>
-                    <InventoryDisplay inventory={allCompanyInventory} />
-                  </div>
-                </Card>
-              </div>
-              <div className="lg:col-span-1">
-                <Chatbot companyName={session.company.name} inventoryData={allCompanyInventory} />
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'menu':
-      default:
-        return (
-          <StorageRequestMenu
-            companyName={session.company.name}
-            hasActiveRequest={hasActiveRequest}
-            onSelectOption={setSelectedOption}
-          />
-        );
+          )}
+        </div>
+      );
     }
+
+    return (
+      <StorageRequestMenu
+        companyName={session.company.name}
+        hasActiveRequest={hasActiveRequest}
+        requests={requests}
+        currentUserEmail={currentUserEmail}
+        onSelectOption={handleSelectOption}
+        onArchiveRequest={handleArchiveRequest}
+        archivingRequestId={archivingRequestId}
+        onScheduleDelivery={handleScheduleDelivery}
+      />
+    );
+  };
+
+  const WelcomeMessage = () => {
+    const { displayName, displayCompany } = resolveCustomerIdentity({
+      user,
+      fallbackEmail: session.userId,
+      fallbackCompany: session.company?.name,
+      requests,
+    });
+
+    if (!displayName && !displayCompany) {
+      return null;
+    }
+
+    return (
+      <div className="mb-6 text-center">
+        <h1 className="text-2xl font-bold text-white">
+          Welcome, {displayName}
+          {displayCompany ? ` from ${displayCompany}` : ''}!
+        </h1>
+      </div>
+    );
   };
 
   return (
     <div className="flex flex-col min-h-screen">
       <Header session={session} onLogout={onLogout} />
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
+        <WelcomeMessage />
         {renderContent()}
       </main>
+      {isChatOpen && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <Chatbot
+            companyName={session.company.name}
+            inventoryData={allCompanyInventory}
+            requests={requests}
+            documents={documents}
+            onClose={() => setIsChatOpen(false)}
+            onToggleExpand={() => setIsChatExpanded(prev => !prev)}
+            isExpanded={isChatExpanded}
+          />
+        </div>
+      )}
     </div>
   );
 };
 
 export default Dashboard;
+
+
+
+
+
+
+
+
+

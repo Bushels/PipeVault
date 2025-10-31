@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Form Helper Chatbot
  * Provides AI assistance for filling out the storage request form
  * Powered by Gemini 2.0 Flash (FREE tier for basic usage!)
@@ -20,9 +20,9 @@ const FormHelperChatbot: React.FC<FormHelperChatbotProps> = ({ companyName }) =>
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'model',
-      content: `Hi! I'm your Gemini-powered form assistant, here to help you complete the storage request.
+      content: `Howdy! Roughneck here — your oilfield-savvy form hand, ready to guide you through the storage request.
 
-💡 **Celebrating 20 Years of MPS!** You're getting FREE pipe storage as part of our anniversary promotion.
+Tip: **Celebrating 20 Years of MPS!** You're getting FREE pipe storage as part of our anniversary promotion.
 
 Ask me anything about the form fields - what is a project reference, connection types, how to calculate joints, etc.`,
     },
@@ -131,3 +131,11 @@ Ask me anything about the form fields - what is a project reference, connection 
 };
 
 export default FormHelperChatbot;
+
+
+
+
+
+
+
+

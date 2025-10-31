@@ -164,7 +164,7 @@ IMPORTANT:
 
         const confirmationMessage: ChatMessage = {
           role: 'model',
-          content: `✅ Perfect! I've submitted your storage request.
+          content: `Success! I've submitted your storage request.
 
 **Reference ID:** ${requestData.referenceId}
 

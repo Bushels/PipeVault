@@ -41,13 +41,16 @@ CREATE TABLE IF NOT EXISTS storage_requests (
   -- AI generated summary
   approval_summary TEXT,
   rejection_reason TEXT,
+  archived_at TIMESTAMPTZ,
 
   -- Timestamps
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  approved_at TIMESTAMPTZ,
-  rejected_at TIMESTAMPTZ
-);
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    approved_at TIMESTAMPTZ,
+    approved_by TEXT,
+    rejected_at TIMESTAMPTZ,
+    internal_notes TEXT
+  );
 
 -- Index for faster queries
 CREATE INDEX idx_requests_company ON storage_requests(company_id);
@@ -242,6 +245,7 @@ CREATE INDEX idx_racks_area ON racks(area_id);
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS admin_users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   role TEXT DEFAULT 'admin',
@@ -249,6 +253,9 @@ CREATE TABLE IF NOT EXISTS admin_users (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Index for faster admin lookups
+CREATE INDEX IF NOT EXISTS idx_admin_users_user_id ON admin_users(user_id);
 
 -- ============================================================================
 -- NOTIFICATIONS TABLE (for admin alerts)

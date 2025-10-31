@@ -1,871 +1,821 @@
-# PipeVault - FREE Pipe Storage Management System
-
-**Celebrating 20 Years of MPS Group** 🎉
-
-PipeVault is a comprehensive pipe inventory and storage management platform built for MPS Group's 20th Anniversary FREE storage promotion. The system allows customers to request storage, track inventory, schedule deliveries, and inquire about their pipe storage—all through an intuitive web interface with AI-powered assistance.
-
----
-
-## 🎯 Project Overview
-
-### What is PipeVault?
-
-PipeVault manages the complete lifecycle of pipe storage for oil & gas customers:
-
-1. **Request New Storage** - Submit approval requests for FREE pipe storage
-2. **Schedule Delivery to MPS** - Arrange pipe delivery to storage facility
-3. **Schedule Delivery to Worksite** - Coordinate pickup and delivery to well sites
-4. **Inquire** - Check status, view inventory, request modifications
-
-### Key Features
-
-**Customer-Facing:**
-- ✅ **4-Option Landing Page** - Clean, card-based interface (no login required to start)
-- ✅ **AI Form Helper** - Gemini-powered chatbot assists with form completion
-- ✅ **Smart Request Summaries** - AI generates professional internal summaries
-- ✅ **Project Reference System** - Acts as passcode for future inquiries
-- ✅ **Inquiry Status Display** - Shows "Your Pipe Request is Pending Approval" with details
-- ✅ **Logout After Submission** - Users can sign out after completing requests
-- ✅ **Trucking Coordination** - Quote requests or customer-provided options
-
-**Admin-Facing:**
-- ✅ **Comprehensive Admin Dashboard** - 7-tab interface for complete backend management
-- ✅ **AI Admin Assistant** - Gemini-powered chatbot answers operational questions
-- ✅ **Approval Queue** - Visual rack selection, batch processing, AI-generated summaries
-- ✅ **Request Management** - Filterable table with status tracking
-- ✅ **Company Dashboard** - View all companies with request/inventory counts
-- ✅ **Inventory Panel** - Complete pipe tracking with well assignments
-- ✅ **Storage Visualization** - Real-time capacity monitoring across yards
-- ✅ **Global Search** - Search across all data (requests, companies, inventory)
-- ✅ **Admin Account Creation** - Self-service admin account setup
-
-**Technical:**
-- ✅ **Real-time Database** - Supabase with React Query for live updates
-- ✅ **Responsive Design** - Works on desktop, tablet, and mobile
-- ✅ **GitHub Pages Deployment** - Auto-deploy on git push
-
----
-
-## 🏗️ Architecture
-
-### Tech Stack
-
-**Frontend:**
-- React 19.2 with TypeScript
-- Vite for blazing-fast builds
-- Tailwind CSS for styling
-- React Query (@tanstack/react-query) for server state
-
-**Backend:**
-- Supabase (PostgreSQL database, authentication, storage)
-- Row-Level Security (RLS) policies for data protection
-
-**AI Integration:**
-- **Gemini 2.0 Flash (Google)** - Form helper chatbot, Admin AI assistant, Request summaries (FREE - 1M tokens/day)
-- **Claude 3.5 Haiku (Anthropic)** - Available as alternative (~$0.01/conversation)
-
-**Deployment:**
-- Supports standard React hosting (Vercel, Netlify, etc.)
-- **Wix-ready** - Full migration package included (see `/wix` folder)
-
-### Database Schema
-
-**Collections:**
-- `companies` - Customer organizations
-- `storage_requests` - Storage approval requests
-- `inventory` - Pipe inventory items
-- `yards` - Storage facilities with areas and racks
-- `truck_loads` - Delivery tracking
-- `conversations` - Chat history
-- `notifications` - System alerts
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js 18+ and npm
-- Supabase account (free tier works)
-- Claude API key (Anthropic)
-- Gemini API key (Google) - optional, has free tier
-
-### Local Development Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-org/pipevault.git
-   cd pipevault
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables**
-
-   Create a `.env` file in the root directory:
-   ```env
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-anon-key
-   VITE_ANTHROPIC_API_KEY=sk-ant-api03-...
-   VITE_GOOGLE_AI_API_KEY=AIza...
-   ```
-
-4. **Set up Supabase database**
-
-   Run the SQL scripts in order:
-   ```bash
-   # In Supabase SQL Editor
-   1. Run supabase/schema.sql
-   2. Run supabase/rls-policies-fix.sql
-   ```
-
-5. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-   Open [http://localhost:5173](http://localhost:5173)
-
----
-
-## 📋 User Flow
-
-### For Customers
-
-#### First Visit (Landing Page)
-
-Users see 4 colorful option cards:
-
-1. **Request New Pipe Storage** (Purple/Indigo)
-   - Click to open form
-   - Fill out contact info, pipe specs, trucking preferences
-   - AI chatbot helps with questions
-   - Submit for admin approval
-   - Receive Reference ID (acts as passcode)
-
-2. **Schedule Delivery to MPS** (Blue/Cyan)
-   - Requires email + reference ID
-   - Coordinate delivery to storage facility
-   - Upload documents, confirm trucking
-
-3. **Schedule Delivery to Worksite** (Green/Emerald)
-   - Requires email + reference ID
-   - Arrange pickup from MPS
-   - Deliver to well site
-
-4. **Inquire** (Orange/Red)
-   - Requires email + reference ID
-   - Check request status
-   - View inventory
-   - Request modifications
-   - AI chatbot for questions
-
-#### Form Details (New Storage Request)
-
-**Contact Information:**
-- Company Name
-- Full Name
-- Contact Email (editable)
-- Contact Number
-
-**Pipe Specifications:**
-- Item Type (Blank Pipe, Sand Control, Flow Control, Tools, Other)
-- API Casing Spec (OD, Weight, ID, Drift)
-- Grade (H40, J55, L80, N80, C90, T95, P110, Other)
-- Connection (NUE, EUE, BTC, Premium, **Semi-Premium**, Other)
-- Thread Type
-- Average Joint Length (meters)
-- Total Joints
-- Calculated Total Length
-
-**Project Details:**
-- Storage Start Date
-- Storage End Date
-- **Project Reference** - Acts as passcode for future access
-  - Reminder text: "💡 This will act as your unique passcode to check status and make inquiries"
-
-**Trucking:**
-- Request Quote from MPS
-- Provide Own Trucking
-
-**AI Helper Chatbot:**
-- Sidebar chatbot (right side of form)
-- Powered by Claude 3.5 Haiku
-- Answers questions about form fields
-- Explains pipe terminology
-- Provides examples
-- Promotes 20 Years FREE Storage
-
-### For Admins
-
-#### Admin Access
-
-**How to Access:**
-1. Click the **PipeVault shield icon** on the login screen
-2. Enter admin email (whitelisted in AuthContext.tsx)
-3. Enter password (if account exists) OR click "Create Admin Account"
-
-**Whitelisted Admin Emails:**
-- kylegronning@mpsgroup.ca
-- admin@mpsgroup.com
-- kyle@bushels.com
-- admin@bushels.com
-
-**First-Time Setup:**
-1. Click shield icon on login screen
-2. Enter your whitelisted email
-3. Create a password (minimum 6 characters)
-4. Click "Create Admin Account"
-5. System automatically signs you in
-
-#### Admin Dashboard Overview (7 Tabs)
-
-The admin dashboard provides comprehensive backend management across 7 specialized tabs:
-
-**1. Overview Tab**
-- **Analytics Cards**: Total requests, pending approvals, storage utilization, active companies
-- **Quick Metrics**: At-a-glance KPIs for operational status
-- **Utilization Percentage**: Real-time storage capacity monitoring
-- **Recent Activity**: Latest requests and status changes
-
-**2. Approvals Tab**
-- **Approval Queue**: Cards showing pending requests needing review
-- **AI-Generated Summaries**: Each request includes Gemini-generated internal summary
-- **Visual Rack Selection**: Choose yard → area → specific rack for storage assignment
-- **Approve/Reject Actions**: One-click approval with location assignment or rejection with reason
-- **Request Details**: Full pipe specs, trucking info, contact details
-- **Capacity Validation**: Real-time rack capacity checking
-
-**3. Requests Tab**
-- **Filterable Table**: All requests with status filter (ALL, PENDING, APPROVED, REJECTED, COMPLETED)
-- **Sortable Columns**: Company, Reference ID, Status, Created Date
-- **Search Functionality**: Filter by company name or reference ID
-- **Status Indicators**: Color-coded badges (yellow=pending, green=approved, red=rejected, blue=completed)
-- **Request Count**: Shows total and filtered counts
-
-**4. Companies Tab**
-- **Company Cards**: Visual cards for each registered company
-- **Request Count**: Number of storage requests per company
-- **Inventory Count**: Number of pipe items in storage per company
-- **Domain Display**: Email domain for company identification
-- **Quick Stats**: At-a-glance company activity metrics
-
-**5. Inventory Tab**
-- **Complete Inventory List**: All pipes in system with full details
-- **Status Tracking**: IN_STORAGE, PICKED_UP, EN_ROUTE
-- **Pipe Specifications**: Type, grade, connection, length, joints
-- **Storage Location**: Yard, area, rack assignment
-- **Well Assignment**: UWI and well name for picked-up pipes
-- **Days in Storage**: Automatic calculation from drop-off to current/pickup date
-- **Search & Filter**: Find specific pipes or filter by status
-
-**6. Storage Tab**
-- **Yard Overview**: All storage yards with capacity visualization
-- **Area Breakdown**: Capacity by area within each yard
-- **Rack Details**: Individual rack capacity and occupancy
-- **Utilization Metrics**: Occupied vs. available space in meters
-- **Visual Indicators**: Progress bars showing fullness
-- **Capacity Planning**: Identify available storage locations
-
-**7. AI Assistant Tab**
-- **Gemini-Powered Chatbot**: Ask questions about operations
-- **Contextual Awareness**: Has access to all current system data
-- **Quick Questions**: Pre-populated common queries
-  - "What storage areas have space available?"
-  - "How many pending requests do we have?"
-  - "What is our current storage utilization?"
-  - "Which companies have the most inventory?"
-- **Data-Driven Responses**: Provides specific numbers and metrics
-- **Operational Insights**: Suggests optimal storage allocation
-- **Real-Time Context**: System state updated with each query
-
-**Global Features (All Tabs):**
-- **Global Search Bar**: Search across requests, companies, and inventory from any tab
-- **Tab Navigation**: Quick switching between management areas
-- **Responsive Layout**: Works on all screen sizes
-- **Real-Time Updates**: React Query keeps data fresh
-- **Logout Button**: Secure sign-out functionality
-
-#### Admin Workflows
-
-**Approving a Storage Request:**
-1. Navigate to "Approvals" tab
-2. Review AI-generated summary
-3. Check pipe specifications and trucking details
-4. Click "Approve"
-5. Select Yard (e.g., "Main Yard")
-6. Select Area (e.g., "North Section")
-7. Select Rack (shows available capacity)
-8. Confirm assignment
-9. Request status changes to APPROVED
-10. Pipe inventory automatically created
-
-**Rejecting a Request:**
-1. Navigate to "Approvals" tab
-2. Review request details
-3. Click "Reject"
-4. Enter reason for rejection
-5. Confirm rejection
-6. User notified via email (if configured)
-
-**Finding Available Storage:**
-1. Navigate to "Storage" tab
-2. Review yard utilization percentages
-3. Drill into areas to see rack-level capacity
-4. OR ask AI Assistant: "What storage areas have space available?"
-5. AI provides specific recommendations with capacity numbers
-
-**Searching for Specific Data:**
-1. Use Global Search bar (top of dashboard)
-2. Enter company name, reference ID, or keyword
-3. Results filter across all tabs
-4. Click filtered results to view details
-
-**Monitoring Operations:**
-1. Navigate to "Overview" tab
-2. Check pending approvals count
-3. Review storage utilization percentage
-4. Monitor active company count
-5. Track total requests processed
-
-#### Admin AI Assistant Capabilities
-
-The AI assistant has access to:
-- **All Storage Requests**: Total, pending, approved, completed, rejected counts
-- **Company Data**: Names, domains, request counts
-- **Storage Capacity**: Yards, areas, racks with capacity/occupancy metrics
-- **Inventory Stats**: Total pipes, in-storage count, picked-up count
-- **Utilization Metrics**: Real-time capacity calculations
-
-Example queries:
-- "Which yard has the most capacity?"
-- "Show me companies with pending requests"
-- "What's our average storage utilization?"
-- "How many requests did we approve this month?"
-- "Which racks in Main Yard are available?"
-
-**Cost:** FREE (Gemini 2.0 Flash with 1M tokens/day free tier)
-
----
-
-## 🔧 Recent Changes (January 2025)
-
-### Major Updates - Phase 1 (Early January)
-
-1. **Removed Login Screen** - Now starts with 4 option cards directly
-2. **Created WelcomeScreen** - New landing page component
-3. **Email Field Made Editable** - Collects email as part of form (not pre-filled)
-4. **Added Semi-Premium Connection** - New option in connection type dropdown
-5. **Passcode Reminder** - Prominent yellow text near project reference field
-6. **Interactive AI Chatbot** - Replaced static helper card with real chatbot
-7. **Fixed Typo** - Removed comma in "Welcome to PipeVault [company]!"
-
-### Major Updates - Phase 2 (Late January)
-
-**Admin Dashboard Overhaul:**
-8. **Complete Admin Dashboard Rewrite** - Replaced old dashboard with comprehensive 7-tab system
-   - Overview tab with analytics cards
-   - Approvals tab with visual rack selection
-   - Requests tab with filterable table
-   - Companies tab with card-based view
-   - Inventory tab with complete pipe tracking
-   - Storage tab with capacity visualization
-   - AI Assistant tab with Gemini chatbot
-
-9. **Admin AI Assistant** - NEW: Gemini-powered operational chatbot
-   - Answers questions about storage capacity, requests, companies, inventory
-   - Real-time context awareness with system state
-   - Quick question buttons for common queries
-   - FREE (Gemini 2.0 Flash)
-
-10. **Cost Optimization** - Switched from Claude to Gemini for chatbots
-    - **Form Helper Chatbot**: Now uses `callGeminiFormHelper()` (was Claude)
-    - **Admin AI Assistant**: Uses `callGeminiAdminAssistant()` (Gemini)
-    - **Savings**: ~95% cost reduction (FREE vs $0.80/$4.00 per million tokens)
-    - **Impact**: Essentially unlimited conversations on free tier (1M tokens/day)
-
-**Authentication & UX Improvements:**
-11. **Admin Account Creation** - Self-service admin setup
-    - "Create Admin Account" button on admin login screen
-    - Password validation (minimum 6 characters)
-    - Auto-sign-in after account creation
-    - Helpful error messages for existing accounts
-
-12. **Enhanced Inquiry Status Display** - User-friendly status messages
-    - Shows "Your Pipe Request is Pending Approval"
-    - Color-coded status indicators
-    - Full request details display
-    - Conditional content based on status
-
-13. **Logout After Request Submission** - Improved user flow
-    - Logout button appears after successful submission
-    - Clear indication of signed-in status
-    - Refresh to return to login screen
-
-14. **GitHub Pages Deployment** - Auto-deploy on git push
-    - Hosted at GitHub Pages URL
-    - Automatic deployment via GitHub Actions
-    - Production environment with Supabase backend
-
-**Services & Backend:**
-15. **geminiService.ts Enhancements** - Added two new AI functions
-    - `callGeminiAdminAssistant()` - Operational queries with full context
-    - `callGeminiFormHelper()` - Form assistance for users
-    - Both use Gemini 2.0 Flash model
-    - Comprehensive system instructions for each use case
-
-16. **AuthContext.tsx Updates** - Admin email whitelist
-    - Added `kylegronning@mpsgroup.ca`
-    - Supports multiple admin methods (hardcoded, metadata, admin_users table)
-    - Graceful fallback for admin checking
-
-### Component Structure
-
-**Main Components:**
-- `WelcomeScreen.tsx` - Landing page with 4 option cards
-- `StorageRequestWizard.tsx` - Multi-step form for storage requests
-- `FormHelperChatbot.tsx` - AI assistant for form help (Gemini-powered)
-- `Auth.tsx` - Authentication with admin/user login
-- `Dashboard.tsx` - Main customer dashboard (deprecated for new flow)
-- `Chatbot.tsx` - Inventory inquiry chatbot
-
-**Admin Components:**
-- `admin/AdminDashboard.tsx` - Complete rewrite with 7-tab system
-- `admin/AdminAIAssistant.tsx` - NEW: Gemini-powered operational chatbot
-- `admin/RequestsPanel.tsx` - Approval management (deprecated, now part of AdminDashboard)
-- `admin/YardsPanel.tsx` - Storage facility management (deprecated, now part of AdminDashboard)
-- `admin/InventoryPanel.tsx` - Inventory tracking (deprecated, now part of AdminDashboard)
-
-**Services:**
-- `claudeService.ts` - Claude API integration (available as alternative)
-  - `generateRequestSummary()` - Professional request summaries
-  - `getClaudeResponse()` - Generic chat responses
-  - `callClaudeAdminAssistant()` - Admin operational queries
-- `geminiService.ts` - Gemini API integration (PRIMARY AI SERVICE)
-  - `generateRequestSummary()` - Request summaries with Gemini
-  - `getChatbotResponse()` - Customer inventory chatbot
-  - `callGeminiAdminAssistant()` - NEW: Admin AI assistant
-  - `callGeminiFormHelper()` - NEW: Form assistance chatbot
-- `conversationScripts.ts` - AI conversation templates and prompts
-- `supabase.ts` - Database client
-
-**Hooks:**
-- `useSupabaseData.ts` - React Query hooks for all CRUD operations
-
-**Context:**
-- `lib/AuthContext.tsx` - Authentication state management with admin role checking
-- `lib/QueryProvider.tsx` - React Query setup
-
----
-
-## 🌐 Deployment Options
-
-### Option 1: Deploy to Wix (RECOMMENDED)
-
-**Quick Start - 10 steps, 15 minutes:**
-
-📖 **[QUICK_START_WIX.md](QUICK_START_WIX.md)** - Simple checklist
-
-📘 **[DEPLOY_TO_WIX.md](DEPLOY_TO_WIX.md)** - Detailed guide
-
-This approach:
-- Hosts React app on GitHub Pages (free)
-- Embeds in Wix using iframe
-- Uses Wix Data Collections or Supabase
-- Auto-deploys on every git push
-
-**Benefits:**
-- Free hosting (GitHub Pages)
-- Easy updates (just push to GitHub)
-- Keep React code
-- All features work
-
-### Option 2: Standard React Deployment
-
-Deploy to Vercel, Netlify, or any static host:
+# PipeVault
+
+PipeVault is MPS Group's portal for running the 20-year anniversary "Free Pipe Storage" promotion. Customers submit storage requests and monitor projects, while admins approve work, assign racks, and track inventory with AI assistance.
+
+## Table of Contents
+- [Product Snapshot](#product-snapshot)
+- [Core Flows](#core-flows)
+- [Technology Stack](#technology-stack)
+- [Environment Setup](#environment-setup)
+- [Local Development](#local-development)
+- [Supabase Configuration](#supabase-configuration)
+- [AI Configuration](#ai-configuration)
+- [Operational Playbooks](#operational-playbooks)
+- [Current Gaps & Follow-ups](#current-gaps--follow-ups)
+- [Deployment Notes](#deployment-notes)
+- [Support & Contact](#support--contact)
+
+## Product Snapshot
+- **Audience**: Energy operators and service companies storing pipe with MPS Group.
+- **AI Assistants**:
+  - **Roughneck** - customer-facing field hand that answers project questions.
+  - **Roughneck Ops** - admin-side assistant for approvals, capacity checks, and analytics.
+- **Data Source**: Supabase (`https://cvevhvjxnklbbhtqzyvw.supabase.co`) for auth, storage requests, inventory, documents, notifications, and trucking.
+- **AI Stack**: Gemini Flash 2.5 (chat) + 2.0 summaries (free-tier friendly).
+
+## Core Flows
+
+### Customer
+1. **Account Access** - customers sign up with email/password, first name, last name, company name, and contact number. Supabase Auth handles email verification; users must confirm before accessing the dashboard.
+2. **Dashboard Landing** - authenticated customers see a modern **tile-based system**:
+   - **Request Storage Button** - prominent gradient button above tiles for creating new storage requests
+   - **Request Tiles** - each active request displayed as a card showing status, pipe specs (with thread type), quantity (total meters + joints), storage dates with day counters, and assigned location
+   - **Roughneck AI Tile** - permanent tile featuring:
+     - Live weather updates from Tomorrow.io API with dynamic quips
+     - Project status summary
+     - Quick command suggestions
+     - Chat input for instant AI assistance
+3. **New Storage Request** - streamlined wizard that **pre-fills contact information** from signup metadata:
+   - Contact info shown as read-only summary (no duplicate data entry)
+   - Collects pipe specifications (item type, grade, connection with thread type, size, joints, length)
+   - Storage duration with start/end dates
+   - Trucking preference (customer delivery vs MPS pickup with details)
+   - Submission generates reference ID and creates `PENDING` request
+   - AI generates summary for admin approval queue
+4. **Logistics Scheduling** - "Truck to MPS" button appears on approved requests, allowing customers to schedule delivery without re-authentication (tied to `truck_loads` table)
+5. **Roughneck Chat** - AI assistant provides:
+   - Real-time weather updates with personality-driven quips
+   - Request status inquiries scoped to customer's company
+   - Storage duration and location information
+   - General oilfield advice in conversational tone
+
+### Administrator
+1. **Admin Login** - admins sign in through Supabase Auth. `AuthContext` marks admins by:
+   - A temporary hard-coded email allowlist.
+   - The `admin_users` table (preferred) with RLS enforcement.
+2. **Admin Dashboard Tabs** - Overview, Approvals, Requests, Companies, Inventory, Storage, Roughneck Ops. The Approvals tab now surfaces full pipe specifications (grade, connection, length, trucking preferences) alongside an internal notes field, and the All Requests table mirrors that detail with inline-editable notes, a total length column, and approver/timestamp metadata.
+3. **Truck Loads & Pickups** - record inbound and outbound loads to keep utilisation accurate.
+
+## Technology Stack
+- **Frontend**: React 19 + Vite + TypeScript
+- **State/Data**: TanStack Query (Supabase fetch/mutations)
+- **Backend-as-a-Service**: Supabase (Postgres, Auth, Storage, Realtime)
+- **Styling**: Tailwind-style utility classes within custom components
+- **AI**: `@google/genai` (Gemini Flash 2.5 chat + 2.0 summaries)
+- **Weather**: Tomorrow.io API for real-time weather data in Roughneck AI tile
+
+## Environment Setup
+Create `.env` from `.env.example`:
 
 ```bash
-npm run build
-# Upload dist/ folder to your host
+VITE_SUPABASE_URL=https://cvevhvjxnklbbhtqzyvw.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+VITE_GOOGLE_AI_API_KEY=your_gemini_key_here
+VITE_RESEND_API_KEY=your_resend_key_here
+VITE_TOMORROW_API_KEY=your_tomorrow_io_key_here
+VITE_ANTHROPIC_API_KEY=your_anthropic_key_here
 ```
 
-**Environment Variables:** Set in your hosting platform's settings
+**Required Configuration:**
+- `VITE_SUPABASE_URL` - Supabase project URL
+- `VITE_SUPABASE_ANON_KEY` - Supabase anonymous key for client-side auth
+- `VITE_GOOGLE_AI_API_KEY` - Gemini API key for Roughneck chat assistants
+- `VITE_RESEND_API_KEY` - Resend API key for approval/rejection emails sent from `services/emailService.ts`
+- `VITE_TOMORROW_API_KEY` - Tomorrow.io API key for real-time weather data in Roughneck tile
 
-### Option 3: Full Wix Native Conversion
+**Optional variables:**
+- `VITE_SUPABASE_SERVICE_ROLE` for privileged Edge Functions
+- `VITE_AI_SYSTEM_PROMPT` to override default AI prompts
+- `VITE_ANTHROPIC_API_KEY` for future Claude integration
 
-**Complete migration package available in `/wix` folder:**
+**Important Notes:**
+- Never commit real keys; the samples are for local debugging only
+- **Contact Email**: All emails sent from `pipevault@mpsgroup.ca` (requires Resend domain verification in production)
+- **Slack Notifications**: Configured via Supabase Database Webhooks (not client-side), see `NOTIFICATION_SERVICES_SETUP.md`
+- After changing `.env`, restart your dev server for changes to take effect
 
-- ✅ Wix Data Collections (replaces Supabase)
-- ✅ Velo backend functions (AI + database)
-- ✅ Production-ready code
-- ✅ Step-by-step guide
-
-**See `/wix/README.md` and `/wix/WIX_MIGRATION_GUIDE.md`**
-
-**Benefits:**
-- All-in-one platform (~$30-40/month)
-- No separate database hosting
-- Built-in forms, members, payments
-- Better SEO
-
----
-
-## 💰 Cost Breakdown
-
-### Current Setup (Supabase + Gemini)
-
-**OPTIMIZED FOR COST SAVINGS:**
-
-- **Supabase Free Tier**: $0/month (500MB database, 50,000 monthly active users)
-- **Supabase Pro**: $25/month (8GB database, 100,000 MAU) - only if scaling needed
-- **Hosting (GitHub Pages)**: $0/month (FREE static hosting)
-- **Gemini 2.0 Flash API**: $0/month (FREE tier: 1M tokens/day = ~1,000+ conversations/day)
-  - Form Helper Chatbot: FREE
-  - Admin AI Assistant: FREE
-  - Request Summaries: FREE
-- **Claude API** (optional fallback): ~$0.01 per conversation (not currently used)
-- **Total Current Cost**: $0-25/month (FREE on small scale, $25/month if database scaling needed)
-
-**Cost Savings from Gemini Migration:**
-- **Before**: Claude Haiku at $0.80 input / $4.00 output per million tokens
-- **After**: Gemini 2.0 Flash at $0 for first 1M tokens/day
-- **Savings**: ~95% cost reduction on AI operations
-- **Impact**: Essentially unlimited conversations for free during growth phase
-
-**Projected Costs at Scale:**
-- **100 requests/month**: ~$0/month (all on free tiers)
-- **500 requests/month**: ~$25/month (Supabase Pro for data)
-- **1000+ requests/month**: ~$25-50/month (may need paid AI tier eventually)
-
-### Wix Setup (Alternative)
-
-- **Wix Premium**: ~$27-32/month (includes hosting + database + backend)
-- **Claude API**: ~$0.01 per conversation
-- **Gemini API**: FREE
-- **Total**: ~$30-40/month
-
----
-
-## 📁 Project Structure
-
-```
-PipeVault/
-├── components/
-│   ├── Auth.tsx                   # Authentication screen with admin/user login
-│   ├── WelcomeScreen.tsx          # Landing page with 4 cards
-│   ├── StorageRequestWizard.tsx   # Form-based request flow
-│   ├── FormHelperChatbot.tsx      # AI form assistant (Gemini)
-│   ├── StorageRequestMenu.tsx     # 4-option menu component
-│   ├── StorageRequestChatbot.tsx  # Storage request chatbot
-│   ├── Dashboard.tsx              # Customer dashboard (deprecated)
-│   ├── Chatbot.tsx                # Inventory chatbot
-│   ├── InventoryDisplay.tsx       # Inventory table
-│   ├── admin/
-│   │   ├── AdminDashboard.tsx     # NEW: Complete rewrite - 7-tab admin system
-│   │   ├── AdminAIAssistant.tsx   # NEW: Gemini-powered operational chatbot
-│   │   ├── RequestsPanel.tsx      # Approval management (deprecated)
-│   │   ├── YardsPanel.tsx         # Storage facility management (deprecated)
-│   │   └── InventoryPanel.tsx     # Inventory tracking (deprecated)
-│   ├── icons/
-│   │   └── Icons.tsx              # Icon components (PipeVaultIcon, etc.)
-│   └── ui/                        # Reusable UI components
-│       ├── Card.tsx
-│       ├── Button.tsx
-│       └── Spinner.tsx
-├── services/
-│   ├── claudeService.ts           # Claude API integration (alternative)
-│   ├── geminiService.ts           # NEW: Gemini API integration (PRIMARY)
-│   ├── conversationScripts.ts     # AI conversation templates
-│   └── emailService.ts            # Email notifications
-├── hooks/
-│   └── useSupabaseData.ts         # React Query hooks for all CRUD
-├── lib/
-│   ├── supabase.ts                # Supabase client
-│   ├── AuthContext.tsx            # Authentication context with admin checking
-│   └── QueryProvider.tsx          # React Query setup
-├── supabase/
-│   ├── schema.sql                 # Database schema
-│   └── rls-policies-fix.sql       # Security policies
-├── wix/                           # Wix deployment package
-│   ├── README.md                  # Wix quick start
-│   ├── WIX_MIGRATION_GUIDE.md     # Step-by-step guide
-│   ├── backend/
-│   │   ├── ai.jsw                 # AI service for Wix
-│   │   └── data.jsw               # Database operations
-│   └── pages/
-│       └── storageRequest.js      # Example page code
-├── .github/                       # GitHub Actions for deployment
-│   └── workflows/
-│       └── deploy.yml             # Auto-deploy to GitHub Pages
-├── types.ts                       # TypeScript interfaces
-├── App.tsx                        # Main app component
-├── index.tsx                      # Entry point
-├── .env.example                   # Environment variable template
-├── AUTH_QUICK_START.md            # Authentication setup guide
-├── CHANGELOG.md                   # Version history
-├── DEPLOY_TO_WIX.md               # Wix deployment detailed guide
-├── QUICK_START_WIX.md             # Wix deployment quick start
-└── WIX_DEPLOYMENT.md              # Wix deployment overview
+## Local Development
+```bash
+npm install
+npm run dev         # start Vite dev server
+npm run build       # type-check + production bundle
+npm run preview     # test the production build locally
 ```
 
----
+### Test Accounts
+- Create customer/admin accounts in the Supabase dashboard.
+- `Auth.tsx` contains a temporary admin allowlist (`adminEmails`). Remove it once all admins live in `admin_users`.
 
-## 🔐 Security
+## Supabase Configuration
+1. **Schema** - run `supabase/schema.sql` in the Supabase SQL editor to create tables, enums, and seed yard data.
+2. **Row-Level Security** - run `supabase/rls-policies-fix.sql` **whenever this file changes**. The script:
+   - Enforces RLS on companies, storage requests, inventory, truck_loads, documents, conversations, and notifications.
+   - Restricts customers to data that matches their email domain.
+   - Grants admins broader SELECT/UPDATE access via the `admin_users` table.
+   - Adds an allowlisted admin fallback for key policies; update the email list in the SQL to match your roster.
+3. **Checks** - use the verification queries at the bottom of the SQL file to confirm RLS state.
+4. **Admin Users** - insert admin records (Supabase Auth UUID) into `admin_users` via service-role SQL or the dashboard.
 
-### Supabase Row-Level Security (RLS)
+## AI Configuration
+- Set `VITE_GOOGLE_AI_API_KEY`. Without it, the app uses canned fallback responses.
+- `services/geminiService.ts` contains all prompts for Roughneck, Roughneck Ops, request summaries, and the form helper.
+- Adjust tone/behaviour by editing the prompt strings or `services/conversationScripts.ts`.
+- Chat history is trimmed in the client to stay within free-tier token limits.
 
-All tables have RLS policies:
-- Users can only see their own company's data
-- Admins have full access
-- Public cannot read sensitive data
+## Technical Troubleshooting & Issue Resolution
 
-### API Keys
+This section documents critical issues encountered during development, their root causes, and technical solutions. Written for AI comprehension and future debugging.
 
-- Stored in `.env` (never committed to git)
-- `.env` is in `.gitignore`
-- Use Wix Secrets Manager for Wix deployment
+### Issue 1: React Query Cache Persistence Across Authentication State Changes
 
-### Authentication
+**Symptom**: When switching between user accounts (customer → admin or vice versa), the application displays stale data from the previous session until the development server is restarted. Admin dashboards show customer data, customer dashboards show admin data.
 
-- Email-based (no passwords stored)
-- Reference ID acts as project-specific passcode
-- Admin credentials for backend access
+**Root Cause Analysis**:
+- React Query (`@tanstack/react-query`) caches all API responses with a 5-minute `staleTime` ([QueryProvider.tsx:13](lib/QueryProvider.tsx#L13))
+- When authentication state changes (logout → login with different account):
+  1. Supabase auth state updates correctly (new JWT token issued)
+  2. Local React state clears (`user`, `session`, `isAdmin` in AuthContext)
+  3. **BUT** React Query cache persists with data fetched using the previous user's JWT
+  4. New queries see "fresh" cached data and don't refetch
+  5. Even though the new JWT has different Row Level Security (RLS) permissions, cached data is still returned
+- This is a JWT caching issue at the React Query layer, not a Supabase Auth layer issue
+- The problem compounds in development due to Hot Module Replacement (HMR) maintaining in-memory state across code changes
 
----
+**Technical Solution**:
+Implemented automatic cache invalidation in [AuthContext.tsx](lib/AuthContext.tsx) when authentication events occur:
 
-## 🧪 Testing
+```typescript
+// Import queryClient from QueryProvider
+import { queryClient } from './QueryProvider';
 
-### Manual Testing Checklist
+// In useEffect - onAuthStateChange listener (lines 62-82)
+supabase.auth.onAuthStateChange((event, session) => {
+  const previousUserId = user?.id;
+  const newUserId = session?.user?.id;
 
-**Customer Flow:**
-- [ ] Load landing page - see 4 option cards
-- [ ] Click "Request New Pipe Storage" - opens form with chatbot
-- [ ] Fill out all fields - validation works
-- [ ] Ask chatbot questions - gets helpful responses
-- [ ] Submit form - receives reference ID
-- [ ] Try other 3 options - prompts for email + reference ID
+  // Update local auth state
+  setSession(session);
+  setUser(session?.user ?? null);
+  checkAdminStatus(session?.user ?? null);
 
-**Admin Flow:**
-- [ ] Login as admin (Admin/Admin)
-- [ ] View pending requests
-- [ ] Approve request - assigns location
-- [ ] Check inventory - pipe added
-- [ ] Reject request - sends notification
+  // Clear cache on logout or account switch
+  if (event === 'SIGNED_OUT' || (newUserId && previousUserId && newUserId !== previousUserId)) {
+    console.log('Auth state changed - clearing query cache to prevent stale data');
+    queryClient.clear(); // Remove all queries from cache
+  }
+  // Refetch all data when logging in or token refreshes
+  else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    console.log('User authenticated - invalidating queries to refetch with new permissions');
+    queryClient.invalidateQueries(); // Mark all queries as stale and refetch
+  }
+});
+```
 
----
+**Cache Invalidation Strategy**:
+- `queryClient.clear()` - Complete cache removal on logout and account switch
+- `queryClient.invalidateQueries()` - Mark queries stale and refetch on login and token refresh
+- User ID comparison prevents unnecessary cache clears when same user refreshes token
 
-## 🤝 Contributing
+**Files Modified**:
+- [lib/QueryProvider.tsx:9](lib/QueryProvider.tsx#L9) - Exported `queryClient` for external access
+- [lib/AuthContext.tsx:9](lib/AuthContext.tsx#L9) - Imported `queryClient`
+- [lib/AuthContext.tsx:73-81](lib/AuthContext.tsx#L73-L81) - Added cache invalidation in auth event handler
+- [lib/AuthContext.tsx:189-191](lib/AuthContext.tsx#L189-L191) - Added redundant cache clear in `signOut()` function
 
-This is a private project for MPS Group. For internal contributions:
+**Testing Verification**:
+```bash
+# Before fix:
+1. Login as customer@example.com → see customer dashboard
+2. Logout
+3. Login as admin@mpsgroup.com → ❌ still shows customer data
+4. Restart dev server → ✅ now shows admin data
 
-1. Create feature branch
-2. Make changes
-3. Test thoroughly
-4. Submit pull request
-5. Get approval from project lead
+# After fix:
+1. Login as customer@example.com → see customer dashboard
+2. Logout → Console: "Auth state changed - clearing query cache to prevent stale data"
+3. Login as admin@mpsgroup.com → Console: "User authenticated - invalidating queries to refetch with new permissions"
+4. ✅ Immediately shows correct admin data (no restart needed)
+```
 
----
+**Production Impact**: Minimal. This was primarily a development issue due to HMR and rapid account switching. Production users rarely switch accounts in the same browser session. However, the fix ensures robustness in all environments and handles edge cases like:
+- JWT token refresh every hour (auto-refetch with new token)
+- RLS policy changes in Supabase (clear cache forces new permission check)
+- Multi-tab logout scenarios (prevents stale data in other tabs)
 
-## 📞 Support
-
-For questions or issues:
-
-- **Technical Issues**: Check `/wix/README.md` or `/wix/WIX_MIGRATION_GUIDE.md`
-- **AI Integration**: See `services/claudeService.ts` and `services/geminiService.ts`
-- **Database**: See `supabase/schema.sql` and `hooks/useSupabaseData.ts`
-
----
-
-## 🤖 Notes for AI Assistants (Codex, ChatGPT, Claude)
-
-This section provides context for AI coding assistants working on PipeVault.
-
-### Project Context
-
-**Purpose**: Pipe storage management system for MPS Group's 20th Anniversary FREE storage promotion
-
-**Current State**: Production-ready, deployed on GitHub Pages with Supabase backend
-
-**Tech Stack Priorities**:
-1. **Gemini 2.0 Flash** - PRIMARY AI service (FREE tier)
-2. **Claude 3.5 Haiku** - Available as fallback (paid)
-3. **React + TypeScript** - Frontend framework
-4. **Supabase** - Database and authentication
-5. **React Query** - Server state management
-
-### Key Architecture Decisions
-
-**Why Gemini over Claude for Chatbots?**
-- Cost: Gemini is FREE (1M tokens/day) vs Claude at $0.80/$4.00 per million tokens
-- Savings: ~95% reduction in AI operation costs
-- Current functions using Gemini:
-  - `callGeminiAdminAssistant()` - Admin operational queries
-  - `callGeminiFormHelper()` - User form assistance
-  - `generateRequestSummary()` - Request summaries
-- When to use Claude: Complex multi-turn conversations requiring nuanced understanding (not currently needed)
-
-**Authentication Pattern:**
-- Users: Email + Reference ID (Reference ID acts as password)
-- Admins: Email + password with whitelist checking in AuthContext.tsx
-- Admin whitelist: `kylegronning@mpsgroup.ca`, `admin@mpsgroup.com`, `kyle@bushels.com`, `admin@bushels.com`
-- Self-service admin account creation via "Create Admin Account" button
-
-**Admin Dashboard Architecture:**
-- Single comprehensive component: [admin/AdminDashboard.tsx](components/admin/AdminDashboard.tsx)
-- 7 tabs managed via internal state (not separate routes)
-- Deprecated components: RequestsPanel, YardsPanel, InventoryPanel (all merged into AdminDashboard)
-- AI Assistant in separate component: [admin/AdminAIAssistant.tsx](components/admin/AdminAIAssistant.tsx)
-
-### Common Tasks
-
-**Adding a new AI chatbot:**
-1. Add function to [services/geminiService.ts](services/geminiService.ts) using `ai.chats.create()` pattern
-2. Define `systemInstruction` with role, capabilities, guidelines
-3. Map chat history to Gemini format (role: 'user' | 'model')
-4. Use model: 'gemini-2.5-flash'
-5. Include contextual data in system instruction (JSON.stringify)
-
-**Adding admin functionality:**
-1. Work in [components/admin/AdminDashboard.tsx](components/admin/AdminDashboard.tsx)
-2. Add new tab to `TabType` if needed
-3. Create render function for tab content
-4. Update tab navigation in JSX
-5. Use existing React Query hooks from [hooks/useSupabaseData.ts](hooks/useSupabaseData.ts)
-
-**Database operations:**
-1. All queries go through React Query hooks in [hooks/useSupabaseData.ts](hooks/useSupabaseData.ts)
-2. Use `useQuery` for reads, `useMutation` for writes
-3. Row-Level Security (RLS) policies in [supabase/rls-policies-fix.sql](supabase/rls-policies-fix.sql)
-4. Schema in [supabase/schema.sql](supabase/schema.sql)
-
-### Known Issues & Gotchas
-
-**Reference ID as Password:**
-- Users set Reference ID during request submission
-- System uses `signUpWithEmail(email, referenceId)` to create auth account
-- Reference ID must be memorable but unique
-- Warning displayed in yellow on form
-
-**Admin Access on GitHub Pages:**
-- Changes to admin whitelist require git push to deploy
-- GitHub Actions auto-deploys to gh-pages branch
-- Production URL: [GitHub Pages URL]
-- Local changes won't affect production until pushed
-
-**Deprecated Components:**
-- [Dashboard.tsx](components/Dashboard.tsx) - Old customer dashboard, now uses WelcomeScreen
-- [admin/RequestsPanel.tsx](components/admin/RequestsPanel.tsx) - Merged into AdminDashboard
-- [admin/YardsPanel.tsx](components/admin/YardsPanel.tsx) - Merged into AdminDashboard
-- [admin/InventoryPanel.tsx](components/admin/InventoryPanel.tsx) - Merged into AdminDashboard
-
-**Don't delete these yet** - may have reusable code snippets
-
-### File Locations Quick Reference
-
-**Authentication:**
-- Login screen: [components/Auth.tsx](components/Auth.tsx)
-- Auth context: [lib/AuthContext.tsx](lib/AuthContext.tsx)
-- Admin whitelist: [lib/AuthContext.tsx](lib/AuthContext.tsx) line 24-29
-
-**Admin Dashboard:**
-- Main dashboard: [components/admin/AdminDashboard.tsx](components/admin/AdminDashboard.tsx)
-- AI assistant: [components/admin/AdminAIAssistant.tsx](components/admin/AdminAIAssistant.tsx)
-- Analytics calculation: [components/admin/AdminDashboard.tsx](components/admin/AdminDashboard.tsx) useMemo hook around line 40
-
-**AI Services:**
-- Gemini service: [services/geminiService.ts](services/geminiService.ts)
-- Admin AI function: [services/geminiService.ts](services/geminiService.ts) line 173-229
-- Form helper function: [services/geminiService.ts](services/geminiService.ts) line 235-292
-- Claude service (alternative): [services/claudeService.ts](services/claudeService.ts)
-
-**Customer Flow:**
-- Landing page: [components/WelcomeScreen.tsx](components/WelcomeScreen.tsx)
-- Request wizard: [components/StorageRequestWizard.tsx](components/StorageRequestWizard.tsx)
-- Form chatbot: [components/FormHelperChatbot.tsx](components/FormHelperChatbot.tsx)
-- Inquiry status: [components/WelcomeScreen.tsx](components/WelcomeScreen.tsx) renderInquiryStatus() around line 147
-
-**Database:**
-- React Query hooks: [hooks/useSupabaseData.ts](hooks/useSupabaseData.ts)
-- Schema: [supabase/schema.sql](supabase/schema.sql)
-- RLS policies: [supabase/rls-policies-fix.sql](supabase/rls-policies-fix.sql)
-
-### Testing Checklist
-
-**Before committing changes:**
-- [ ] Test both admin and user login flows
-- [ ] Verify Gemini API key is set (VITE_GOOGLE_AI_API_KEY)
-- [ ] Check Supabase connection (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
-- [ ] Test form submission creates request and auth account
-- [ ] Verify admin can approve/reject requests
-- [ ] Check AI assistants respond (form helper and admin assistant)
-- [ ] Ensure no console errors in browser
-- [ ] Test on mobile viewport
-
-**For production deployment:**
-- [ ] Update environment variables in hosting platform
-- [ ] Run `npm run build` successfully
-- [ ] Test built version locally
-- [ ] Push to GitHub (auto-deploys to Pages)
-- [ ] Verify deployment at GitHub Pages URL
-- [ ] Test admin login on production
-- [ ] Confirm AI services work on production
-
-### Development Workflow
-
-**Typical development session:**
-1. Pull latest from main: `git pull origin main`
-2. Create feature branch: `git checkout -b feature/description`
-3. Make changes with hot reload: `npm run dev`
-4. Test locally at http://localhost:5173
-5. Commit changes: `git add . && git commit -m "description"`
-6. Push to GitHub: `git push origin feature/description`
-7. Create pull request
-8. Merge to main (auto-deploys to production)
-
-**Working with Supabase:**
-1. Changes to schema: Edit [supabase/schema.sql](supabase/schema.sql), run in Supabase SQL Editor
-2. Changes to RLS: Edit [supabase/rls-policies-fix.sql](supabase/rls-policies-fix.sql), run in SQL Editor
-3. Local development uses production Supabase instance (no local Supabase)
-4. Test with real data or create test company in database
-
-### Collaboration Notes
-
-**When Codex/ChatGPT/Claude is helping:**
-- Prefer Gemini functions for new AI features (cost-effective)
-- Follow existing patterns in AdminDashboard.tsx for new admin features
-- Use React Query hooks from useSupabaseData.ts (don't create new Supabase queries)
-- Keep AI system instructions detailed and specific
-- Test admin features with whitelisted email before asking user
-- Remember: Reference ID acts as password for users
-- GitHub Pages deployment means changes need git push to go live
-
-**Code Style:**
-- TypeScript strict mode enabled
-- Functional components with hooks (no class components)
-- Tailwind CSS for styling (no CSS modules)
-- Props interfaces defined above components
-- Comprehensive comments for complex logic
-- Error handling with try/catch and user-friendly messages
+**Reference**: See [CACHE_INVALIDATION_FIX.md](CACHE_INVALIDATION_FIX.md) for complete analysis.
 
 ---
 
-## 📝 License
+### Issue 2: Slack Webhook URL Exposure in Client Bundle
 
-Proprietary - MPS Group © 2025
+**Symptom**: Original Slack notification implementation sent notifications directly from the browser using a webhook URL stored in `VITE_SLACK_WEBHOOK_URL` environment variable.
+
+**Security Vulnerability**:
+- Vite bundles all `VITE_*` environment variables into the client-side JavaScript bundle
+- Slack webhook URL becomes visible in browser DevTools and production bundle
+- Any user can extract the webhook URL and send arbitrary messages to the Slack channel
+- Client-side network requests can fail silently (CORS, network issues, ad blockers)
+
+**Technical Solution**:
+Migrated from client-side fetch to Supabase Database Webhooks (server-side):
+
+**Architecture Comparison**:
+```
+# Before (Client-side):
+[Browser] → [fetch(VITE_SLACK_WEBHOOK_URL)] → [Slack API]
+Issues: URL exposed, unreliable, no retries
+
+# After (Server-side):
+[Browser] → [Supabase INSERT] → [Supabase Webhook] → [Slack API]
+Benefits: Secure, reliable, automatic retries, centralized logging
+```
+
+**Implementation Changes**:
+1. **Removed client-side code**:
+   - Deleted `import * as slackService` from [StorageRequestWizard.tsx:254-268](components/StorageRequestWizard.tsx)
+   - Removed fetch call to Slack webhook
+   - Added comment: "Slack notification handled automatically by Supabase webhook on INSERT"
+
+2. **Created Supabase webhook configuration**:
+   - [supabase/SETUP_SLACK_WEBHOOK.sql](supabase/SETUP_SLACK_WEBHOOK.sql) - Complete webhook template
+   - Webhook triggers on `INSERT` to `storage_requests` table
+   - Uses Slack Block Kit for rich message formatting
+   - Includes all request details (reference ID, company, pipe specs, dates)
+
+3. **Updated documentation**:
+   - Removed `VITE_SLACK_WEBHOOK_URL` from [.env.example](.env.example)
+   - Updated [NOTIFICATION_SERVICES_SETUP.md](NOTIFICATION_SERVICES_SETUP.md) with Supabase webhook instructions
+   - Created [SLACK_INTEGRATION_MIGRATION.md](SLACK_INTEGRATION_MIGRATION.md) for migration details
+
+**Webhook Configuration** (applied in Supabase Dashboard):
+```
+Name: slack-new-storage-request
+Table: storage_requests
+Events: INSERT
+Type: HTTP Request
+Method: POST
+URL: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+HTTP Headers: Content-Type: application/json
+```
+
+**Benefits of Server-Side Webhooks**:
+- **Security**: Webhook URL never exposed to client
+- **Reliability**: Supabase handles retries and error logging
+- **Automatic**: No client-side code needed
+- **Centralized**: All database events logged in Supabase Dashboard
+- **Testable**: Can test directly in Supabase SQL Editor
+
+**Testing Verification**:
+```bash
+# Test webhook in Supabase SQL Editor:
+INSERT INTO storage_requests (reference_id, company_name, user_email, status)
+VALUES ('TEST-001', 'Test Company', 'test@example.com', 'PENDING');
+# Check Slack channel for notification
+```
+
+**Reference**: See [SLACK_INTEGRATION_MIGRATION.md](SLACK_INTEGRATION_MIGRATION.md) and [NOTIFICATION_SERVICES_SETUP.md](NOTIFICATION_SERVICES_SETUP.md).
 
 ---
 
-## 🎉 Acknowledgments
+### Issue 3: Email Notifications Not Being Delivered
 
-- Built for MPS Group's 20th Anniversary
-- Celebrating 20 Years of FREE Pipe Storage
-- Powered by AI: Claude (Anthropic) & Gemini (Google)
-- Database: Supabase
-- Framework: React + TypeScript + Vite
+**Symptom**: Sign-up confirmation emails arrive successfully, but approval/rejection emails sent from admin dashboard never reach customer inboxes.
+
+**Root Cause Analysis**:
+- **Sign-up emails**: Handled by Supabase Auth's built-in email service (working correctly)
+- **Approval/rejection emails**: Handled by custom code in [services/emailService.ts](services/emailService.ts) using Resend API
+- The `VITE_RESEND_API_KEY` was set to placeholder value `'your_resend_key_here'`
+- When [emailService.ts:30-34](services/emailService.ts#L30-L34) detects missing/invalid API key:
+  ```typescript
+  if (isDevelopment || !isValidApiKey) {
+    console.log('📧 [DEV MODE] Email would be sent:', { to, subject });
+    return; // Email logged to console but not sent
+  }
+  ```
+
+**Email Architecture**:
+```
+Sign-up Flow:
+[User Registration] → [Supabase Auth] → [Built-in Email Service] → ✅ Customer Inbox
+
+Approval Flow:
+[Admin Approves] → [App.tsx:130] → [emailService.sendApprovalEmail()]
+  → [Resend API] → ✅ Customer Inbox (after fix)
+
+Rejection Flow:
+[Admin Rejects] → [App.tsx:145] → [emailService.sendRejectionEmail()]
+  → [Resend API] → ✅ Customer Inbox (after fix)
+```
+
+**Solution**:
+1. Configured valid Resend API key in [.env:10](.env#L10):
+   ```bash
+   VITE_RESEND_API_KEY=re_99TDdtXH_5EUoLuQY8jCGUW7cq9zXhx2K
+   ```
+   (Key will be rotated before production)
+
+2. Updated all email contact references to `pipevault@mpsgroup.ca`:
+   - [services/emailService.ts:28](services/emailService.ts#L28) - `FROM_EMAIL` constant
+   - [components/RequestSummaryPanel.tsx:167](components/RequestSummaryPanel.tsx#L167) - mailto link
+   - [NOTIFICATION_SERVICES_SETUP.md](NOTIFICATION_SERVICES_SETUP.md) - documentation
+   - [README.md:132](README.md#L132) - support contact
+
+3. **Domain Verification Pending**: `mpsgroup.ca` domain needs DNS records (SPF, DKIM, DMARC) configured in Resend dashboard for production delivery. Currently paused pending DNS access.
+
+**Email Templates**:
+- **Approval Email**: Celebration theme, red gradient header, yellow "20 Years of MPS Group" highlight, green location box, dashboard link
+- **Rejection Email**: Professional tone, reason explanation, resubmission encouragement, support contact
+- Both templates include HTML (styled) and plain text (fallback) versions
+
+**Testing Verification**:
+```bash
+# Development mode (logs to console):
+npm run dev
+# Approve request in admin dashboard
+# Check browser console for: "📧 [DEV MODE] Email would be sent: { to, subject }"
+
+# Production mode (sends via Resend):
+VITE_RESEND_API_KEY=re_99... npm run dev
+# Approve request
+# Check customer inbox for email
+```
+
+**Reference**: See [NOTIFICATION_SERVICES_SETUP.md](NOTIFICATION_SERVICES_SETUP.md) for complete email configuration.
 
 ---
 
-**PipeVault - Your pipes, your project, our commitment.** 🚀
+### Issue 4: Archive Feature Database Schema Mismatch
+
+**Symptom**: Archive functionality implemented in TypeScript code but `archived_at` column missing from Supabase database, causing runtime errors when attempting to archive requests.
+
+**Root Cause**: Frontend code updated ([types.ts:95](types.ts#L95), [database.types.ts:51](lib/database.types.ts#L51), [useSupabaseData.ts:32](hooks/useSupabaseData.ts#L32)) but database schema not applied.
+
+**Solution**: Created [supabase/APPLY_ARCHIVE_COLUMN.sql](supabase/APPLY_ARCHIVE_COLUMN.sql):
+```sql
+-- Add archived_at column to storage_requests table
+ALTER TABLE storage_requests
+ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+
+-- Add index for faster filtering of archived requests
+CREATE INDEX IF NOT EXISTS idx_requests_archived
+ON storage_requests(archived_at)
+WHERE archived_at IS NOT NULL;
+```
+
+**Archive Feature Implementation**:
+- [components/RequestSummaryPanel.tsx:12](components/RequestSummaryPanel.tsx#L12) - Archive/Restore button with loading state
+- [components/RequestSummaryPanel.tsx:170](components/RequestSummaryPanel.tsx#L170) - "Show Archived" toggle
+- [components/Dashboard.tsx:26](components/Dashboard.tsx#L26) - Archive mutation wiring
+- [hooks/useSupabaseData.ts:223](hooks/useSupabaseData.ts#L223) - Supabase UPDATE mutation
+- Archived requests hidden by default, visible via toggle
+- Admin dashboards still see all requests (customer-only filter)
+
+**Deployment Checklist**:
+1. Apply SQL in Supabase SQL Editor
+2. Verify column exists: `SELECT column_name FROM information_schema.columns WHERE table_name = 'storage_requests' AND column_name = 'archived_at';`
+3. Test archive/restore in customer dashboard
+4. Deploy frontend with `npm run build`
+
+---
+
+### Common Debugging Patterns
+
+**React Query Cache Issues**:
+- Symptoms: Stale data after auth state change, data from wrong user
+- Solution: Check if `queryClient.clear()` or `invalidateQueries()` called on auth events
+- Debug: Add `console.log` in [AuthContext.tsx:74,79](lib/AuthContext.tsx#L74) to verify cache clearing
+
+**RLS Permission Issues**:
+- Symptoms: Data not visible, "new row violates row-level security policy"
+- Solution: Verify JWT token has correct claims, check admin_users table, verify RLS policies
+- Debug: Run `SELECT auth.uid()` in Supabase SQL Editor to see current user ID
+
+**Email Not Sending**:
+- Symptoms: No email in inbox, no errors in console
+- Solution: Check if API key valid, verify domain verified in Resend, check spam folder
+- Debug: Look for "📧 [DEV MODE]" logs indicating development mode vs production mode
+
+**Webhook Not Firing**:
+- Symptoms: Database INSERT succeeds but no Slack notification
+- Solution: Check Supabase Dashboard → Database → Webhooks for error logs
+- Debug: Test webhook with manual INSERT in SQL Editor, verify webhook URL valid
+
+## Testing & Quality Assurance
+
+### Flow Testing Methodology
+
+**Authentication Flow Testing**:
+```bash
+# Test 1: Customer Sign-up
+1. Navigate to sign-up page
+2. Enter email, password, company details
+3. Submit form
+4. Verify Supabase Auth email received
+5. Confirm email address
+6. Login with credentials
+7. Verify redirect to customer dashboard
+
+# Test 2: Admin Login
+1. Navigate to login page
+2. Enter admin email (listed in AuthContext.tsx:96-100)
+3. Login with credentials
+4. Verify redirect to admin dashboard (not customer dashboard)
+5. Verify admin tabs visible (Overview, Approvals, Requests, etc.)
+
+# Test 3: Account Switching (Cache Invalidation)
+1. Login as customer account
+2. Note data visible on dashboard
+3. Logout → Check console for "clearing query cache"
+4. Login as admin account → Check console for "invalidating queries"
+5. Verify admin data shown (NOT customer data)
+6. No page refresh or server restart required
+```
+
+**Storage Request Flow Testing**:
+```bash
+# Test 4: Customer Request Submission
+1. Login as customer
+2. Click "Request Storage" on dashboard
+3. Complete wizard steps:
+   - Contact information (auto-filled from user metadata)
+   - Pipe specifications (type, size, grade, joints)
+   - Storage duration (start/end dates)
+   - Trucking preference (customer delivery vs MPS pickup)
+4. Submit request
+5. Verify project reference ID displayed
+6. Verify request appears in dashboard summary panel
+7. Verify request status shows "PENDING"
+8. Check Slack channel for new request notification (if webhook configured)
+
+# Test 5: Admin Approval Flow
+1. Login as admin
+2. Navigate to "Approvals" tab
+3. Select pending request
+4. Review AI-generated summary
+5. Assign rack locations (select from available racks)
+6. Click "Approve"
+7. Verify confirmation alert appears
+8. Verify request status changes to "APPROVED"
+9. Verify request moves from Approvals to Requests tab
+10. Check customer email inbox for approval email
+11. Verify email includes assigned location
+
+# Test 6: Admin Rejection Flow
+1. Login as admin
+2. Navigate to "Approvals" tab
+3. Select pending request
+4. Click "Reject"
+5. Enter rejection reason
+6. Submit rejection
+7. Verify confirmation alert appears
+8. Verify request status changes to "REJECTED"
+9. Check customer email inbox for rejection email
+10. Verify email includes reason and support contact
+```
+
+**Archive Feature Testing**:
+```bash
+# Test 7: Archive Request (Customer)
+1. Login as customer with multiple active requests
+2. View dashboard with request summary cards
+3. Click "Archive" button on a completed request
+4. Verify card disappears from default view
+5. Verify button shows loading state during update
+6. Click "Show Archived" toggle
+7. Verify archived request appears with "Restore" button
+8. Click "Restore"
+9. Verify request returns to default view
+10. Verify admin dashboard still shows all requests (archived + active)
+```
+
+**Email Notification Testing**:
+```bash
+# Test 8: Email Delivery (Development)
+1. Set VITE_RESEND_API_KEY to placeholder value
+2. Start dev server: npm run dev
+3. Approve a storage request
+4. Check browser console for "📧 [DEV MODE] Email would be sent"
+5. Verify no actual email sent (development mode)
+
+# Test 9: Email Delivery (Production)
+1. Set valid VITE_RESEND_API_KEY in .env
+2. Restart dev server (required for env change)
+3. Approve a storage request
+4. Check customer email inbox (may take 1-2 minutes)
+5. Verify HTML formatting renders correctly
+6. Test "View Dashboard" button link
+7. Reply to email and verify reply-to address works
+```
+
+**Roughneck AI Assistant Testing**:
+```bash
+# Test 10: Customer Chat
+1. Login as customer
+2. Click "Ask Roughneck" on dashboard
+3. Ask: "What is the status of my storage request?"
+4. Verify response scoped to customer's requests only
+5. Ask: "How long will my pipe be stored?"
+6. Verify AI references specific dates from request
+7. Ask: "What location is my pipe stored at?"
+8. Verify AI responds with assigned rack location
+
+# Test 11: Admin Assistant (Roughneck Ops)
+1. Login as admin
+2. Navigate to "Roughneck Ops" tab
+3. Ask: "Which companies are picking up this month?"
+4. Verify AI analyzes truck_loads table
+5. Ask: "What is our current utilization rate?"
+6. Verify AI calculates from racks and inventory
+7. Ask: "Show me all pending approvals"
+8. Verify AI references storage_requests table
+```
+
+### Modern Development Practices
+
+**React Query Data Fetching Pattern**:
+```typescript
+// Pattern used in hooks/useSupabaseData.ts
+export function useStorageRequests(userEmail?: string) {
+  return useQuery({
+    queryKey: ['requests', userEmail], // Unique cache key
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('storage_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userEmail, // Only fetch when userEmail available
+  });
+}
+```
+
+**Benefits**:
+- Automatic caching reduces redundant API calls
+- Background refetching keeps data fresh
+- Loading and error states handled automatically
+- Optimistic updates for better UX
+- Query invalidation ensures consistency
+
+**Environment-Based Configuration**:
+```typescript
+// Pattern used in services/emailService.ts
+const isDevelopment = import.meta.env.MODE === 'development';
+const apiKey = import.meta.env.VITE_RESEND_API_KEY;
+const isValidApiKey = apiKey && !apiKey.includes('your_') && apiKey.startsWith('re_');
+
+if (isDevelopment || !isValidApiKey) {
+  console.log('📧 [DEV MODE] Email would be sent:', { to, subject });
+  return; // Safe fallback in development
+}
+
+// Production: actually send email
+await fetch('https://api.resend.com/emails', { ... });
+```
+
+**Benefits**:
+- Safe development environment (no accidental emails/notifications)
+- Easy testing without external service costs
+- Production parity with environment variables
+- No code changes between environments
+
+**TypeScript Type Safety**:
+```typescript
+// Pattern used throughout codebase
+export interface StorageRequest {
+  id: string;
+  referenceId: string;
+  companyName: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'; // Type-safe enum
+  archivedAt: string | null; // Explicit nullability
+  // ... other fields
+}
+
+// Supabase types generated from database schema
+import { Database } from './lib/database.types';
+type StorageRequestRow = Database['public']['Tables']['storage_requests']['Row'];
+```
+
+**Benefits**:
+- Compile-time error detection
+- Autocomplete in IDE
+- Refactoring safety
+- Self-documenting code
+- Prevents runtime type errors
+
+**Component Composition Pattern**:
+```typescript
+// Pattern used in components/Dashboard.tsx
+export function Dashboard() {
+  const { user } = useAuth();
+  const { data: requests } = useStorageRequests(user?.email);
+  const { mutate: archiveRequest } = useArchiveRequest();
+
+  return (
+    <RequestSummaryPanel
+      requests={requests}
+      onArchive={archiveRequest}
+    />
+  );
+}
+```
+
+**Benefits**:
+- Separation of concerns (data fetching, UI rendering)
+- Reusable components
+- Testable in isolation
+- Clear prop interfaces
+- Easy to reason about data flow
+
+**Security Best Practices**:
+```typescript
+// Pattern: Never expose secrets in client bundle
+// ❌ Bad:
+const SLACK_WEBHOOK = 'https://hooks.slack.com/...' // Visible in browser
+
+// ✅ Good:
+// Supabase Database Webhook (server-side)
+// Configured in Supabase Dashboard, never touches client code
+
+// Pattern: Validate API keys before use
+const isValidApiKey = apiKey &&
+                      !apiKey.includes('placeholder') &&
+                      apiKey.startsWith('expected_prefix');
+
+// Pattern: Row Level Security (RLS) in database
+-- Policy: Customers see only their company's data
+CREATE POLICY customer_select_own ON storage_requests
+FOR SELECT USING (
+  user_email LIKE '%' || (SELECT substring(auth.jwt() ->> 'email' FROM '@(.*)$'))
+);
+```
+
+**Benefits**:
+- Defense in depth (client + server + database security)
+- Automatic authorization enforcement
+- No secret leakage in browser
+- Principle of least privilege
+
+**Error Handling Pattern**:
+```typescript
+// Pattern used in hooks/useSupabaseData.ts
+const { mutate: approveRequest } = useMutation({
+  mutationFn: async ({ requestId, rackIds }) => {
+    const { data, error } = await supabase
+      .from('storage_requests')
+      .update({ status: 'APPROVED', assignedRackIds: rackIds })
+      .eq('id', requestId);
+
+    if (error) throw error; // Propagate error to React Query
+    return data;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['requests'] }); // Refetch
+    toast.success('Request approved successfully'); // User feedback
+  },
+  onError: (error) => {
+    console.error('Approval failed:', error);
+    toast.error('Failed to approve request. Please try again.');
+  },
+});
+```
+
+**Benefits**:
+- Graceful error handling
+- User-friendly error messages
+- Error logging for debugging
+- Automatic retry on transient failures
+- Optimistic updates with rollback
+
+**Git Workflow & Commit Hygiene**:
+```bash
+# Pattern: Feature branch workflow
+git checkout -b feat/archive-functionality
+git add components/RequestSummaryPanel.tsx hooks/useSupabaseData.ts
+git commit -m "feat: Add archive/restore functionality for customer requests"
+git push origin feat/archive-functionality
+
+# Pattern: Descriptive commit messages
+feat: Add Slack webhook integration via Supabase
+fix: Clear React Query cache on authentication state change
+docs: Add technical troubleshooting section to README
+chore: Update Resend API key and email configuration
+```
+
+**Benefits**:
+- Clear change history
+- Easy rollback if needed
+- Searchable commit messages
+- CI/CD integration readiness
+
+## Operational Playbooks
+
+### Daily Admin Routine
+- Review **Approvals**, assign racks, and approve/reject (confirmation alerts will appear).
+- Monitor **Overview** metrics: utilisation, upcoming pickups, trucking quote backlog.
+- Record truck movements in **Storage/Inventory** so utilisation stays accurate.
+- Ask **Roughneck Ops** for quick analytics (for example, "Which companies are picking up this month?").
+
+### Customer Support Checklist
+- Confirm new users verified their email (Supabase returns "email not confirmed" otherwise).
+- If a user cannot find their request:
+  - Ensure their email domain maps to a company domain.
+  - Verify the request exists and `user_email` is stored in lower case.
+  - Remind them multiple requests show up as swipeable cards in the summary panel.
+- Encourage customers to use the dashboard Roughneck chat rather than the old inquiry form.
+
+## Recent Architecture Improvements & Legacy Code Removal
+
+### Authentication System Modernization (January 2025)
+
+**Legacy System Removed:**
+- ❌ **WelcomeScreen.tsx** - Old dual authentication system with 4-tile menu and email/reference ID sign-in
+- ❌ **Dual Session State** - Complex session management mixing Supabase Auth with custom session objects
+- ❌ **Email/Reference ID Authentication** - Secondary authentication layer for delivery scheduling (no longer needed)
+- ❌ **Full Name Storage** - Single `full_name` field replaced with structured `first_name` + `last_name`
+
+**Modern Architecture:**
+- ✅ **Streamlined Authentication** - Single Supabase Auth flow with automatic session creation ([App.tsx:240-253](App.tsx#L240-L253))
+- ✅ **Tile-Based Dashboard** - Modern UI with permanent Roughneck AI tile and request cards ([StorageRequestMenu.tsx](components/StorageRequestMenu.tsx))
+- ✅ **Structured User Metadata** - First name, last name, company name, and contact number stored separately in `auth.users.raw_user_meta_data`
+- ✅ **Pre-filled Forms** - Contact information auto-populated from signup metadata ([StorageRequestWizard.tsx:235-250](components/StorageRequestWizard.tsx#L235-L250))
+- ✅ **Removed Session.referenceId** - Simplified session interface to only contain company and userId ([types.ts:133-136](types.ts#L133-L136))
+
+**Files Deleted:**
+- `components/WelcomeScreen.tsx` - 442 lines of legacy code removed
+
+**Files Modernized:**
+- [App.tsx](App.tsx) - Auto-create session from authenticated user (removed dual session management)
+- [Auth.tsx](Auth.tsx) - Split full name into first/last name fields in signup form
+- [AuthContext.tsx](lib/AuthContext.tsx) - Updated signUpWithEmail to accept firstName/lastName
+- [types.ts](types.ts) - Removed referenceId from Session interface
+- [StorageRequestWizard.tsx](components/StorageRequestWizard.tsx) - Pre-fill contact info from metadata
+- [Header.tsx](components/Header.tsx) - Construct full name from first_name + last_name
+- [customerIdentity.ts](utils/customerIdentity.ts) - Resolve identity from structured metadata
+
+### UI/UX Enhancements (January 2025)
+
+**Improvements:**
+- ✅ **Connection Display** - Shows thread type alongside connection (e.g., "BTC 8 Round") ([RequestSummaryPanel.tsx:365-366](components/RequestSummaryPanel.tsx#L365-L366))
+- ✅ **Quantity Display** - Total meters as primary value with joints breakdown (e.g., "1266.9m / 103 joints @ 12.3m avg length") ([RequestSummaryPanel.tsx:373-378](components/RequestSummaryPanel.tsx#L373-L378))
+- ✅ **Weather Integration** - Real-time weather from Tomorrow.io API with dynamic Roughneck quips ([services/weatherService.ts](services/weatherService.ts))
+- ✅ **Request Adjustments** - Removed "Request Adjustment" button; adjustments now handled via Roughneck AI chat
+
+**Weather Service Features:**
+- Live temperature and conditions for Calgary, Alberta (MPS location)
+- 80+ weather codes mapped to emojis and descriptions
+- Dynamic personality-driven quips based on temperature and conditions
+- Automatic fallback if API unavailable
+
+## Current Gaps & Follow-ups
+
+### Completed
+- ✅ **Archive Feature** - Customer dashboard archive/restore functionality implemented ([RequestSummaryPanel.tsx](components/RequestSummaryPanel.tsx), [Dashboard.tsx](components/Dashboard.tsx))
+- ✅ **Cache Invalidation** - Fixed stale data on account switching with automatic React Query cache clearing ([AuthContext.tsx:73-81](lib/AuthContext.tsx#L73-L81))
+- ✅ **Slack Notifications** - Migrated from client-side to secure Supabase Database Webhooks ([SLACK_INTEGRATION_MIGRATION.md](SLACK_INTEGRATION_MIGRATION.md))
+- ✅ **Email Service** - Configured Resend API for approval/rejection emails ([emailService.ts](services/emailService.ts))
+- ✅ **Contact Email** - Standardized on `pipevault@mpsgroup.ca` across all touchpoints
+- ✅ **Authentication Modernization** - Removed 442-line WelcomeScreen component and dual authentication system
+- ✅ **Structured User Metadata** - Split full name into first/last name fields with automatic form pre-fill
+- ✅ **Tile-Based Dashboard** - Permanent Roughneck AI tile with live weather integration
+- ✅ **Enhanced Request Cards** - Thread type display and metric-first quantity formatting
+- Admin approvals now surface full pipe specifications, support persistent internal notes, and persist approver/timestamp metadata for the All Requests ledger.
+- Customer request wizard now presents casing OD and wt selections in metric-first formatting (mm, kg/m) with imperial references retained in brackets.
+
+### Pending (Requires User Action)
+1. **Database Schema Update** - Run [supabase/APPLY_ARCHIVE_COLUMN.sql](supabase/APPLY_ARCHIVE_COLUMN.sql) in Supabase SQL Editor to add `archived_at` column
+2. **Approval Metadata Columns** - Run [supabase/APPLY_APPROVER_METADATA.sql](supabase/APPLY_APPROVER_METADATA.sql) in Supabase SQL Editor so `storage_requests` stores approver email and internal notes.
+3. **Slack Webhook Configuration** - Create webhook in Supabase Dashboard using template from [supabase/SETUP_SLACK_WEBHOOK.sql](supabase/SETUP_SLACK_WEBHOOK.sql)
+4. **Domain Verification** - Add DNS records (SPF, DKIM, DMARC) for `mpsgroup.ca` in Resend dashboard to enable production email delivery
+5. **API Key Rotation** - Rotate `VITE_RESEND_API_KEY` before production launch (current key shared for development)
+
+### Pending (Development Work)
+1. **Delivery Scheduling** - Replace placeholder cards with forms that write to `truck_loads` table for scheduling deliveries to MPS and worksite
+2. **Inventory Sync** - Automate inventory record creation when admins approve storage requests (currently manual)
+3. **Session Routing** - Decide whether to show dedicated `Dashboard` view immediately after login or keep current flow
+4. **Automated Tests** - Add unit/UI test coverage:
+   - Summary calculation logic ([RequestSummaryPanel.tsx](components/RequestSummaryPanel.tsx))
+   - Rack assignment logic ([AdminDashboard.tsx](components/admin/AdminDashboard.tsx))
+   - Cache invalidation behavior ([AuthContext.tsx](lib/AuthContext.tsx))
+   - Archive/restore mutations ([useSupabaseData.ts](hooks/useSupabaseData.ts))
+5. **Production Hardening** - Replace temporary admin email allowlist ([AuthContext.tsx:96-100](lib/AuthContext.tsx#L96-L100)) with:
+   - Custom JWT claims (`app_metadata.role === 'admin'`), OR
+   - Strict `admin_users` table membership check only
+6. **Notifications UX** - Surface content from `notifications` table via:
+   - In-app notification inbox component
+   - Toast notification system for real-time alerts
+   - Badge counter for unread notifications
+
+## Deployment Notes
+- GitHub Pages hosts the static bundle. Run `npm run build`, commit, then push to trigger `.github/workflows/`.
+- Configure the same `VITE_*` variables on the hosting service to match production Supabase and Gemini keys.
+- Post-deploy smoke test: customer login, new submission, admin approval, multi-request summary swipe, Roughneck responses.
+
+## Support & Contact
+- **Product Owner**: Kyle Gronning (MPS Group)
+- **Supabase Project**: `cvevhvjxnklbbhtqzyvw`
+- **AI Vendor**: Google Gemini (Flash 2.5)
+
+See `CHECKLISTS.md` for SOPs. For help or hand-off questions, reach out via the internal Slack channel or email `pipevault@mpsgroup.ca`.

@@ -19,7 +19,7 @@ export const APPROVAL_WORKFLOW_SCRIPT = `You are a helpful assistant for MPS Gro
 
 2. **Project Reference**:
    - Ask: "What project reference or well name should we use?"
-   - **IMPORTANT**: Emphasize this: "This will be your unique ID to check status and make inquiries about your pipe - kind of like a passcode. Make sure it's something you'll remember!"
+   - **IMPORTANT**: Emphasize this: "This will be your unique ID to check status and make inquiries about your pipe. Make sure it's something you'll remember!"
 
 3. **Pipe Type**:
    - Ask: "What type of pipe are you storing?"

@@ -20,7 +20,13 @@ export const useMockData = () => {
 
   const addRequest = (newRequest: Omit<StorageRequest, 'id'>) => {
     const newId = `req-${Date.now()}`;
-    const requestWithId = { ...newRequest, id: newId };
+    const requestWithId: StorageRequest = {
+      ...newRequest,
+      id: newId,
+      approvedAt: newRequest.approvedAt ?? null,
+      approvedBy: newRequest.approvedBy ?? null,
+      internalNotes: newRequest.internalNotes ?? null,
+    };
     setRequests(prevRequests => [...prevRequests, requestWithId]);
     return requestWithId;
   };
@@ -32,7 +38,7 @@ export const useMockData = () => {
     return companyWithId;
   };
 
-  const approveRequest = (requestId: string, assignedRackIds: string[], requiredJoints: number) => {
+  const approveRequest = (requestId: string, assignedRackIds: string[], requiredJoints: number, notes?: string) => {
     // 1. Update the request status
     let assignedLocation = '';
     const request = requests.find(r => r.id === requestId);
@@ -40,6 +46,9 @@ export const useMockData = () => {
     
     let updatedRequest: StorageRequest | null = null;
     const avgJointLength = request.requestDetails.avgJointLength;
+    const approvedAt = new Date().toISOString();
+    const approvedBy = 'mock.admin@pipevault.dev';
+    const internalNotes = notes?.trim() ? notes.trim() : null;
 
 
     setRequests(prev => prev.map(r => {
@@ -59,7 +68,17 @@ export const useMockData = () => {
                 }
             }
             
-            updatedRequest = { ...r, status: 'APPROVED' as const, assignedRackIds, assignedLocation };
+            updatedRequest = {
+                ...r,
+                status: 'APPROVED' as const,
+                assignedRackIds,
+                assignedLocation,
+                approvedAt,
+                approvedBy,
+                internalNotes,
+                rejectionReason: null,
+                rejectedAt: null,
+            };
             return updatedRequest;
         }
         return r;
@@ -99,7 +118,15 @@ export const useMockData = () => {
     if (!request) return;
 
     setRequests(prev => prev.map(r => 
-        r.id === requestId ? { ...r, status: 'REJECTED' as const, rejectionReason: reason } : r
+        r.id === requestId
+            ? {
+                ...r,
+                status: 'REJECTED' as const,
+                rejectionReason: reason,
+                approvedAt: null,
+                approvedBy: null,
+              }
+            : r
     ));
 
     // Send notification

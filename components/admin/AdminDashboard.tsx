@@ -9,6 +9,7 @@ import AdminHeader from './AdminHeader';
 import AdminAIAssistant from './AdminAIAssistant';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
+import { formatDate } from '../../utils/dateUtils';
 
 interface AdminDashboardProps {
   session: AdminSession;
@@ -18,10 +19,11 @@ interface AdminDashboardProps {
   yards: Yard[];
   inventory: Pipe[];
   truckLoads: TruckLoad[];
-  approveRequest: (requestId: string, assignedRackIds: string[], requiredJoints: number) => void;
+  approveRequest: (requestId: string, assignedRackIds: string[], requiredJoints: number, notes?: string) => void;
   rejectRequest: (requestId: string, reason: string) => void;
   addTruckLoad: (truckLoad: Omit<TruckLoad, 'id'>) => void;
   pickUpPipes: (pipeIds: string[], uwi: string, wellName: string, truckLoadId?: string) => void;
+  updateRequest: (request: StorageRequest) => Promise<unknown>;
 }
 
 type TabType = 'overview' | 'approvals' | 'requests' | 'companies' | 'inventory' | 'storage' | 'ai';
@@ -38,10 +40,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   rejectRequest,
   addTruckLoad,
   pickUpPipes,
+  updateRequest,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [globalSearch, setGlobalSearch] = useState('');
   const [requestFilter, setRequestFilter] = useState<'ALL' | RequestStatus>('ALL');
+  const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
+  const [notesSavingId, setNotesSavingId] = useState<string | null>(null);
+
+  const getDraftNote = (request: StorageRequest) =>
+    notesDraft.hasOwnProperty(request.id)
+      ? notesDraft[request.id]
+      : request.internalNotes ?? '';
+
+  const handleNotesChange = (requestId: string, value: string) => {
+    setNotesDraft(prev => ({ ...prev, [requestId]: value }));
+  };
+
+  const handleNotesReset = (requestId: string) => {
+    setNotesDraft(prev => {
+      const { [requestId]: _, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const handleNotesSave = async (request: StorageRequest) => {
+    const draft = getDraftNote(request);
+    const trimmed = draft.trim();
+    const internalNotes = trimmed.length > 0 ? trimmed : null;
+
+    setNotesSavingId(request.id);
+    try {
+      await updateRequest({ ...request, internalNotes });
+      setNotesDraft(prev => {
+        const { [request.id]: _, ...rest } = prev;
+        return rest;
+      });
+    } catch (error) {
+      console.error('Error saving internal notes:', error);
+      alert('Unable to save internal notes. Please try again or contact support.');
+    } finally {
+      setNotesSavingId(null);
+    }
+  };
 
   // ===== ANALYTICS =====
   const analytics = useMemo(() => {
@@ -58,13 +99,55 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         asum + area.racks.reduce((rsum, rack) => rsum + (rack.occupiedMeters || 0), 0), 0), 0);
     const utilization = totalCapacity > 0 ? (totalOccupied / totalCapacity * 100) : 0;
 
+    const now = new Date();
+    const msPerDay = 1000 * 60 * 60 * 24;
+
+    const requestMap = new Map<string, StorageRequest>();
+    requests.forEach((req) => requestMap.set(req.id, req));
+
+    const pickupLoads = truckLoads.filter(load => load.type === 'PICKUP');
+    const upcomingPickups = pickupLoads
+      .map(load => ({
+        load,
+        date: new Date(load.arrivalTime),
+      }))
+      .filter(({ date }) => !Number.isNaN(date.getTime()) && date >= now)
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    const nextPickupInfo = upcomingPickups[0] ?? null;
+    const nextPickupDays = nextPickupInfo
+      ? Math.max(0, Math.ceil((nextPickupInfo.date.getTime() - now.getTime()) / msPerDay))
+      : null;
+
+    const pickupsThisMonthCompanies = new Set<string>();
+    pickupLoads.forEach(load => {
+      const date = new Date(load.arrivalTime);
+      if (Number.isNaN(date.getTime())) return;
+      if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) {
+        const related = load.relatedRequestId ? requestMap.get(load.relatedRequestId) : undefined;
+        if (related) {
+          pickupsThisMonthCompanies.add(related.companyId);
+        }
+      }
+    });
+
+    const pendingTruckingQuotes = requests.filter(
+      req => req.status === 'PENDING' && req.truckingInfo?.truckingType === 'quote'
+    );
+
     return {
       requests: { total: requests.length, pending, approved, completed, rejected },
       storage: { totalCapacity, totalOccupied, available: totalCapacity - totalOccupied, utilization },
       companies: companies.length,
       inventory: { total: inventory.length, inStorage: inventory.filter(p => p.status === 'IN_STORAGE').length },
+      operational: {
+        companiesPickingUpThisMonth: pickupsThisMonthCompanies.size,
+        nextPickupDays,
+        nextPickupDate: nextPickupInfo?.load.arrivalTime ?? null,
+        pendingTruckingQuotes: pendingTruckingQuotes.length,
+      },
     };
-  }, [requests, yards, companies, inventory]);
+  }, [requests, yards, companies, inventory, truckLoads]);
 
   // ===== GLOBAL SEARCH =====
   const searchResults = useMemo(() => {
@@ -147,6 +230,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {analytics.storage.totalCapacity.toFixed(0)}m total capacity
           </p>
         </Card>
+      </div>
+
+      <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-4 space-y-2">
+        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Operational Highlights</h3>
+        <ul className="text-sm text-gray-300 space-y-1">
+          <li>
+            There {analytics.operational.companiesPickingUpThisMonth === 1 ? 'is' : 'are'}{' '}
+            <span className="text-white font-semibold">{analytics.operational.companiesPickingUpThisMonth}</span>{' '}
+            company{analytics.operational.companiesPickingUpThisMonth === 1 ? '' : 'ies'} scheduled to pick up pipe this month.
+          </li>
+          <li>
+            {analytics.operational.nextPickupDays !== null ? (
+              <>
+                Next storage pickup in{' '}
+                <span className="text-white font-semibold">
+                  {analytics.operational.nextPickupDays} day{analytics.operational.nextPickupDays === 1 ? '' : 's'}
+                </span>
+                {analytics.operational.nextPickupDate && (
+                  <> ({formatDate(analytics.operational.nextPickupDate, true)})</>
+                )}
+              </>
+            ) : (
+              'No upcoming pickups scheduled.'
+            )}
+          </li>
+          <li>
+            {analytics.operational.pendingTruckingQuotes > 0 ? (
+              <>
+                Reminder: follow up on{' '}
+                <span className="text-white font-semibold">
+                  {analytics.operational.pendingTruckingQuotes} pending trucking quote
+                  {analytics.operational.pendingTruckingQuotes === 1 ? '' : 's'}.
+                </span>
+              </>
+            ) : (
+              'All pending trucking quotes have been addressed.'
+            )}
+          </li>
+        </ul>
       </div>
 
       {/* Quick Stats */}
@@ -273,6 +395,42 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const filteredRequests = requests.filter(r =>
       requestFilter === 'ALL' || r.status === requestFilter
     );
+    const buildPipeSummary = (req: StorageRequest) => {
+      const d = req.requestDetails;
+      if (!d) return '-';
+      const lines: string[] = [];
+      const itemType =
+        d.itemType === 'Other' && d.itemTypeOther ? `Other (${d.itemTypeOther})` : d.itemType;
+      if (itemType) lines.push(itemType);
+      const grade =
+        d.grade === 'Other' && d.gradeOther ? `Grade: ${d.gradeOther}` : d.grade ? `Grade: ${d.grade}` : '';
+      if (grade) lines.push(grade);
+      const connection =
+        d.connection === 'Other' && d.connectionOther
+          ? `Connection: ${d.connectionOther}`
+          : d.connection
+          ? `Connection: ${d.connection}`
+          : '';
+      if (connection) lines.push(connection);
+      if (d.threadType) {
+        lines.push(`Thread: ${d.threadType}`);
+      }
+      if (typeof d.totalJoints === 'number' && typeof d.avgJointLength === 'number') {
+        lines.push(`${d.totalJoints} joints @ ${d.avgJointLength} m`);
+      }
+      if (d.casingSpec) {
+        if (typeof d.casingSpec.size_mm === 'number' && typeof d.casingSpec.size_in === 'number') {
+          const mmDisplay = Number(d.casingSpec.size_mm.toFixed(2));
+          const inchDisplay = Number(d.casingSpec.size_in.toFixed(3));
+          lines.push(`OD: ${mmDisplay} (${inchDisplay})`);
+        }
+        if (typeof d.casingSpec.weight_lbs_ft === 'number') {
+          const kgPerMeter = d.casingSpec.weight_lbs_ft * 1.48816394;
+          lines.push(`Wt: ${kgPerMeter.toFixed(1)} (${d.casingSpec.weight_lbs_ft.toFixed(1)})`);
+        }
+      }
+      return lines.length ? lines.join('\n') : '-';
+    };
 
     return (
       <div className="space-y-6">
@@ -298,22 +456,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <th className="text-left py-3 px-4 text-gray-400">Reference ID</th>
                 <th className="text-left py-3 px-4 text-gray-400">Company</th>
                 <th className="text-left py-3 px-4 text-gray-400">Contact</th>
-                <th className="text-left py-3 px-4 text-gray-400">Item Type</th>
-                <th className="text-left py-3 px-4 text-gray-400">Quantity</th>
+                <th className="text-left py-3 px-4 text-gray-400">Pipe Details</th>
+                <th className="text-left py-3 px-4 text-gray-400">Total Length (m)</th>
                 <th className="text-left py-3 px-4 text-gray-400">Status</th>
                 <th className="text-left py-3 px-4 text-gray-400">Location</th>
+                <th className="text-left py-3 px-4 text-gray-400">Approved</th>
+                <th className="text-left py-3 px-4 text-gray-400">Approved By</th>
+                <th className="text-left py-3 px-4 text-gray-400">Internal Notes</th>
               </tr>
             </thead>
             <tbody>
-              {filteredRequests.map(req => (
+              {filteredRequests.map(req => {
+                const totalMeters =
+                  req.requestDetails && typeof req.requestDetails.avgJointLength === 'number' && typeof req.requestDetails.totalJoints === 'number'
+                    ? req.requestDetails.avgJointLength * req.requestDetails.totalJoints
+                    : null;
+                const originalNote = req.internalNotes ?? '';
+                const noteValue = getDraftNote(req);
+                const isDirty = noteValue !== originalNote;
+                const isSaving = notesSavingId === req.id;
+
+                return (
                 <tr key={req.id} className="border-b border-gray-800 hover:bg-gray-800/50">
                   <td className="py-3 px-4 font-medium text-white">{req.referenceId}</td>
                   <td className="py-3 px-4 text-gray-300">
                     {companies.find(c => c.id === req.companyId)?.name || 'Unknown'}
                   </td>
                   <td className="py-3 px-4 text-gray-400 text-xs">{req.userId}</td>
-                  <td className="py-3 px-4 text-gray-300">{req.requestDetails?.itemType || 'N/A'}</td>
-                  <td className="py-3 px-4 text-gray-300">{req.requestDetails?.totalJoints || 0} joints</td>
+                  <td className="py-3 px-4 text-gray-300 whitespace-pre-wrap">{buildPipeSummary(req)}</td>
+                  <td className="py-3 px-4 text-gray-300">
+                    {totalMeters !== null ? totalMeters.toFixed(1) : '-'}
+                  </td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 rounded text-xs ${
                       req.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400' :
@@ -325,8 +498,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </span>
                   </td>
                   <td className="py-3 px-4 text-gray-400 text-xs">{req.assignedLocation || '-'}</td>
+                  <td className="py-3 px-4 text-gray-300">
+                    {req.approvedAt ? formatDate(req.approvedAt, true) : '-'}
+                  </td>
+                  <td className="py-3 px-4 text-gray-300">{req.approvedBy || '-'}</td>
+                  <td className="py-3 px-4 text-gray-400 text-xs whitespace-pre-wrap">
+                    <textarea
+                      className="w-full bg-gray-900 border border-gray-700 rounded-md p-2 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-red-500 resize-y"
+                      rows={3}
+                      value={noteValue}
+                      onChange={e => handleNotesChange(req.id, e.target.value)}
+                    />
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-xs rounded bg-green-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handleNotesSave(req)}
+                        disabled={isSaving || !isDirty}
+                      >
+                        {isSaving ? 'Saving...' : 'Save'}
+                      </button>
+                      {isDirty && (
+                        <button
+                          type="button"
+                          className="px-2 py-1 text-xs rounded bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => handleNotesReset(req.id)}
+                          disabled={isSaving}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </Card>
@@ -487,7 +693,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             type="text"
             value={globalSearch}
             onChange={e => setGlobalSearch(e.target.value)}
-            placeholder="🔍 Global search: requests, companies, inventory..."
+            placeholder="Search: requests, companies, inventory..."
             className="w-full bg-gray-800 text-white placeholder-gray-500 border border-gray-700 rounded-md py-3 px-4 focus:outline-none focus:ring-2 focus:ring-red-500"
           />
           {searchResults && (
@@ -538,24 +744,142 @@ const ApprovalCard: React.FC<{
   request: StorageRequest;
   company?: Company;
   yards: Yard[];
-  onApprove: (requestId: string, rackIds: string[], requiredJoints: number) => void;
+  onApprove: (requestId: string, rackIds: string[], requiredJoints: number, notes?: string) => void;
   onReject: (requestId: string, reason: string) => void;
 }> = ({ request, company, yards, onApprove, onReject }) => {
   const [selectedRacks, setSelectedRacks] = useState<string[]>([]);
-  const requiredJoints = request.requestDetails?.totalJoints || 0;
+  const [actionLoading, setActionLoading] = useState(false);
+  const [internalNotes, setInternalNotes] = useState(request.internalNotes ?? '');
+  const details = request.requestDetails;
+  const trucking = request.truckingInfo;
+  const requiredJoints = details?.totalJoints ?? 0;
+  const totalLengthMeters =
+    details && typeof details.avgJointLength === 'number' && typeof details.totalJoints === 'number'
+      ? details.avgJointLength * details.totalJoints
+      : null;
 
-  const handleApprove = () => {
+  const formattedItemType =
+    details?.itemType === 'Other' && details?.itemTypeOther
+      ? `Other (${details.itemTypeOther})`
+      : details?.itemType ?? '';
+
+  const formattedGrade =
+    details?.grade === 'Other' && details?.gradeOther
+      ? `Other (${details.gradeOther})`
+      : details?.grade ?? '';
+
+  const formattedConnection =
+    details?.connection === 'Other' && details?.connectionOther
+      ? `Other (${details.connectionOther})`
+      : details?.connection ?? '';
+
+  const pipeFacts: Array<{ label: string; value: string }> = [];
+  if (formattedItemType) pipeFacts.push({ label: 'Item Type', value: formattedItemType });
+  if (formattedGrade) pipeFacts.push({ label: 'Grade', value: formattedGrade });
+  if (formattedConnection) pipeFacts.push({ label: 'Connection', value: formattedConnection });
+  if (details?.threadType) pipeFacts.push({ label: 'Thread', value: details.threadType });
+  if (typeof details?.avgJointLength === 'number') {
+    pipeFacts.push({ label: 'Avg Joint Length', value: `${details.avgJointLength} m` });
+  }
+  if (typeof details?.totalJoints === 'number') {
+    pipeFacts.push({ label: 'Total Joints', value: `${details.totalJoints}` });
+  }
+  if (totalLengthMeters !== null) {
+    pipeFacts.push({ label: 'Total Length', value: `${totalLengthMeters.toFixed(1)} m` });
+  }
+  if (details?.storageStartDate || details?.storageEndDate) {
+    pipeFacts.push({
+      label: 'Storage Window',
+      value: `${details?.storageStartDate || '-'} -> ${details?.storageEndDate || '-'}`,
+    });
+  }
+  if (details?.sandControlScreenType) {
+    const screen =
+      details.sandControlScreenType === 'Other' && details.sandControlScreenTypeOther
+        ? `Other (${details.sandControlScreenTypeOther})`
+        : details.sandControlScreenType;
+    pipeFacts.push({ label: 'Screen Type', value: screen });
+  }
+  if (details?.casingSpec) {
+    if (typeof details.casingSpec.size_in === 'number') {
+      pipeFacts.push({ label: 'OD (in)', value: details.casingSpec.size_in.toString() });
+    }
+    if (typeof details.casingSpec.weight_lbs_ft === 'number') {
+      pipeFacts.push({
+        label: 'Weight (lbs/ft)',
+        value: details.casingSpec.weight_lbs_ft.toString(),
+      });
+    }
+    if (typeof details.casingSpec.drift_in === 'number') {
+      pipeFacts.push({ label: 'Drift ID (in)', value: details.casingSpec.drift_in.toFixed(3) });
+    }
+  }
+
+  const truckingFacts: Array<{ label: string; value: string; fullWidth?: boolean }> = [];
+  if (trucking) {
+    truckingFacts.push({
+      label: 'Preference',
+      value: trucking.truckingType === 'quote' ? 'Needs MPS quote' : 'Customer provided',
+    });
+    if (trucking.details?.storageLocation) {
+      truckingFacts.push({
+        label: 'Storage Location',
+        value: trucking.details.storageLocation,
+      });
+    }
+    if (
+      trucking.details?.storageContactName ||
+      trucking.details?.storageContactEmail ||
+      trucking.details?.storageContactNumber
+    ) {
+      const contactLines: string[] = [];
+      if (trucking.details.storageContactName) contactLines.push(trucking.details.storageContactName);
+      if (trucking.details.storageContactEmail) contactLines.push(trucking.details.storageContactEmail);
+      if (trucking.details.storageContactNumber) contactLines.push(trucking.details.storageContactNumber);
+      truckingFacts.push({
+        label: 'Contact',
+        value: contactLines.join('\n'),
+        fullWidth: true,
+      });
+    }
+    if (trucking.details?.specialInstructions) {
+      truckingFacts.push({
+        label: 'Instructions',
+        value: trucking.details.specialInstructions,
+        fullWidth: true,
+      });
+    }
+  }
+
+  const handleApprove = async () => {
     if (selectedRacks.length === 0) {
       alert('Please select at least one rack');
       return;
     }
-    onApprove(request.id, selectedRacks, requiredJoints);
+    try {
+      setActionLoading(true);
+      await onApprove(request.id, selectedRacks, requiredJoints, internalNotes);
+      alert('Request approved successfully.');
+    } catch (error) {
+      console.error('Error approving request:', error);
+      alert('Unable to approve the request. Please try again or contact support.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     const reason = prompt('Rejection reason:');
-    if (reason) {
-      onReject(request.id, reason);
+    if (!reason) return;
+    try {
+      setActionLoading(true);
+      await onReject(request.id, reason);
+      alert('Request rejected.');
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      alert('Unable to reject the request. Please try again or contact support.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -577,28 +901,73 @@ const ApprovalCard: React.FC<{
         <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded text-sm">PENDING</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-        <div>
-          <span className="text-gray-400">Contact:</span> <span className="text-white">{request.userId}</span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 text-sm">
+        <div className="bg-gray-800/40 border border-gray-700 rounded-md p-3">
+          <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Contact</p>
+          <p className="text-white break-words">{request.userId}</p>
         </div>
-        <div>
-          <span className="text-gray-400">Item Type:</span>{' '}
-          <span className="text-white">{request.requestDetails?.itemType}</span>
+        <div className="bg-gray-800/40 border border-gray-700 rounded-md p-3">
+          <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Total Volume</p>
+          <p className="text-white">{requiredJoints} joints</p>
+          {totalLengthMeters !== null && (
+            <p className="text-xs text-gray-500 mt-1">~ {totalLengthMeters.toFixed(1)} m total length</p>
+          )}
         </div>
-        <div>
-          <span className="text-gray-400">Quantity:</span>{' '}
-          <span className="text-white">{requiredJoints} joints</span>
-        </div>
-        <div>
-          <span className="text-gray-400">Duration:</span>{' '}
-          <span className="text-white">
-            {request.requestDetails?.storageStartDate} to {request.requestDetails?.storageEndDate}
-          </span>
+        <div className="bg-gray-800/40 border border-gray-700 rounded-md p-3">
+          <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Timeline</p>
+          <p className="text-white">
+            {details?.storageStartDate || '-'}{' -> '}{details?.storageEndDate || '-'}
+          </p>
         </div>
       </div>
 
-      <div className="mb-4">
-        <h4 className="text-sm font-semibold text-white mb-2">Select Storage Racks:</h4>
+      {pipeFacts.length > 0 && (
+        <div className="bg-gray-800/60 border border-gray-700 rounded-md p-4 mb-6">
+          <h4 className="text-sm font-semibold text-white mb-3 uppercase tracking-wide">Pipe Information</h4>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm text-gray-300">
+            {pipeFacts.map(item => (
+              <div key={item.label}>
+                <dt className="text-xs uppercase text-gray-500">{item.label}</dt>
+                <dd className="text-white">{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+
+      {truckingFacts.length > 0 && (
+        <div className="bg-gray-800/40 border border-gray-700 rounded-md p-4 mb-6">
+          <h4 className="text-sm font-semibold text-white mb-3 uppercase tracking-wide">Trucking</h4>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-300">
+            {truckingFacts.map(fact => (
+              <div key={fact.label} className={fact.fullWidth ? 'sm:col-span-2' : undefined}>
+                <dt className="text-xs uppercase text-gray-500">{fact.label}</dt>
+                <dd className="text-white whitespace-pre-wrap">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+
+      <div className="mb-6">
+        <label className="block text-sm font-semibold text-white mb-2" htmlFor={`internal-notes-${request.id}`}>
+          Internal Notes (visible to admins only)
+        </label>
+        <textarea
+          id={`internal-notes-${request.id}`}
+          className="w-full bg-gray-900 border border-gray-700 rounded-md p-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+          rows={3}
+          placeholder="Add context for logistics or follow-up steps..."
+          value={internalNotes}
+          onChange={e => setInternalNotes(e.target.value)}
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          Notes are stored with the request and appear in the All Requests table for future reference.
+        </p>
+      </div>
+
+      <div className="mb-6">
+        <h4 className="text-sm font-semibold text-white mb-2">Select Storage Racks</h4>
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 max-h-48 overflow-y-auto">
           {availableRacks.map(rack => (
             <button
@@ -624,13 +993,24 @@ const ApprovalCard: React.FC<{
             </button>
           ))}
         </div>
+        {selectedRacks.length > 0 && (
+          <p className="text-xs text-gray-400 mt-2">Selected: {selectedRacks.join(', ')}</p>
+        )}
       </div>
 
       <div className="flex gap-3">
-        <Button onClick={handleApprove} className="flex-1 bg-green-600 hover:bg-green-700">
+        <Button
+          onClick={handleApprove}
+          disabled={actionLoading}
+          className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
           Approve
         </Button>
-        <Button onClick={handleReject} className="flex-1 bg-red-600 hover:bg-red-700">
+        <Button
+          onClick={handleReject}
+          disabled={actionLoading}
+          className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
           Reject
         </Button>
       </div>
@@ -639,3 +1019,9 @@ const ApprovalCard: React.FC<{
 };
 
 export default AdminDashboard;
+
+
+
+
+
+

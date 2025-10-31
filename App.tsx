@@ -1,14 +1,14 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useAuth } from './lib/AuthContext';
 import Auth from './components/Auth';
-import WelcomeScreen from './components/WelcomeScreen';
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
 import {
   useCompanies,
   useRequests,
   useInventory,
+  useDocuments,
   useYards,
   useTruckLoads,
   useAddCompany,
@@ -17,19 +17,20 @@ import {
   useAddTruckLoad,
   useUpdateInventoryItem,
   useUpdateRack,
+  queryKeys,
 } from './hooks/useSupabaseData';
-import type { AppSession, StorageRequest, Company, TruckLoad, Pipe } from './types';
+import type { AppSession, Session, StorageRequest, Company, TruckLoad, Pipe } from './types';
 import * as emailService from './services/emailService';
+import { queryClient } from './lib/QueryProvider';
 
 function App() {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
-  const [session, setSession] = useState<AppSession | null>(null);
-  const [guestMode, setGuestMode] = useState(false);
 
   // Fetch data from Supabase
   const { data: companies = [], isLoading: loadingCompanies } = useCompanies();
   const { data: requests = [], isLoading: loadingRequests } = useRequests();
   const { data: inventory = [], isLoading: loadingInventory } = useInventory();
+  const { data: documents = [], isLoading: loadingDocuments } = useDocuments();
   const { data: yards = [], isLoading: loadingYards } = useYards();
   const { data: truckLoads = [], isLoading: loadingTruckLoads } = useTruckLoads();
 
@@ -41,13 +42,12 @@ function App() {
   const updateInventoryMutation = useUpdateInventoryItem();
   const updateRackMutation = useUpdateRack();
 
-  const handleLogin = (session: AppSession) => {
-    setSession(session);
-  };
-
   const handleLogout = async () => {
-    setSession(null);
-    await signOut();
+    try {
+      await signOut();
+    } catch (error: any) {
+      console.log('Logout error:', error?.name);
+    }
   };
 
   // Wrapper functions to match the old useMockData interface
@@ -63,11 +63,21 @@ function App() {
     return updateRequestMutation.mutateAsync(updatedRequest);
   };
 
-  const approveRequest = async (requestId: string, assignedRackIds: string[], requiredJoints: number) => {
+  const approveRequest = async (
+    requestId: string,
+    assignedRackIds: string[],
+    requiredJoints: number,
+    notes?: string
+  ) => {
     const request = requests.find(r => r.id === requestId);
     if (!request || !request.requestDetails) return;
 
     const avgJointLength = request.requestDetails.avgJointLength;
+    const approvedAt = new Date().toISOString();
+    const approvedBy = user?.email ?? 'admin@pipevault';
+    const sourceNotes = typeof notes === 'string' ? notes : request.internalNotes ?? '';
+    const trimmedNotes = sourceNotes.trim();
+    const internalNotes = trimmedNotes.length > 0 ? trimmedNotes : null;
 
     // Determine the human-readable location string
     const firstRackId = assignedRackIds[0];
@@ -91,6 +101,11 @@ function App() {
       status: 'APPROVED',
       assignedRackIds,
       assignedLocation,
+      approvedAt,
+      approvedBy,
+      internalNotes,
+      rejectionReason: null,
+      rejectedAt: null,
     });
 
     // Update yard occupancy
@@ -121,6 +136,12 @@ function App() {
     if (assignedLocation) {
       emailService.sendApprovalEmail(request.userId, request.referenceId, assignedLocation);
     }
+
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.requests }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.companies }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.requestsByCompany(request.companyId) }),
+    ]);
   };
 
   const rejectRequest = async (requestId: string, reason: string) => {
@@ -131,10 +152,18 @@ function App() {
       ...request,
       status: 'REJECTED',
       rejectionReason: reason,
+      approvedAt: null,
+      approvedBy: null,
     });
 
     // Send notification
     emailService.sendRejectionEmail(request.userId, request.referenceId, reason);
+
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.requests }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.companies }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.requestsByCompany(request.companyId) }),
+    ]);
   };
 
   const addTruckLoad = (newTruckLoad: Omit<TruckLoad, 'id'>) => {
@@ -162,7 +191,7 @@ function App() {
   };
 
   // Show loading state
-  if (authLoading || loadingCompanies || loadingRequests || loadingInventory || loadingYards || loadingTruckLoads) {
+  if (authLoading || loadingCompanies || loadingRequests || loadingInventory || loadingDocuments || loadingYards || loadingTruckLoads) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 font-sans flex items-center justify-center">
         <div className="text-center">
@@ -173,9 +202,9 @@ function App() {
     );
   }
 
-  // Show auth screen if not authenticated (unless in guest mode)
-  if (!user && !guestMode) {
-    return <Auth onGuestAccess={() => setGuestMode(true)} />;
+  // Show auth screen if not authenticated
+  if (!user) {
+    return <Auth />;
   }
   
   const renderContent = () => {
@@ -194,60 +223,45 @@ function App() {
                 rejectRequest={rejectRequest}
                 addTruckLoad={addTruckLoad}
                 pickUpPipes={pickUpPipes}
+                updateRequest={updateRequest}
             />
           );
       }
 
-      // If no session selected, show welcome screen
-      if (!session) {
-          return (
-             <WelcomeScreen
-                companies={companies}
-                requests={requests}
-                addCompany={addCompany}
-                addRequest={addRequest}
-            />
-          );
-      }
+      // Auto-create session from authenticated user
+      const userEmail = user?.email?.toLowerCase() || '';
+      const userDomain = userEmail.split('@')[1] || '';
+      const companyMatch = companies.find((c) => c.domain.toLowerCase() === userDomain);
 
-      if ('isAdmin' in session && session.isAdmin) {
-          return (
-            <AdminDashboard
-                session={session}
-                onLogout={handleLogout}
-                requests={requests}
-                companies={companies}
-                yards={yards}
-                inventory={inventory}
-                truckLoads={truckLoads}
-                approveRequest={approveRequest}
-                rejectRequest={rejectRequest}
-                addTruckLoad={addTruckLoad}
-                pickUpPipes={pickUpPipes}
-            />
-          );
-      } else {
-        // FIX: By using an else block, we make the type narrowing explicit.
-        // After checking for `isAdmin`, TypeScript correctly infers that `session`
-        // must be of type `Session` within this block, resolving the property access errors.
-        const userRequests = requests.filter((r) => r.companyId === session.company.id);
-        const allCompanyInventory = inventory.filter((i) => i.companyId === session.company.id);
-        const projectInventory = session.referenceId
-          ? allCompanyInventory.filter(i => i.referenceId === session.referenceId)
-          : [];
+      // Create session with company info
+      const session: Session = {
+        company: companyMatch || {
+          id: 'temp',
+          name: user?.user_metadata?.company_name || 'Your Company',
+          domain: userDomain,
+        },
+        userId: userEmail,
+      };
 
-        return (
-          <Dashboard
-            session={session}
-            onLogout={handleLogout}
-            requests={userRequests}
-            projectInventory={projectInventory}
-            allCompanyInventory={allCompanyInventory}
-            updateRequest={updateRequest}
-            addRequest={addRequest}
-          />
-        );
-      }
+      const userRequests = requests.filter((r) =>
+        r.companyId === session.company.id ||
+        r.userId.toLowerCase() === userEmail
+      );
+      const allCompanyInventory = inventory.filter((i) => i.companyId === session.company.id);
+      const companyDocuments = documents.filter((doc) => doc.companyId === session.company.id);
+
+      return (
+        <Dashboard
+          session={session}
+          onLogout={handleLogout}
+          requests={userRequests}
+          projectInventory={[]}
+          allCompanyInventory={allCompanyInventory}
+          documents={companyDocuments}
+          updateRequest={updateRequest}
+          addRequest={addRequest}
+        />
+      );
   }
 
   return (
@@ -258,3 +272,6 @@ function App() {
 }
 
 export default App;
+
+
+

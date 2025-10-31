@@ -48,10 +48,13 @@ export interface Database {
           assigned_rack_ids: string[] | null;
           approval_summary: string | null;
           rejection_reason: string | null;
+          archived_at: string | null;
           created_at: string;
           updated_at: string;
           approved_at: string | null;
+          approved_by: string | null;
           rejected_at: string | null;
+          internal_notes: string | null;
         };
         Insert: {
           id?: string;
@@ -65,10 +68,13 @@ export interface Database {
           assigned_rack_ids?: string[] | null;
           approval_summary?: string | null;
           rejection_reason?: string | null;
+          archived_at?: string | null;
           created_at?: string;
           updated_at?: string;
           approved_at?: string | null;
+          approved_by?: string | null;
           rejected_at?: string | null;
+          internal_notes?: string | null;
         };
         Update: {
           id?: string;
@@ -82,10 +88,13 @@ export interface Database {
           assigned_rack_ids?: string[] | null;
           approval_summary?: string | null;
           rejection_reason?: string | null;
+          archived_at?: string | null;
           created_at?: string;
           updated_at?: string;
           approved_at?: string | null;
+          approved_by?: string | null;
           rejected_at?: string | null;
+          internal_notes?: string | null;
         };
       };
       inventory: {

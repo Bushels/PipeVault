@@ -5,8 +5,118 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import type { Company, StorageRequest, Pipe, Yard, TruckLoad } from '../types';
+import type { Company, StorageRequest, Pipe, Yard, TruckLoad, StorageDocument } from '../types';
 import type { Database } from '../lib/database.types';
+
+type CompanyRow = Database['public']['Tables']['companies']['Row'];
+type StorageRequestRow = Database['public']['Tables']['storage_requests']['Row'];
+type InventoryRow = Database['public']['Tables']['inventory']['Row'];
+type DocumentRow = Database['public']['Tables']['documents']['Row'];
+type TruckLoadRow = Database['public']['Tables']['truck_loads']['Row'];
+type YardRow = Database['public']['Tables']['yards']['Row'];
+type YardAreaRow = Database['public']['Tables']['yard_areas']['Row'];
+type RackRow = Database['public']['Tables']['racks']['Row'];
+
+const mapCompanyRow = (row: CompanyRow): Company => ({
+  id: row.id,
+  name: row.name,
+  domain: row.domain,
+});
+
+const mapStorageRequestRow = (row: StorageRequestRow): StorageRequest => ({
+  id: row.id,
+  companyId: row.company_id,
+  userId: row.user_email,
+  referenceId: row.reference_id,
+  status: row.status,
+  archivedAt: row.archived_at ?? undefined,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+  approvedAt: row.approved_at,
+  approvedBy: row.approved_by ?? undefined,
+  rejectedAt: row.rejected_at,
+  internalNotes: row.internal_notes ?? undefined,
+  requestDetails: row.request_details ? (row.request_details as StorageRequest['requestDetails']) : undefined,
+  truckingInfo: row.trucking_info ? (row.trucking_info as StorageRequest['truckingInfo']) : undefined,
+  assignedLocation: row.assigned_location || undefined,
+  assignedRackIds: row.assigned_rack_ids || undefined,
+  approvalSummary: row.approval_summary || undefined,
+  rejectionReason: row.rejection_reason || undefined,
+});
+
+const mapInventoryRow = (row: InventoryRow): Pipe => ({
+  id: row.id,
+  companyId: row.company_id,
+  referenceId: row.reference_id,
+  type: row.type,
+  grade: row.grade,
+  outerDiameter: Number(row.outer_diameter),
+  weight: Number(row.weight),
+  length: Number(row.length),
+  quantity: row.quantity,
+  status: row.status,
+  dropOffTimestamp: row.drop_off_timestamp || undefined,
+  pickUpTimestamp: row.pickup_timestamp || undefined,
+  storageAreaId: row.storage_area_id || undefined,
+  assignedUWI: row.assigned_uwi || undefined,
+  assignedWellName: row.assigned_well_name || undefined,
+  deliveryTruckLoadId: row.delivery_truck_load_id || undefined,
+  pickupTruckLoadId: row.pickup_truck_load_id || undefined,
+});
+
+const mapDocumentRow = (row: DocumentRow): StorageDocument => ({
+  id: row.id,
+  companyId: row.company_id,
+  requestId: row.request_id || undefined,
+  inventoryId: row.inventory_id || undefined,
+  fileName: row.file_name,
+  fileType: row.file_type,
+  fileSize: row.file_size,
+  storagePath: row.storage_path,
+  extractedData: (row.extracted_data as StorageDocument['extractedData']) ?? null,
+  isProcessed: row.is_processed ?? false,
+  uploadedAt: row.uploaded_at,
+  processedAt: row.processed_at || undefined,
+});
+
+const mapTruckLoadRow = (row: TruckLoadRow): TruckLoad => ({
+  id: row.id,
+  type: row.type,
+  truckingCompany: row.trucking_company,
+  driverName: row.driver_name,
+  driverPhone: row.driver_phone || undefined,
+  arrivalTime: row.arrival_time,
+  departureTime: row.departure_time || undefined,
+  jointsCount: row.joints_count,
+  storageAreaId: row.storage_area_id || undefined,
+  relatedRequestId: row.related_request_id || undefined,
+  relatedPipeIds: row.related_pipe_ids ?? [],
+  assignedUWI: row.assigned_uwi || undefined,
+  assignedWellName: row.assigned_well_name || undefined,
+  notes: row.notes || undefined,
+  photoUrls: row.photo_urls || undefined,
+});
+
+type YardQueryRow = YardRow & {
+  areas?: Array<YardAreaRow & { racks?: RackRow[] }>;
+};
+
+const mapYardRow = (row: YardQueryRow): Yard => ({
+  id: row.id,
+  name: row.name,
+  areas: (row.areas || []).map((area) => ({
+    id: area.id,
+    name: area.name,
+    racks: (area.racks || []).map((rack) => ({
+      id: rack.id,
+      name: rack.name,
+      capacity: rack.capacity ?? 0,
+      capacityMeters: rack.capacity_meters ?? 0,
+      occupied: rack.occupied ?? 0,
+      occupiedMeters: rack.occupied_meters ?? 0,
+    })),
+  })),
+});
 
 // ============================================================================
 // QUERY KEYS
@@ -21,6 +131,8 @@ export const queryKeys = {
   yards: ['yards'] as const,
   racks: ['racks'] as const,
   truckLoads: ['truckLoads'] as const,
+  documents: ['documents'] as const,
+  documentsByCompany: (companyId: string) => ['documents', companyId] as const,
 };
 
 // ============================================================================
@@ -37,8 +149,13 @@ export function useCompanies() {
         .order('name');
 
       if (error) throw error;
-      return data as Company[];
+      const rows = (data ?? []) as CompanyRow[];
+      return rows.map(mapCompanyRow);
     },
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: 'always',
   });
 }
 
@@ -57,7 +174,7 @@ export function useAddCompany() {
         .single();
 
       if (error) throw error;
-      return data as Company;
+      return mapCompanyRow(data as CompanyRow);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.companies });
@@ -85,8 +202,13 @@ export function useRequests(companyId?: string) {
       const { data, error} = await query;
 
       if (error) throw error;
-      return data as StorageRequest[];
+      const rows = (data ?? []) as StorageRequestRow[];
+      return rows.map(mapStorageRequestRow);
     },
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: 'always',
   });
 }
 
@@ -102,14 +224,22 @@ export function useAddRequest() {
           user_email: newRequest.userId,
           reference_id: newRequest.referenceId,
           status: newRequest.status,
-          request_details: newRequest.requestDetails as any,
-          trucking_info: newRequest.truckingInfo as any,
+          request_details: (newRequest.requestDetails as StorageRequest['requestDetails']) ?? null,
+          trucking_info: (newRequest.truckingInfo as StorageRequest['truckingInfo']) ?? null,
+          assigned_location: newRequest.assignedLocation ?? null,
+          assigned_rack_ids: newRequest.assignedRackIds ?? null,
+          approval_summary: newRequest.approvalSummary ?? null,
+          rejection_reason: newRequest.rejectionReason ?? null,
+          archived_at: newRequest.archivedAt ?? null,
+          approved_at: newRequest.approvedAt ?? null,
+          approved_by: newRequest.approvedBy ?? null,
+          internal_notes: newRequest.internalNotes ?? null,
         })
         .select()
         .single();
 
       if (error) throw error;
-      return data as unknown as StorageRequest;
+      return mapStorageRequestRow(data as StorageRequestRow);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.requests });
@@ -122,23 +252,40 @@ export function useUpdateRequest() {
 
   return useMutation({
     mutationFn: async (updatedRequest: StorageRequest) => {
+      const updateData: any = {
+        status: updatedRequest.status,
+        request_details: (updatedRequest.requestDetails as StorageRequest['requestDetails']) ?? null,
+        trucking_info: (updatedRequest.truckingInfo as StorageRequest['truckingInfo']) ?? null,
+        assigned_location: updatedRequest.assignedLocation ?? null,
+        assigned_rack_ids: updatedRequest.assignedRackIds ?? null,
+        approval_summary: updatedRequest.approvalSummary ?? null,
+        rejection_reason: updatedRequest.rejectionReason ?? null,
+        archived_at: updatedRequest.archivedAt ?? null,
+        approved_by: updatedRequest.approvedBy ?? null,
+        internal_notes: updatedRequest.internalNotes ?? null,
+      };
+
+      // Set timestamp based on status
+      if (updatedRequest.status === 'APPROVED') {
+        updateData.approved_at = updatedRequest.approvedAt ?? new Date().toISOString();
+        updateData.rejected_at = updatedRequest.rejectedAt ?? null;
+      } else if (updatedRequest.status === 'REJECTED') {
+        updateData.rejected_at = updatedRequest.rejectedAt ?? new Date().toISOString();
+        updateData.approved_at = updatedRequest.approvedAt ?? null;
+      } else {
+        updateData.approved_at = updatedRequest.approvedAt ?? null;
+        updateData.rejected_at = updatedRequest.rejectedAt ?? null;
+      }
+
       const { data, error } = await supabase
         .from('storage_requests')
-        .update({
-          status: updatedRequest.status,
-          request_details: updatedRequest.requestDetails as any,
-          trucking_info: updatedRequest.truckingInfo as any,
-          assigned_location: updatedRequest.assignedLocation,
-          assigned_rack_ids: updatedRequest.assignedRackIds,
-          approval_summary: updatedRequest.approvalSummary,
-          rejection_reason: updatedRequest.rejectionReason,
-        })
+        .update(updateData)
         .eq('id', updatedRequest.id)
         .select()
         .single();
 
       if (error) throw error;
-      return data as unknown as StorageRequest;
+      return mapStorageRequestRow(data as StorageRequestRow);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.requests });
@@ -174,7 +321,8 @@ export function useInventory(companyId?: string, referenceId?: string) {
       const { data, error } = await query;
 
       if (error) throw error;
-      return data as unknown as Pipe[];
+      const rows = (data ?? []) as InventoryRow[];
+      return rows.map(mapInventoryRow);
     },
   });
 }
@@ -203,7 +351,7 @@ export function useAddInventoryItem() {
         .single();
 
       if (error) throw error;
-      return data as unknown as Pipe;
+      return mapInventoryRow(data as InventoryRow);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory });
@@ -239,6 +387,32 @@ export function useUpdateInventoryItem() {
 }
 
 // ============================================================================
+// DOCUMENTS
+// ============================================================================
+
+export function useDocuments(companyId?: string) {
+  return useQuery({
+    queryKey: companyId ? queryKeys.documentsByCompany(companyId) : queryKeys.documents,
+    queryFn: async () => {
+      let query = supabase
+        .from('documents')
+        .select('*')
+        .order('uploaded_at', { ascending: false });
+
+      if (companyId) {
+        query = query.eq('company_id', companyId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      const rows = (data ?? []) as DocumentRow[];
+      return rows.map(mapDocumentRow);
+    },
+  });
+}
+
+// ============================================================================
 // YARDS
 // ============================================================================
 
@@ -258,7 +432,8 @@ export function useYards() {
         .order('id');
 
       if (error) throw error;
-      return data as unknown as Yard[];
+      const rows = (data ?? []) as YardQueryRow[];
+      return rows.map(mapYardRow);
     },
   });
 }
@@ -302,7 +477,8 @@ export function useTruckLoads() {
         .order('arrival_time', { ascending: false });
 
       if (error) throw error;
-      return data as unknown as TruckLoad[];
+      const rows = (data ?? []) as TruckLoadRow[];
+      return rows.map(mapTruckLoadRow);
     },
   });
 }
@@ -318,23 +494,23 @@ export function useAddTruckLoad() {
           type: newTruckLoad.type,
           trucking_company: newTruckLoad.truckingCompany,
           driver_name: newTruckLoad.driverName,
-          driver_phone: newTruckLoad.driverPhone,
+          driver_phone: newTruckLoad.driverPhone ?? null,
           arrival_time: newTruckLoad.arrivalTime,
-          departure_time: newTruckLoad.departureTime,
+          departure_time: newTruckLoad.departureTime ?? null,
           joints_count: newTruckLoad.jointsCount,
-          storage_area_id: newTruckLoad.storageAreaId,
-          related_request_id: newTruckLoad.relatedRequestId,
-          related_pipe_ids: newTruckLoad.relatedPipeIds,
-          assigned_uwi: newTruckLoad.assignedUWI,
-          assigned_well_name: newTruckLoad.assignedWellName,
-          notes: newTruckLoad.notes,
-          photo_urls: newTruckLoad.photoUrls,
+          storage_area_id: newTruckLoad.storageAreaId ?? null,
+          related_request_id: newTruckLoad.relatedRequestId ?? null,
+          related_pipe_ids: newTruckLoad.relatedPipeIds ?? [],
+          assigned_uwi: newTruckLoad.assignedUWI ?? null,
+          assigned_well_name: newTruckLoad.assignedWellName ?? null,
+          notes: newTruckLoad.notes ?? null,
+          photo_urls: newTruckLoad.photoUrls ?? null,
         })
         .select()
         .single();
 
       if (error) throw error;
-      return data as unknown as TruckLoad;
+      return mapTruckLoadRow(data as TruckLoadRow);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.truckLoads });
@@ -350,16 +526,16 @@ export function useUpdateTruckLoad() {
       const { data, error } = await supabase
         .from('truck_loads')
         .update({
-          departure_time: updates.departureTime,
-          notes: updates.notes,
-          photo_urls: updates.photoUrls,
+          departure_time: updates.departureTime ?? null,
+          notes: updates.notes ?? null,
+          photo_urls: updates.photoUrls ?? null,
         })
         .eq('id', id)
         .select()
         .single();
 
       if (error) throw error;
-      return data as unknown as TruckLoad;
+      return mapTruckLoadRow(data as TruckLoadRow);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.truckLoads });

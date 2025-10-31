@@ -129,7 +129,7 @@ const TruckReceiving: React.FC<TruckReceivingProps> = ({
             onClick={onClose}
             className="text-gray-400 hover:text-gray-200 text-2xl"
           >
-            ×
+            x
           </button>
         </div>
 

@@ -1,20 +1,24 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import type { ChatMessage, Pipe } from '../types';
+import type { ChatMessage, Pipe, StorageRequest, StorageDocument } from '../types';
 import Button from './ui/Button';
 import { getChatbotResponse } from '../services/geminiService';
 import Card from './ui/Card';
-import { SendIcon, BotIcon, UserIcon } from './icons/Icons';
-import Spinner from './ui/Spinner';
+import { SendIcon, BotIcon, UserIcon, CloseIcon, ExpandIcon, CollapseIcon } from './icons/Icons';
 
 interface ChatbotProps {
   companyName: string;
   inventoryData: Pipe[];
+  requests?: StorageRequest[];
+  documents?: StorageDocument[];
+  onClose: () => void;
+  onToggleExpand: () => void;
+  isExpanded: boolean;
 }
 
-const Chatbot: React.FC<ChatbotProps> = ({ companyName, inventoryData }) => {
+const Chatbot: React.FC<ChatbotProps> = ({ companyName, inventoryData, requests = [], documents = [], onClose, onToggleExpand, isExpanded }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'model', content: `Hello! I'm your inventory assistant for ${companyName}. How can I help you with your pipes today?` }
+    { role: 'model', content: `Howdy! I'm Roughneck, your PipeVault field hand for ${companyName}. What do you need help with on this project?` }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -31,12 +35,13 @@ const Chatbot: React.FC<ChatbotProps> = ({ companyName, inventoryData }) => {
     if (input.trim() === '' || isLoading) return;
 
     const userMessage: ChatMessage = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMessage]);
+    const nextHistory = [...messages, userMessage];
+    setMessages(nextHistory);
     setInput('');
     setIsLoading(true);
 
     try {
-      const response = await getChatbotResponse(companyName, inventoryData, messages, input);
+      const response = await getChatbotResponse(companyName, inventoryData, requests, documents, nextHistory, input);
       const modelMessage: ChatMessage = { role: 'model', content: response };
       setMessages(prev => [...prev, modelMessage]);
     } catch (error) {
@@ -48,9 +53,17 @@ const Chatbot: React.FC<ChatbotProps> = ({ companyName, inventoryData }) => {
   };
 
   return (
-    <Card className="flex flex-col h-[75vh] max-h-[800px]">
-      <div className="flex-shrink-0 p-4 border-b border-gray-700">
-        <h2 className="text-xl font-bold text-center">AI Assistant</h2>
+    <Card className={`flex flex-col ${isExpanded ? 'h-[80vh] w-[60vw]' : 'h-[60vh] w-[400px]'} max-w-full transition-all duration-300`}>
+      <div className="flex-shrink-0 p-3 border-b border-gray-700 flex items-center justify-between">
+        <h2 className="text-lg font-bold">Roughneck AI</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={onToggleExpand} variant="ghost" size="icon" className="w-6 h-6">
+            {isExpanded ? <CollapseIcon className="w-4 h-4" /> : <ExpandIcon className="w-4 h-4" />}
+          </Button>
+          <Button onClick={onClose} variant="ghost" size="icon" className="w-6 h-6">
+            <CloseIcon className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
       <div className="flex-grow p-4 overflow-y-auto space-y-4">
         {messages.map((msg, index) => (
@@ -102,3 +115,4 @@ const Chatbot: React.FC<ChatbotProps> = ({ companyName, inventoryData }) => {
 };
 
 export default Chatbot;
+

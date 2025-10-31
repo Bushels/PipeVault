@@ -8,7 +8,21 @@
       "Bash(npm install)",
       "Bash(npx tsx:*)",
       "Bash(git add:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npm run build:*)",
+      "Bash(VITE_GITHUB_PAGES=true npm run build:*)",
+      "Bash(export VITE_GITHUB_PAGES=true)",
+      "Bash(cat:*)",
+      "Bash(gh run list:*)",
+      "Bash(claude mcp add:*)",
+      "Bash(claude mcp list:*)",
+      "Bash(claude mcp update:*)",
+      "Bash(claude mcp --help:*)",
+      "Bash(claude mcp remove:*)",
+      "Bash(npm run dev:*)",
+      "Bash(node:*)",
+      "Bash(pkill:*)",
+      "Bash(npx supabase:*)"
     ],
     "deny": [],
     "ask": []

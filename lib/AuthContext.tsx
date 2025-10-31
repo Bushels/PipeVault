@@ -6,6 +6,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { queryClient } from './QueryProvider';
 
 interface AuthContextType {
   user: User | null;
@@ -13,7 +14,16 @@ interface AuthContextType {
   isAdmin: boolean;
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (
+    email: string,
+    password: string,
+    profile?: {
+      companyName?: string;
+      firstName?: string;
+      lastName?: string;
+      contactNumber?: string;
+    }
+  ) => Promise<void>;
   signInWithOAuth: (provider: 'google' | 'apple' | 'azure') => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -50,14 +60,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      const previousUserId = user?.id;
+      const newUserId = session?.user?.id;
+
       setSession(session);
       setUser(session?.user ?? null);
       checkAdminStatus(session?.user ?? null);
+
+      // Clear React Query cache when:
+      // 1. User signs out (SIGNED_OUT event)
+      // 2. User signs in with a different account (different user ID)
+      if (event === 'SIGNED_OUT' || (newUserId && previousUserId && newUserId !== previousUserId)) {
+        console.log('Auth state changed - clearing query cache to prevent stale data');
+        queryClient.clear();
+      }
+      // Also refetch all queries when signing in to ensure fresh data with new JWT
+      else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        console.log('User authenticated - invalidating queries to refetch with new permissions');
+        queryClient.invalidateQueries();
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [user?.id]);
 
   const checkAdminStatus = async (user: User | null) => {
     if (!user) {
@@ -91,7 +117,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .from('admin_users')
         .select('user_id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle() to avoid 406 errors when no record exists
 
       if (!error && data) {
         setIsAdmin(true);
@@ -115,10 +141,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signUpWithEmail = async (email: string, password: string) => {
+  const signUpWithEmail = async (
+    email: string,
+    password: string,
+    profile?: { companyName?: string; firstName?: string; lastName?: string; contactNumber?: string }
+  ) => {
+    const metadata: Record<string, string> = {};
+    if (profile?.companyName) metadata.company_name = profile.companyName.trim();
+    if (profile?.firstName) metadata.first_name = profile.firstName.trim();
+    if (profile?.lastName) metadata.last_name = profile.lastName.trim();
+    if (profile?.contactNumber) metadata.contact_number = profile.contactNumber.trim();
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
+      options: Object.keys(metadata).length ? { data: metadata } : undefined,
     });
 
     if (error) {
@@ -140,9 +177,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      throw error;
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.log('Supabase signOut error (may be expected):', error.message);
+      }
+    } finally {
+      // Always clear local state, even if API call fails
+      setUser(null);
+      setSession(null);
+      setIsAdmin(false);
+
+      // Clear React Query cache to prevent stale data when logging in with different account
+      console.log('Logout - clearing all cached queries');
+      queryClient.clear();
     }
   };
 

@@ -92,6 +92,12 @@ export interface StorageRequest {
   userId: string;
   referenceId: string;
   status: RequestStatus;
+  archivedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
+  rejectedAt?: string | null;
   requestDetails?: NewRequestDetails;
   truckingInfo?: TruckingInfo;
   detailedInfo?: DetailedRequestInfo;
@@ -100,6 +106,22 @@ export interface StorageRequest {
   assignedRackIds?: string[];
   approvalSummary?: string;
   rejectionReason?: string;
+  internalNotes?: string | null;
+}
+
+export interface StorageDocument {
+  id: string;
+  companyId: string;
+  requestId?: string | null;
+  inventoryId?: string | null;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  storagePath: string;
+  extractedData?: Record<string, unknown> | null;
+  isProcessed: boolean;
+  uploadedAt: string;
+  processedAt?: string | null;
 }
 
 export interface ChatMessage {
@@ -111,7 +133,6 @@ export interface ChatMessage {
 export interface Session {
     company: Company;
     userId: string;
-    referenceId?: string;
 }
 
 // Admin session

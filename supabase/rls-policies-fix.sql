@@ -3,6 +3,20 @@
 -- Run this in Supabase SQL Editor after running schema.sql
 -- ============================================================================
 
+-- Anyone can read companies (needed for signup and request creation)
+CREATE POLICY "Anyone can read companies"
+  ON companies FOR SELECT
+  TO public
+  USING (true);
+
+-- Allow authenticated users to register their company (domain must match email)
+CREATE POLICY "Users can register their company"
+  ON companies FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    lower(domain) = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
+  );
+
 -- ============================================================================
 -- ADMIN USERS TABLE - Restrict access
 -- ============================================================================
@@ -65,16 +79,46 @@ CREATE POLICY "Users can view own company truck loads"
       SELECT id FROM storage_requests
       WHERE company_id IN (
         SELECT id FROM companies
-        WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+        WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
       )
     )
   );
 
+CREATE POLICY "Admins can view all truck loads"
+  ON truck_loads FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM admin_users
+      WHERE admin_users.user_id = (SELECT auth.uid())
+    )
+  );
+
+CREATE POLICY "Allowlisted admins can view all truck loads"
+  ON truck_loads FOR SELECT
+  TO authenticated
+  USING (
+    lower((SELECT auth.jwt() ->> 'email')) = ANY (ARRAY[
+      'admin@mpsgroup.com',
+      'kyle@bushels.com',
+      'admin@bushels.com',
+      'kylegronning@mpsgroup.ca'
+    ])
+  );
 -- Authenticated users can create truck loads (for delivery/pickup scheduling)
 CREATE POLICY "Authenticated users can create truck loads"
   ON truck_loads FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (
+    related_request_id IS NULL OR
+    related_request_id IN (
+      SELECT id FROM storage_requests
+      WHERE company_id IN (
+        SELECT id FROM companies
+        WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
+      )
+    )
+  );
 
 -- ============================================================================
 -- DOCUMENTS - Add missing write policies
@@ -87,7 +131,7 @@ CREATE POLICY "Users can upload own company documents"
   WITH CHECK (
     company_id IN (
       SELECT id FROM companies
-      WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+      WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
     )
   );
 
@@ -98,12 +142,70 @@ CREATE POLICY "Users can view own company documents"
   USING (
     company_id IN (
       SELECT id FROM companies
-      WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+      WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
     )
   );
 
+CREATE POLICY "Admins can view all documents"
+  ON documents FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM admin_users
+      WHERE admin_users.user_id = (SELECT auth.uid())
+    )
+  );
+
+CREATE POLICY "Allowlisted admins can view all documents"
+  ON documents FOR SELECT
+  TO authenticated
+  USING (
+    lower((SELECT auth.jwt() ->> 'email')) = ANY (ARRAY[
+      'admin@mpsgroup.com',
+      'kyle@bushels.com',
+      'admin@bushels.com',
+      'kylegronning@mpsgroup.ca'
+    ])
+  );
+-- STORAGE REQUESTS - Read/write policies
 -- ============================================================================
--- STORAGE REQUESTS - Add missing write policies
+
+-- Users can view requests for their own company
+CREATE POLICY "Users can view own company requests"
+  ON storage_requests FOR SELECT
+  TO authenticated
+  USING (
+    company_id IN (
+      SELECT id FROM companies
+      WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
+    )
+  );
+
+-- Admins can view all requests
+CREATE POLICY "Admins can view all requests"
+  ON storage_requests FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM admin_users
+      WHERE admin_users.user_id = (SELECT auth.uid())
+    )
+  );
+
+-- Fallback allowlist for trusted admin emails
+CREATE POLICY "Allowlisted admins can view all requests"
+  ON storage_requests FOR SELECT
+  TO authenticated
+  USING (
+    lower((SELECT auth.jwt() ->> 'email')) = ANY (ARRAY[
+      'admin@mpsgroup.com',
+      'kyle@bushels.com',
+      'admin@bushels.com',
+      'kylegronning@mpsgroup.ca'
+    ])
+  );
+-- ============================================================================
+-- STORAGE REQUESTS - Write policies
 -- ============================================================================
 
 -- Users can create requests for their own company
@@ -113,27 +215,96 @@ CREATE POLICY "Users can create requests for own company"
   WITH CHECK (
     company_id IN (
       SELECT id FROM companies
-      WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+      WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
     )
   );
 
 -- Users can update their own company's requests
+CREATE POLICY "Admins can update all requests"
+  ON storage_requests FOR UPDATE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM admin_users
+      WHERE admin_users.user_id = (SELECT auth.uid())
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM admin_users
+      WHERE admin_users.user_id = (SELECT auth.uid())
+    )
+  );
+CREATE POLICY "Allowlisted admins can update all requests"
+  ON storage_requests FOR UPDATE
+  TO authenticated
+  USING (
+    lower((SELECT auth.jwt() ->> 'email')) = ANY (ARRAY[
+      'admin@mpsgroup.com',
+      'kyle@bushels.com',
+      'admin@bushels.com',
+      'kylegronning@mpsgroup.ca'
+    ])
+  )
+  WITH CHECK (
+    lower((SELECT auth.jwt() ->> 'email')) = ANY (ARRAY[
+      'admin@mpsgroup.com',
+      'kyle@bushels.com',
+      'admin@bushels.com',
+      'kylegronning@mpsgroup.ca'
+    ])
+  );
 CREATE POLICY "Users can update own company requests"
   ON storage_requests FOR UPDATE
   TO authenticated
   USING (
     company_id IN (
       SELECT id FROM companies
-      WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+      WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
     )
   )
   WITH CHECK (
     company_id IN (
       SELECT id FROM companies
-      WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+      WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
     )
   );
 
+-- ============================================================================
+-- INVENTORY - Read policies
+-- ============================================================================
+
+CREATE POLICY "Users can view own company inventory"
+  ON inventory FOR SELECT
+  TO authenticated
+  USING (
+    company_id IN (
+      SELECT id FROM companies
+      WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
+    )
+  );
+
+CREATE POLICY "Admins can view all inventory"
+  ON inventory FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM admin_users
+      WHERE admin_users.user_id = (SELECT auth.uid())
+    )
+  );
+
+CREATE POLICY "Allowlisted admins can view all inventory"
+  ON inventory FOR SELECT
+  TO authenticated
+  USING (
+    lower((SELECT auth.jwt() ->> 'email')) = ANY (ARRAY[
+      'admin@mpsgroup.com',
+      'kyle@bushels.com',
+      'admin@bushels.com',
+      'kylegronning@mpsgroup.ca'
+    ])
+  );
 -- ============================================================================
 -- INVENTORY - Add missing write policies
 -- ============================================================================
@@ -145,7 +316,7 @@ CREATE POLICY "Users can create own company inventory"
   WITH CHECK (
     company_id IN (
       SELECT id FROM companies
-      WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+      WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
     )
   );
 
@@ -156,13 +327,13 @@ CREATE POLICY "Users can update own company inventory"
   USING (
     company_id IN (
       SELECT id FROM companies
-      WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+      WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
     )
   )
   WITH CHECK (
     company_id IN (
       SELECT id FROM companies
-      WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+      WHERE domain = lower(split_part((SELECT auth.jwt() ->> 'email'), '@', 2))
     )
   );
 
@@ -242,3 +413,13 @@ CREATE POLICY "Admins can update own notifications"
 -- 1. Create a test user in Supabase Auth
 -- 2. Try to query tables as that user
 -- 3. Verify they can only see their own company's data
+
+
+
+
+
+
+
+
+
+

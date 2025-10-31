@@ -6,12 +6,15 @@ import Button from './ui/Button';
 import Spinner from './ui/Spinner';
 import { generateRequestSummary } from '../services/geminiService';
 import { CASING_DATA } from '../data/casingData';
+import { supabase } from '../lib/supabase';
+
+type MaybePromise<T> = T | Promise<T>;
 
 interface StorageRequestWizardProps {
   request: StorageRequest | null;
   session: Session;
-  updateRequest: (request: StorageRequest) => void;
-  addRequest: (request: Omit<StorageRequest, 'id'>) => StorageRequest;
+  updateRequest: (request: StorageRequest) => MaybePromise<StorageRequest | void>;
+  addRequest: (request: Omit<StorageRequest, 'id'>) => MaybePromise<StorageRequest>;
 }
 
 const Label: React.FC<{ children: React.ReactNode; htmlFor?: string }> = ({ children, htmlFor }) => (
@@ -69,14 +72,25 @@ const initialTruckingDetails: ProvidedTruckingDetails = {
 };
 
 const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, session, updateRequest, addRequest }) => {
-    const { signUpWithEmail, signInWithEmail, signOut } = useAuth();
+    const { signOut, user } = useAuth();
+    const userMetadata = user?.user_metadata ?? {};
+    const metadataCompanyName = typeof userMetadata.company_name === 'string' ? userMetadata.company_name : '';
+    const metadataFirstName = typeof userMetadata.first_name === 'string' ? userMetadata.first_name : '';
+    const metadataLastName = typeof userMetadata.last_name === 'string' ? userMetadata.last_name : '';
+    const metadataFullName = metadataFirstName && metadataLastName ? `${metadataFirstName} ${metadataLastName}` : '';
+    const metadataContactNumber = typeof userMetadata.contact_number === 'string' ? userMetadata.contact_number : '';
     const [isLoading, setIsLoading] = useState(false);
-    const [wizardStep, setWizardStep] = useState<'details' | 'trucking' | 'submitted'>('details');
-    
+    const [wizardStep, setWizardStep] = useState<'details' | 'submitted'>('details');
+    const [error, setError] = useState<string | null>(null);
+
     // State for Step 1
+    const loggedInEmail = user?.email ?? '';
     const [formData, setFormData] = useState<NewRequestDetails>({
         ...initialFormState,
-        companyName: session.company.name, // Pre-fill company name
+        companyName: metadataCompanyName || session.company.name,
+        fullName: metadataFullName || '',
+        contactEmail: loggedInEmail,
+        contactNumber: metadataContactNumber || '',
     });
     const [referenceId, setReferenceId] = useState('');
     
@@ -93,6 +107,21 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
         return CASING_DATA.filter(d => d.size_in === selectedSize);
     }, [selectedSize]);
 
+    const formatOdOption = (sizeIn: number) => {
+        const matchingSpec = CASING_DATA.find(d => d.size_in === sizeIn);
+        const sizeMm = matchingSpec?.size_mm ?? sizeIn * 25.4;
+        const mmDisplay = Number(sizeMm.toFixed(2)).toString();
+        const inchDisplay = Number(sizeIn.toFixed(3)).toString();
+        return `${mmDisplay} (${inchDisplay})`;
+    };
+
+    const formatWeightOption = (weightLbsPerFt: number) => {
+        const kgPerMeter = weightLbsPerFt * 1.48816394;
+        const metricDisplay = kgPerMeter.toFixed(1);
+        const imperialDisplay = weightLbsPerFt.toFixed(1);
+        return `${metricDisplay} (${imperialDisplay})`;
+    };
+
     useEffect(() => {
         // Reset weight and spec if size changes
         setFormData(f => ({ ...f, casingSpec: null }));
@@ -104,61 +133,153 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
         setFormData(f => ({ ...f, casingSpec: null, sandControlScreenType: 'DWW', sandControlScreenTypeOther: '' }));
     }, [formData.itemType]);
 
-    const handleDetailsSubmit = (e: React.FormEvent) => {
+    useEffect(() => {
+        // Clear any previous error message when the user changes steps
+        setError(null);
+    }, [wizardStep]);
+
+    useEffect(() => {
+        setFormData(prev => ({
+            ...prev,
+            companyName: prev.companyName || metadataCompanyName || session.company.name,
+            fullName: prev.fullName || metadataFullName,
+            contactEmail: loggedInEmail || prev.contactEmail,
+            contactNumber: prev.contactNumber || metadataContactNumber,
+        }));
+    }, [metadataCompanyName, metadataFullName, metadataContactNumber, loggedInEmail, session.company.name]);
+
+    const handleDetailsSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setWizardStep('trucking');
+
+        const normalizedReferenceId = referenceId.trim().toUpperCase();
+        const normalizedCompanyName = formData.companyName.trim() || session.company.name;
+        const normalizedEmail = formData.contactEmail.trim().toLowerCase();
+
+        if (!normalizedReferenceId) {
+            setError('Please enter a project reference ID before continuing.');
+            return;
+        }
+
+        if (!normalizedEmail) {
+            setError('Please enter a contact email before continuing.');
+            return;
+        }
+
+        // Now submit the request directly (no trucking step)
+        await handleSubmitRequest(normalizedReferenceId, normalizedCompanyName, normalizedEmail);
     }
 
-    const handleTruckingSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!truckingType) return;
-        setIsLoading(true);
+    const handleSubmitRequest = async (normalizedReferenceId: string, normalizedCompanyName: string, normalizedEmail: string) => {
 
-        const truckingInfo: TruckingInfo = {
-            truckingType,
-            details: (truckingType === 'quote' || (truckingType === 'provided' && truckingDetails.specialInstructions))
-                ? truckingDetails
-                : undefined
+        // Trucking info will be added later via "Schedule Delivery to MPS"
+        const truckingInfo: TruckingInfo | undefined = undefined;
+
+        const requestDetails: NewRequestDetails = {
+            ...formData,
+            companyName: normalizedCompanyName,
+            contactEmail: normalizedEmail,
         };
 
-        try {
-            const summary = await generateRequestSummary(formData.companyName, formData.contactEmail, referenceId, formData, truckingInfo);
+        setIsLoading(true);
+        setError(null);
 
-            const newRequestData = {
-                companyId: session.company.id,
-                userId: formData.contactEmail,
-                referenceId: referenceId,
-                status: 'PENDING' as RequestStatus,
-                requestDetails: formData,
-                truckingInfo: truckingInfo,
-                approvalSummary: summary
+        try {
+            if (!user) {
+                setError('Please sign in before submitting a storage request.');
+                return;
+            }
+
+            const { data: existingRequests, error: referenceLookupError } = await supabase
+                .from('storage_requests')
+                .select('id')
+                .eq('reference_id', normalizedReferenceId)
+                .limit(1);
+
+            if (referenceLookupError) {
+                throw referenceLookupError;
+            }
+
+            const firstMatch = (existingRequests as Array<{ id: string }> | null)?.[0] || null;
+            const duplicateExists = Boolean(firstMatch && firstMatch.id !== request?.id);
+
+            if (duplicateExists) {
+                setError('A storage request with this reference ID already exists. Please choose another reference ID.');
+                return;
+            }
+
+            const summarySession: Session = {
+                company: {
+                    ...session.company,
+                    name: normalizedCompanyName,
+                },
+                userId: normalizedEmail,
+                referenceId: normalizedReferenceId,
             };
 
-            if (request) {
-                updateRequest({ ...request, ...newRequestData });
-            } else {
-                addRequest(newRequestData);
+            let summary = '';
+            try {
+                summary = await generateRequestSummary(
+                    normalizedCompanyName,
+                    summarySession,
+                    normalizedReferenceId,
+                    requestDetails,
+                    truckingInfo
+                );
+            } catch (summaryError) {
+                console.error('Error generating AI summary:', summaryError);
+                summary = `Storage request for ${normalizedCompanyName} (Reference ${normalizedReferenceId}). Recommend approval.`;
+            }
 
-                // Create Supabase account for new user (Reference ID = Password)
-                try {
-                    await signUpWithEmail(formData.contactEmail, referenceId);
-                    // Automatically sign in the user
-                    await signInWithEmail(formData.contactEmail, referenceId);
-                } catch (authError: any) {
-                    // If account already exists, just sign in
-                    if (authError.message?.includes('already registered')) {
-                        try {
-                            await signInWithEmail(formData.contactEmail, referenceId);
-                        } catch {
-                            // Silent fail - user can sign in manually later
-                            console.log('Could not auto-sign-in user');
-                        }
+            if (user) {
+                const currentMetadata = user.user_metadata ?? {};
+                // Update user metadata if needed (company and contact number only)
+                const updatedMetadata: Record<string, string> = {};
+                if (normalizedCompanyName && normalizedCompanyName !== (currentMetadata.company_name ?? '')) {
+                    updatedMetadata.company_name = normalizedCompanyName;
+                }
+                if (requestDetails.contactNumber && requestDetails.contactNumber !== (currentMetadata.contact_number ?? '')) {
+                    updatedMetadata.contact_number = requestDetails.contactNumber;
+                }
+                if (Object.keys(updatedMetadata).length) {
+                    const { error: updateMetadataError } = await supabase.auth.updateUser({
+                        data: updatedMetadata,
+                    });
+                    if (updateMetadataError) {
+                        console.warn('Unable to update user profile metadata:', updateMetadataError.message);
                     }
                 }
             }
+
+            const newRequestData: Omit<StorageRequest, 'id'> = {
+                companyId: session.company.id,
+                userId: normalizedEmail,
+                referenceId: normalizedReferenceId,
+                status: 'PENDING' as RequestStatus,
+                requestDetails,
+                truckingInfo,
+                approvalSummary: summary,
+            };
+
+            if (request) {
+                await Promise.resolve(updateRequest({ ...request, ...newRequestData }));
+            } else {
+                await Promise.resolve(addRequest(newRequestData));
+                // Slack notification handled automatically by Supabase webhook on INSERT
+            }
+
+            setReferenceId(normalizedReferenceId);
+            setFormData((prev) => ({
+                ...prev,
+                companyName: normalizedCompanyName,
+                contactEmail: normalizedEmail,
+                fullName: requestDetails.fullName,
+                contactNumber: requestDetails.contactNumber,
+            }));
+
             setWizardStep('submitted');
-        } catch (error) {
-            console.error(error);
+        } catch (err: any) {
+            console.error('Error submitting storage request:', err);
+            setError(err?.message || 'We ran into an issue while submitting your request. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -167,6 +288,7 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
     const handleTruckingTypeChange = (type: 'quote' | 'provided') => {
         setTruckingType(type);
         setTruckingDetails(initialTruckingDetails); 
+        setError(null);
     }
     
     const handleComplete = () => {
@@ -178,28 +300,38 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
     const renderDetailsForm = () => {
         const totalLength = formData.avgJointLength * formData.totalJoints;
         return (
-             <WizardCard title="New Storage Request" subtitle="Fill in the details below to submit your project for approval.">
+            <WizardCard title="New Storage Request" subtitle="Fill in the details below to submit your project for approval.">
                 <form onSubmit={handleDetailsSubmit} className="space-y-6">
-                    {/* Contact Info */}
-                    <fieldset className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <legend className="text-lg font-semibold text-white mb-2 col-span-full">Contact Information</legend>
-                        <div>
-                            <Label htmlFor="companyName">Company Name</Label>
-                            <Input id="companyName" type="text" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} required />
+                    {error && (
+                        <div className="p-3 bg-red-900/40 border border-red-700 rounded-md text-sm text-red-200">
+                            {error}
                         </div>
-                         <div>
-                            <Label htmlFor="fullName">Full Name</Label>
-                            <Input id="fullName" type="text" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} required />
+                    )}
+                    {/* Contact Info - Hidden since we have it from signup */}
+                    <div className="p-4 bg-gray-800/30 border border-gray-700 rounded-lg">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-green-400 text-lg">✓</span>
+                            <p className="text-sm font-semibold text-white">Your Contact Information</p>
                         </div>
-                        <div>
-                            <Label htmlFor="contactEmail">Contact Email</Label>
-                            <Input id="contactEmail" type="email" value={formData.contactEmail} onChange={e => setFormData({...formData, contactEmail: e.target.value})} required />
+                        <div className="text-sm text-gray-300 space-y-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <span className="text-gray-500 font-medium">Company:</span>
+                                <span className="ml-2">{formData.companyName}</span>
+                            </div>
+                            <div>
+                                <span className="text-gray-500 font-medium">Name:</span>
+                                <span className="ml-2">{formData.fullName}</span>
+                            </div>
+                            <div>
+                                <span className="text-gray-500 font-medium">Email:</span>
+                                <span className="ml-2">{formData.contactEmail}</span>
+                            </div>
+                            <div>
+                                <span className="text-gray-500 font-medium">Phone:</span>
+                                <span className="ml-2">{formData.contactNumber}</span>
+                            </div>
                         </div>
-                        <div>
-                            <Label htmlFor="contactNumber">Contact Number</Label>
-                            <Input id="contactNumber" type="tel" value={formData.contactNumber} onChange={e => setFormData({...formData, contactNumber: e.target.value})} required />
-                        </div>
-                    </fieldset>
+                    </div>
 
                     {/* Item Details */}
                     <fieldset>
@@ -244,20 +376,28 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
                             <legend className="text-lg font-semibold text-white mb-2">API Casing Specification</legend>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div>
-                                    <Label htmlFor="casing-od">OD (in)</Label>
+                                    <Label htmlFor="casing-od">OD (mm / in)</Label>
                                     <Select id="casing-od" value={selectedSize || ''} onChange={e => setSelectedSize(parseFloat(e.target.value))} required>
                                         <option value="" disabled>Select Size</option>
-                                        {uniqueSizes.map(s => <option key={s} value={s}>{s}</option>)}
+                                        {uniqueSizes.map(s => (
+                                            <option key={s} value={s}>
+                                                {formatOdOption(s)}
+                                            </option>
+                                        ))}
                                     </Select>
                                 </div>
                                  <div>
-                                    <Label htmlFor="casing-weight">Weight (lbs/ft)</Label>
+                                    <Label htmlFor="casing-weight">Wt (kg/m / lbs/ft)</Label>
                                     <Select id="casing-weight" value={formData.casingSpec?.weight_lbs_ft || ''} disabled={!selectedSize} onChange={e => {
                                         const spec = availableWeights.find(w => w.weight_lbs_ft === parseFloat(e.target.value));
                                         setFormData({...formData, casingSpec: spec || null});
                                     }} required>
                                         <option value="" disabled>Select Weight</option>
-                                        {availableWeights.map(w => <option key={w.weight_lbs_ft} value={w.weight_lbs_ft}>{w.weight_lbs_ft}</option>)}
+                                        {availableWeights.map(w => (
+                                            <option key={w.weight_lbs_ft} value={w.weight_lbs_ft}>
+                                                {formatWeightOption(w.weight_lbs_ft)}
+                                            </option>
+                                        ))}
                                     </Select>
                                 </div>
                                 <div className="p-2 bg-gray-800 rounded-md">
@@ -326,16 +466,13 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
                             <Input id="endDate" type="date" value={formData.storageEndDate} onChange={e => setFormData({...formData, storageEndDate: e.target.value})} required />
                         </div>
                         <div>
-                            <Label htmlFor="referenceId">Project Reference Number</Label>
-                            <p className="text-xs text-yellow-400 mb-2">
-                                💡 This will act as your unique passcode to check status and make inquiries - make sure it's something you'll remember!
-                            </p>
+                            <Label htmlFor="referenceId">Project Reference Number <span className="text-xs text-gray-400">(make unique)</span></Label>
                             <Input id="referenceId" type="text" placeholder="AFE, Project Name, etc." value={referenceId} onChange={e => setReferenceId(e.target.value)} required />
                         </div>
                     </fieldset>
 
-                    <Button type="submit" className="w-full py-3 mt-4">
-                        Current Storage Details
+                    <Button type="submit" className="w-full py-3 mt-4" disabled={isLoading}>
+                        {isLoading ? 'Submitting Request...' : 'Submit Request'}
                     </Button>
                 </form>
             </WizardCard>
@@ -351,6 +488,11 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
         return (
             <WizardCard title="Current Storage & Trucking" subtitle="How will your items get to our facility?">
                 <form onSubmit={handleTruckingSubmit} className="space-y-6">
+                    {error && (
+                        <div className="p-3 bg-red-900/40 border border-red-700 rounded-md text-sm text-red-200">
+                            {error}
+                        </div>
+                    )}
                     <div>
                         <Label>Do you require a trucking quote or have your own trucking?</Label>
                         <div className="flex flex-col sm:flex-row gap-4">
@@ -403,13 +545,13 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
                 <p className="text-gray-300">Your request has been submitted for approval. Our team will review the details and you will be notified shortly.</p>
 
                 <div className="bg-gray-800 p-6 rounded-lg border-2 border-yellow-500">
-                    <p className="text-yellow-400 font-semibold mb-2">🔑 Important - Save This Information!</p>
+                    <p className="text-yellow-400 font-semibold mb-2">Key Information - Save This!</p>
                     <div className="bg-gray-900 p-4 rounded-md mt-3">
                         <p className="text-sm text-gray-400">Your Project Reference ID</p>
                         <p className="text-2xl font-bold text-red-500 mt-1">{referenceId}</p>
                     </div>
                     <p className="text-xs text-gray-400 mt-3">
-                        💡 Your Project Reference ID acts as your password. Use it with your email to sign in and check your request status.
+                        Tip: Keep this Reference ID handy - you will need it to check status, schedule deliveries, and talk to the MPS team about this project.
                     </p>
                 </div>
 
@@ -466,7 +608,6 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
         // Handle new request flow (status is DRAFT)
         switch(currentStep) {
             case 'details': return renderDetailsForm();
-            case 'trucking': return renderTruckingForm();
             case 'submitted': return renderSubmitted();
             default: return renderDetailsForm();
         }
@@ -476,3 +617,6 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
 };
 
 export default StorageRequestWizard;
+
+
+

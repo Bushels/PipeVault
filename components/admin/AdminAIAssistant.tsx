@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Admin AI Assistant - Help admins find answers quickly
  * Powered by Gemini 2.0 Flash (FREE tier for basic usage!)
  */
@@ -24,7 +24,7 @@ interface Message {
 const AdminAIAssistant: React.FC<AdminAIAssistantProps> = ({ requests, companies, yards, inventory }) => {
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
-    content: 'Hi! I\'m your PipeVault admin assistant powered by Gemini 2.0 Flash. I can help you with:\n\n• Storage capacity and availability\n• Request status and analytics\n• Company information\n• Inventory queries\n• Operational insights\n\nWhat would you like to know?'
+    content: 'Howdy! Roughneck Ops here — your oilfield-savvy admin assistant. I can help with:\n\n- Yard capacity and availability\n- Pending approvals and project status\n- Company contact details\n- Inventory balance and movements\n- Operational reminders and next steps\n\nWhat\'s the next job on your list?'
   }]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -139,10 +139,10 @@ const AdminAIAssistant: React.FC<AdminAIAssistantProps> = ({ requests, companies
     <Card className="flex flex-col h-[600px]">
       <div className="border-b border-gray-700 pb-4 mb-4">
         <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-          <span className="text-2xl">🤖</span>
-          Admin AI Assistant
+          <span className="text-2xl">🛢️</span>
+          Roughneck Ops Assistant
         </h3>
-        <p className="text-sm text-gray-400 mt-1">Ask me anything about your operations</p>
+        <p className="text-sm text-gray-400 mt-1">Ask for status updates, capacity checks, or next actions.</p>
       </div>
 
       {/* Messages */}
@@ -219,3 +219,5 @@ const AdminAIAssistant: React.FC<AdminAIAssistantProps> = ({ requests, companies
 };
 
 export default AdminAIAssistant;
+
+

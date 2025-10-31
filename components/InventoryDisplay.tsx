@@ -120,7 +120,7 @@ const InventoryDisplay: React.FC<InventoryDisplayProps> = ({ inventory, showAllC
                             {pipe.assignedUWI && <div className="text-xs text-gray-500">{pipe.assignedUWI}</div>}
                           </div>
                         ) : (
-                          <span className="text-gray-500">—</span>
+                          <span className="text-gray-500">-</span>
                         )}
                       </td>
                     </>
