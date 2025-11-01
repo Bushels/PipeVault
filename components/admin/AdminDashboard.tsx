@@ -793,7 +793,7 @@ const ApprovalCard: React.FC<{
       value: `${details?.storageStartDate || '-'} -> ${details?.storageEndDate || '-'}`,
     });
   }
-  if (details?.sandControlScreenType) {
+  if (details?.itemType === 'Sand Control' && details.sandControlScreenType) {
     const screen =
       details.sandControlScreenType === 'Other' && details.sandControlScreenTypeOther
         ? `Other (${details.sandControlScreenTypeOther})`

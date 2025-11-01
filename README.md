@@ -847,7 +847,10 @@ chore: Update Resend API key and email configuration
 ### Pending (Requires User Action)
 1. **Database Schema Update** - Run [supabase/APPLY_ARCHIVE_COLUMN.sql](supabase/APPLY_ARCHIVE_COLUMN.sql) in Supabase SQL Editor to add `archived_at` column
 2. **Approval Metadata Columns** - Run [supabase/APPLY_APPROVER_METADATA.sql](supabase/APPLY_APPROVER_METADATA.sql) in Supabase SQL Editor so `storage_requests` stores approver email and internal notes.
-3. **Slack Webhook Configuration** - Create webhook in Supabase Dashboard using template from [supabase/SETUP_SLACK_WEBHOOK.sql](supabase/SETUP_SLACK_WEBHOOK.sql)
+3. **Slack Webhook Configuration** - ⚙️ **IN PROGRESS**: Slack app created and webhook URL configured. Complete setup by:
+   - Running SQL trigger for user signups: `CREATE EXTENSION pg_net;` then execute `notify_slack_new_user()` function from [supabase/SETUP_SLACK_WEBHOOKS_COMPLETE.sql](supabase/SETUP_SLACK_WEBHOOKS_COMPLETE.sql)
+   - Creating 3 Supabase Dashboard webhooks for storage requests, deliveries, and pickups using payload templates from the SQL file
+   - Testing each webhook by triggering the corresponding event
 4. **Domain Verification** - Add DNS records (SPF, DKIM, DMARC) for `mpsgroup.ca` in Resend dashboard to enable production email delivery
 5. **API Key Rotation** - Rotate `VITE_RESEND_API_KEY` before production launch (current key shared for development)
 

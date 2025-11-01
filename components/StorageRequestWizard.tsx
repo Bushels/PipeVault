@@ -130,7 +130,22 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
     useEffect(() => {
         // Reset dependent fields when itemType changes
         setSelectedSize(null);
-        setFormData(f => ({ ...f, casingSpec: null, sandControlScreenType: 'DWW', sandControlScreenTypeOther: '' }));
+        setFormData(prev => {
+            const next = { ...prev, casingSpec: null };
+            if (formData.itemType === 'Sand Control') {
+                return {
+                    ...next,
+                    sandControlScreenType: prev.sandControlScreenType ?? 'DWW',
+                    sandControlScreenTypeOther:
+                        prev.sandControlScreenType === 'Other' ? prev.sandControlScreenTypeOther ?? '' : undefined,
+                };
+            }
+            return {
+                ...next,
+                sandControlScreenType: undefined,
+                sandControlScreenTypeOther: undefined,
+            };
+        });
     }, [formData.itemType]);
 
     useEffect(() => {

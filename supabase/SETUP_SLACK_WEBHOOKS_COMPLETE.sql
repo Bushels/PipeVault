@@ -7,10 +7,16 @@
 -- 3. Delivery bookings (to MPS)
 -- 4. Pickup bookings (to site)
 --
+-- CONFIGURATION STATUS:
+-- ✅ Slack App Created: "PipeVault Notifications"
+-- ✅ Webhook URL Configured: https://hooks.slack.com/services/T09QJM7DN1X/B09QK2RC51P/...
+-- ✅ Channel: #pipevault-notifications
+--
 -- SETUP INSTRUCTIONS:
 -- 1. Create a Slack Incoming Webhook (https://api.slack.com/messaging/webhooks)
 -- 2. Go to Supabase Dashboard > Database > Webhooks
 -- 3. Create 4 separate webhooks using the configurations below
+-- 4. Replace 'YOUR/WEBHOOK/URL' with your actual Slack webhook URL
 -- ============================================================================
 
 -- ============================================================================
