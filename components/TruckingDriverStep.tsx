@@ -4,8 +4,8 @@ import clsx from 'clsx';
 
 export interface TruckingDriverFormData {
   truckingCompanyName: string;
-  driverName: string;
-  driverPhone: string;
+  driverName?: string;
+  driverPhone?: string;
 }
 
 interface TruckingDriverStepProps {
@@ -69,7 +69,7 @@ const TruckingDriverStep: React.FC<TruckingDriverStepProps> = ({ register, error
           <div>
             <h3 className="text-sm font-bold text-white mb-1">Trucking & Driver Details</h3>
             <p className="text-xs text-gray-300">
-              Provide the trucking company and driver contact information. We'll use this to coordinate delivery and address any issues during transport.
+              Provide the trucking company name. Driver contact information is optional and can be added later if not yet assigned.
             </p>
           </div>
         </div>
@@ -102,46 +102,50 @@ const TruckingDriverStep: React.FC<TruckingDriverStepProps> = ({ register, error
 
       {/* Driver Information */}
       <div className="border-t border-gray-700 pt-6">
-        <h4 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-          Driver Contact Information
-        </h4>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            Driver Contact Information
+          </h4>
+          <span className="text-xs text-gray-500 bg-gray-800 px-3 py-1 rounded-full">Optional</span>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Driver Name */}
           <div>
-            <Label htmlFor="driverName" required>
+            <Label htmlFor="driverName">
               Driver Name
             </Label>
             <Input
               id="driverName"
-              placeholder="e.g., John Smith"
+              placeholder="e.g., John Smith (if known)"
               error={!!errors.driverName}
               {...register('driverName', {
-                required: 'Driver name is required',
                 minLength: {
                   value: 2,
                   message: 'Name must be at least 2 characters',
                 },
               })}
             />
+            <p className="mt-1 text-xs text-gray-400">
+              Can be added later if driver not yet assigned
+            </p>
             <ErrorMessage message={errors.driverName?.message} />
           </div>
 
           {/* Driver Phone */}
           <div>
-            <Label htmlFor="driverPhone" required>
+            <Label htmlFor="driverPhone">
               Driver Contact Number
             </Label>
             <Input
               id="driverPhone"
               type="tel"
-              placeholder="(403) 555-9876"
+              placeholder="(403) 555-9876 (if available)"
               error={!!errors.driverPhone}
               {...register('driverPhone', {
-                required: 'Driver contact number is required',
                 pattern: {
                   value: /^[\d\s\-\(\)\+]+$/,
                   message: 'Please enter a valid phone number',
@@ -153,7 +157,7 @@ const TruckingDriverStep: React.FC<TruckingDriverStepProps> = ({ register, error
               })}
             />
             <p className="mt-1 text-xs text-gray-400">
-              Direct line to reach driver during transport
+              Direct line to reach driver (often assigned last minute)
             </p>
             <ErrorMessage message={errors.driverPhone?.message} />
           </div>
@@ -168,11 +172,12 @@ const TruckingDriverStep: React.FC<TruckingDriverStepProps> = ({ register, error
           </svg>
           <div className="text-xs text-gray-400 space-y-2">
             <p>
-              <strong className="text-white">Why we need this:</strong> Driver contact allows us to communicate
-              directly if there are delays, scheduling changes, or questions about unloading procedures.
+              <strong className="text-white">About driver contact:</strong> Driver contact information is helpful for
+              communicating directly if there are delays, scheduling changes, or questions about unloading procedures.
+              Since drivers are often assigned last minute, you can leave this blank and update it later.
             </p>
             <p className="text-gray-500">
-              We don't need truck details (make, model, license plate) - just driver contact info for smooth coordination.
+              We don't need truck details (make, model, license plate) - just basic driver contact info when available.
             </p>
           </div>
         </div>
