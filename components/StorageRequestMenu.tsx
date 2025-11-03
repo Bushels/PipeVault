@@ -18,6 +18,7 @@ interface StorageRequestMenuProps {
   onArchiveRequest?: (request: StorageRequest, shouldArchive: boolean) => void | Promise<void>;
   archivingRequestId?: string | null;
   onScheduleDelivery?: (request: StorageRequest) => void;
+  onUploadDocuments?: (request: StorageRequest) => void;
 }
 
 const StorageRequestMenu: React.FC<StorageRequestMenuProps> = ({
@@ -29,6 +30,7 @@ const StorageRequestMenu: React.FC<StorageRequestMenuProps> = ({
   onArchiveRequest,
   archivingRequestId,
   onScheduleDelivery,
+  onUploadDocuments,
 }) => {
   return (
     <>
@@ -62,6 +64,7 @@ const StorageRequestMenu: React.FC<StorageRequestMenuProps> = ({
           onArchiveRequest={onArchiveRequest}
           archivingRequestId={archivingRequestId}
           onScheduleDelivery={onScheduleDelivery}
+          onUploadDocuments={onUploadDocuments}
         />
       </div>
 

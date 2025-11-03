@@ -279,6 +279,11 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
     setErrorMessage(null);
   };
 
+  const handleSkipDocuments = () => {
+    setStep('review');
+    setErrorMessage(null);
+  };
+
   const handleReviewConfirm = async () => {
     if (!storageData || !truckingData || !selectedTimeSlot) {
       setErrorMessage('Missing required information. Please go back and complete all steps.');
@@ -590,6 +595,25 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
               onRemoveDocument={handleRemoveDocument}
               isProcessing={isProcessingManifest}
             />
+
+            {/* Skip Documents Info */}
+            {uploadedDocuments.length === 0 && (
+              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="text-xs text-gray-300">
+                    <p className="font-semibold text-white mb-1">Don't have documents ready?</p>
+                    <p>
+                      You can skip this step and upload your manifest later from your dashboard.
+                      However, uploading now helps us prepare for your arrival.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between pt-4 border-t border-gray-700">
               <Button
                 type="button"
@@ -598,13 +622,23 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
               >
                 Back
               </Button>
-              <Button
-                onClick={handleDocumentsContinue}
-                disabled={!hasCompletedDocuments || isProcessingManifest}
-                className="bg-red-600 hover:bg-red-500 px-8 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isProcessingManifest ? 'Processing...' : 'Continue to Review'}
-              </Button>
+              <div className="flex gap-3">
+                {uploadedDocuments.length === 0 && (
+                  <Button
+                    onClick={handleSkipDocuments}
+                    className="bg-gray-700 hover:bg-gray-600 px-6"
+                  >
+                    Skip for Now
+                  </Button>
+                )}
+                <Button
+                  onClick={handleDocumentsContinue}
+                  disabled={!hasCompletedDocuments || isProcessingManifest}
+                  className="bg-red-600 hover:bg-red-500 px-8 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isProcessingManifest ? 'Processing...' : 'Continue to Review'}
+                </Button>
+              </div>
             </div>
           </div>
         )}

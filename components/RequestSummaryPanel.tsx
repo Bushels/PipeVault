@@ -12,6 +12,7 @@ interface RequestSummaryPanelProps {
   onArchiveRequest?: (request: StorageRequest, shouldArchive: boolean) => void | Promise<void>;
   archivingRequestId?: string | null;
   onScheduleDelivery?: (request: StorageRequest) => void;
+  onUploadDocuments?: (request: StorageRequest) => void;
 }
 
 type StatusBadge = 'PENDING' | 'APPROVED' | 'REJECTED' | 'COMPLETED' | 'DRAFT';
@@ -32,6 +33,7 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
   onArchiveRequest,
   archivingRequestId,
   onScheduleDelivery,
+  onUploadDocuments,
 }) => {
   const nowIso = useMemo(() => new Date().toISOString(), []);
   const [showArchived, setShowArchived] = useState(false);
@@ -362,14 +364,24 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                             </svg>
                           </div>
-                          <div>
-                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-2">Next Step</p>
-                            <Button
-                              onClick={() => onScheduleDelivery(request)}
-                              className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white text-sm px-5 py-2 font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                            >
-                              🚛 Truck to MPS
-                            </Button>
+                          <div className="flex flex-col gap-2">
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Actions</p>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => onScheduleDelivery(request)}
+                                className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white text-sm px-5 py-2 font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                              >
+                                🚛 Truck to MPS
+                              </Button>
+                              {onUploadDocuments && (
+                                <Button
+                                  onClick={() => onUploadDocuments(request)}
+                                  className="bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white text-sm px-5 py-2 font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                                >
+                                  📄 Upload Docs
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </>
                       )}
