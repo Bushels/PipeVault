@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import type { StorageRequest } from '../types';
@@ -35,6 +35,9 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
 }) => {
   const nowIso = useMemo(() => new Date().toISOString(), []);
   const [showArchived, setShowArchived] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   const normalizedRequests = useMemo(() => {
     if (!currentUserEmail) return requests;
@@ -66,6 +69,41 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
       setShowArchived(false);
     }
   }, [archivedCount, showArchived]);
+
+  // Update scroll button visibility
+  const updateScrollButtons = () => {
+    if (!scrollContainerRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+    setCanScrollLeft(scrollLeft > 10);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+  };
+
+  useEffect(() => {
+    updateScrollButtons();
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', updateScrollButtons);
+      window.addEventListener('resize', updateScrollButtons);
+      return () => {
+        container.removeEventListener('scroll', updateScrollButtons);
+        window.removeEventListener('resize', updateScrollButtons);
+      };
+    }
+  }, [visibleRequests]);
+
+  const scrollToNext = () => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const cardWidth = container.querySelector('div')?.offsetWidth || 600;
+    container.scrollBy({ left: cardWidth + 24, behavior: 'smooth' });
+  };
+
+  const scrollToPrev = () => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const cardWidth = container.querySelector('div')?.offsetWidth || 600;
+    container.scrollBy({ left: -(cardWidth + 24), behavior: 'smooth' });
+  };
 
   // Show special onboarding card for new users
   if (!sortedRequests.length) {
@@ -213,7 +251,46 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
           }
         `}</style>
 
-        <div className="flex gap-6 overflow-x-auto overflow-y-visible pb-6 snap-x snap-mandatory scrollbar-hide">
+        {/* Previous Button */}
+        {canScrollLeft && (
+          <button
+            onClick={scrollToPrev}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-gray-900/95 hover:bg-gray-800 border-2 border-gray-700 rounded-full shadow-xl flex items-center justify-center transition-all duration-200 hover:scale-110 group"
+            aria-label="Previous request"
+          >
+            <svg
+              className="w-6 h-6 text-gray-400 group-hover:text-white transition-colors"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
+
+        {/* Next Button */}
+        {canScrollRight && (
+          <button
+            onClick={scrollToNext}
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-gray-900/95 hover:bg-gray-800 border-2 border-gray-700 rounded-full shadow-xl flex items-center justify-center transition-all duration-200 hover:scale-110 group"
+            aria-label="Next request"
+          >
+            <svg
+              className="w-6 h-6 text-gray-400 group-hover:text-white transition-colors"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+
+        <div
+          ref={scrollContainerRef}
+          className="flex gap-6 overflow-x-auto overflow-y-visible pb-6 snap-x snap-mandatory scrollbar-hide"
+        >
           {visibleRequests.map((request, index) => {
             const status = (request.status ?? 'PENDING') as StatusBadge;
             const badgeStyle = statusStyles[status] ?? statusStyles.PENDING;
