@@ -3,6 +3,7 @@ import Header from './Header';
 import StorageRequestWizard from './StorageRequestWizard';
 import StorageRequestMenu from './StorageRequestMenu';
 import FormHelperChatbot from './FormHelperChatbot';
+import InboundShipmentWizard from './InboundShipmentWizard';
 import type { Session, StorageRequest, Pipe } from '../types';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -88,42 +89,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, proj
             </div>
           )}
           {selectedOption === 'delivery-in' && selectedRequest && (
-            <Card className="p-6">
-              <h2 className="text-2xl font-bold mb-4">Schedule Delivery to MPS</h2>
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-6">
-                <h3 className="text-lg font-semibold text-white mb-2">
-                  Request: {selectedRequest.referenceId}
-                </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-500">Item Type</p>
-                    <p className="text-gray-200">{selectedRequest.requestDetails?.itemType || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Quantity</p>
-                    <p className="text-gray-200">
-                      {selectedRequest.requestDetails?.totalJoints || 0} joints
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Storage Start</p>
-                    <p className="text-gray-200">
-                      {selectedRequest.requestDetails?.storageStartDate
-                        ? new Date(selectedRequest.requestDetails.storageStartDate).toLocaleDateString()
-                        : 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Storage Location</p>
-                    <p className="text-green-300 font-semibold">
-                      {selectedRequest.assignedLocation || 'To be assigned'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <p className="text-gray-400 mb-6">AI-powered delivery scheduling coming soon...</p>
-              <p className="text-sm text-gray-500">This will guide you through scheduling pipe delivery to our facility, including trucking options and document uploads.</p>
-            </Card>
+            <InboundShipmentWizard
+              request={selectedRequest}
+              session={session}
+              onBack={() => setSelectedOption('menu')}
+            />
           )}
           {selectedOption === 'delivery-out' && (
             <Card className="p-6">

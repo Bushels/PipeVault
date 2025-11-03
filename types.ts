@@ -6,6 +6,119 @@ export interface Company {
 
 export type PipeStatus = 'PENDING_DELIVERY' | 'IN_STORAGE' | 'PICKED_UP' | 'IN_TRANSIT';
 
+export type ShipmentStatus = 'DRAFT' | 'SCHEDULING' | 'SCHEDULED' | 'IN_TRANSIT' | 'RECEIVED' | 'CANCELLED';
+export type TruckingMethod = 'MPS_QUOTE' | 'CUSTOMER_PROVIDED';
+export type ShipmentTruckStatus = 'PENDING' | 'SCHEDULED' | 'INBOUND' | 'ON_SITE' | 'RECEIVED' | 'CANCELLED';
+export type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+export type ManifestDocumentStatus = 'UPLOADED' | 'PROCESSING' | 'PARSED' | 'FAILED' | 'APPROVED';
+export type ShipmentItemStatus = 'IN_TRANSIT' | 'IN_STORAGE' | 'MISSING' | 'DAMAGED';
+
+export interface Shipment {
+  id: string;
+  requestId: string;
+  companyId: string;
+  createdBy: string;
+  status: ShipmentStatus;
+  truckingMethod: TruckingMethod;
+  truckingCompany?: string | null;
+  truckingContactName?: string | null;
+  truckingContactPhone?: string | null;
+  truckingContactEmail?: string | null;
+  numberOfTrucks: number;
+  estimatedJointCount?: number | null;
+  estimatedTotalLengthFt?: number | null;
+  specialInstructions?: string | null;
+  surchargeApplicable?: boolean | null;
+  surchargeAmount?: number | null;
+  documentsStatus?: string | null;
+  calendarSyncStatus?: string | null;
+  latestCustomerNotificationAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  trucks?: ShipmentTruck[];
+  appointments?: DockAppointment[];
+  documents?: ShipmentDocument[];
+  manifestItems?: ShipmentItem[];
+}
+
+export interface ShipmentTruck {
+  id: string;
+  shipmentId: string;
+  sequenceNumber: number;
+  status: ShipmentTruckStatus;
+  truckingCompany?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  scheduledSlotStart?: string | null;
+  scheduledSlotEnd?: string | null;
+  arrivalTime?: string | null;
+  departureTime?: string | null;
+  jointsCount?: number | null;
+  totalLengthFt?: number | null;
+  manifestReceived?: boolean | null;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  appointment?: DockAppointment;
+  documents?: ShipmentDocument[];
+  manifestItems?: ShipmentItem[];
+}
+
+export interface DockAppointment {
+  id: string;
+  shipmentId: string;
+  truckId?: string | null;
+  slotStart: string;
+  slotEnd: string;
+  afterHours?: boolean | null;
+  surchargeApplied?: boolean | null;
+  status: AppointmentStatus;
+  calendarEventId?: string | null;
+  calendarSyncStatus?: string | null;
+  reminder24hSentAt?: string | null;
+  reminder1hSentAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ShipmentDocument {
+  id: string;
+  shipmentId: string;
+  truckId?: string | null;
+  documentId: string;
+  documentType: string;
+  status: ManifestDocumentStatus;
+  parsedPayload?: Record<string, unknown> | null;
+  processingNotes?: string | null;
+  uploadedBy?: string | null;
+  fileName?: string | null;
+  fileType?: string | null;
+  fileSize?: number | null;
+  storagePath?: string | null;
+  uploadedAt?: string | null;
+  createdAt?: string;
+  processedAt?: string | null;
+  updatedAt?: string;
+}
+
+export interface ShipmentItem {
+  id: string;
+  shipmentId: string;
+  truckId?: string | null;
+  documentId?: string | null;
+  inventoryId?: string | null;
+  manufacturer?: string | null;
+  heatNumber?: string | null;
+  serialNumber?: string | null;
+  tallyLengthFt?: number | null;
+  quantity?: number | null;
+  status: ShipmentItemStatus;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Pipe {
   id: string;
   companyId: string;
@@ -28,6 +141,7 @@ export interface Pipe {
   // Related truck load
   deliveryTruckLoadId?: string; // ID of the truck load that delivered this pipe
   pickupTruckLoadId?: string; // ID of the truck load that picked up this pipe
+  manifestItemId?: string; // Link back to parsed manifest row when available
 }
 
 export interface CasingSpec {

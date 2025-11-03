@@ -65,7 +65,7 @@ Payload Template:
         },
         {
           "type": "mrkdwn",
-          "text": "*Phone:*\n{{ record.raw_user_meta_data.phone }}"
+          "text": "*Phone:*\n{{ record.raw_user_meta_data.contact_number }}"
         },
         {
           "type": "mrkdwn",
@@ -110,13 +110,15 @@ DECLARE
   user_last_name TEXT;
   user_company TEXT;
   user_phone TEXT;
+  user_email TEXT;
   slack_payload JSONB;
 BEGIN
   -- Extract user metadata
   user_first_name := COALESCE(NEW.raw_user_meta_data->>'first_name', 'N/A');
   user_last_name := COALESCE(NEW.raw_user_meta_data->>'last_name', '');
   user_company := COALESCE(NEW.raw_user_meta_data->>'company_name', 'N/A');
-  user_phone := COALESCE(NEW.raw_user_meta_data->>'phone', 'N/A');
+  user_phone := COALESCE(NEW.raw_user_meta_data->>'contact_number', 'N/A');
+  user_email := COALESCE(NEW.email, NEW.raw_user_meta_data->>'contact_email', 'N/A');
 
   -- Build Slack payload
   slack_payload := jsonb_build_object(
@@ -134,7 +136,7 @@ BEGIN
         'fields', jsonb_build_array(
           jsonb_build_object(
             'type', 'mrkdwn',
-            'text', '*Email:*' || E'\n' || COALESCE(NEW.email, 'N/A')
+            'text', '*Email:*' || E'\n' || user_email
           ),
           jsonb_build_object(
             'type', 'mrkdwn',

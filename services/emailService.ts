@@ -209,6 +209,92 @@ MPS Group - 20 Years of Excellence
   await sendEmail(to, subject, htmlBody, textBody);
 };
 
+export interface ShipmentReceiptEmailPayload {
+  to: string;
+  referenceId: string;
+  companyName?: string;
+  trucksReceived: number;
+  manifestLines: number;
+  documentsAttached: number;
+  receivedAt: string;
+}
+
+export const sendShipmentReceivedEmail = async (
+  payload: ShipmentReceiptEmailPayload,
+): Promise<void> => {
+  const receivedDate = new Date(payload.receivedAt);
+  const receivedDisplay = Number.isNaN(receivedDate.getTime())
+    ? payload.receivedAt
+    : receivedDate.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+
+  const subject = `PipeVault Update: Shipment ${payload.referenceId} Received`;
+  const greetingName = payload.companyName ? `${payload.companyName} team` : 'there';
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f9fafb; color: #111827; }
+    .container { max-width: 640px; margin: 0 auto; padding: 24px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; }
+    h1 { font-size: 22px; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+    .footer { margin-top: 24px; font-size: 12px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Shipment Received at MPS</h1>
+    <p>Hello ${greetingName},</p>
+    <p>We have received your shipment for project <strong>${payload.referenceId}</strong>. Our receiving team confirmed the delivery on <strong>${receivedDisplay}</strong>.</p>
+    <table>
+      <tbody>
+        <tr>
+          <th>Trucks Received</th>
+          <td>${payload.trucksReceived}</td>
+        </tr>
+        <tr>
+          <th>Manifest Line Items</th>
+          <td>${payload.manifestLines}</td>
+        </tr>
+        <tr>
+          <th>Documents Uploaded</th>
+          <td>${payload.documentsAttached}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>Inventory has been marked as "In Storage" inside PipeVault. You can review the updated counts and supporting documents in your dashboard.</p>
+    <p>If anything looks incorrect, reply to this email and our team will help right away.</p>
+    <p class="footer">PipeVault by MPS Group</p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const textBody = `
+Shipment ${payload.referenceId} Received
+
+Hello ${greetingName},
+We have received your shipment on ${receivedDisplay}.
+
+Trucks received: ${payload.trucksReceived}
+Manifest line items: ${payload.manifestLines}
+Documents uploaded: ${payload.documentsAttached}
+
+Inventory is now marked as "In Storage" inside PipeVault. Reply to this email or contact pipevault@mpsgroup.ca if anything looks incorrect.
+  `.trim();
+
+  await sendEmail(payload.to, subject, htmlBody, textBody);
+};
+
 /**
  * Helper function to send emails via Resend API or log to console in development
  */

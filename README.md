@@ -21,7 +21,7 @@ PipeVault is MPS Group's portal for running the 20-year anniversary "Free Pipe S
 - **AI Assistants**:
   - **Roughneck** - customer-facing field hand that answers project questions.
   - **Roughneck Ops** - admin-side assistant for approvals, capacity checks, and analytics.
-- **Data Source**: Supabase (`https://cvevhvjxnklbbhtqzyvw.supabase.co`) for auth, storage requests, inventory, documents, notifications, and trucking.
+- **Data Source**: Supabase (project-specific instance) for auth, storage requests, inventory, documents, notifications, and trucking.
 - **AI Stack**: Gemini Flash 2.5 (chat) + 2.0 summaries (free-tier friendly).
 
 ## Core Flows
@@ -69,8 +69,8 @@ PipeVault is MPS Group's portal for running the 20-year anniversary "Free Pipe S
 Create `.env` from `.env.example`:
 
 ```bash
-VITE_SUPABASE_URL=https://cvevhvjxnklbbhtqzyvw.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+VITE_SUPABASE_URL=your_project_url_here
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
 VITE_GOOGLE_AI_API_KEY=your_gemini_key_here
 VITE_RESEND_API_KEY=your_resend_key_here
 VITE_TOMORROW_API_KEY=your_tomorrow_io_key_here
@@ -122,6 +122,7 @@ npm run preview     # test the production build locally
 - `services/geminiService.ts` contains all prompts for Roughneck, Roughneck Ops, request summaries, and the form helper.
 - Adjust tone/behaviour by editing the prompt strings or `services/conversationScripts.ts`.
 - Chat history is trimmed in the client to stay within free-tier token limits.
+- For details on ongoing AI development and the product roadmap, see [ROUGHNECK_AI_REFERENCE.md](ROUGHNECK_AI_REFERENCE.md).
 
 ## Slack Integration
 
@@ -878,7 +879,7 @@ chore: Update Resend API key and email configuration
 
 ## Support & Contact
 - **Product Owner**: Kyle Gronning (MPS Group)
-- **Supabase Project**: `cvevhvjxnklbbhtqzyvw`
+- **Supabase Project**: `your_supabase_project_id`
 - **AI Vendor**: Google Gemini (Flash 2.5)
 
 See `CHECKLISTS.md` for SOPs. For help or hand-off questions, reach out via the internal Slack channel or email `pipevault@mpsgroup.ca`.

@@ -1,10 +1,4 @@
-/**
- * Weather Service - Fetches weather data from Tomorrow.io API
- */
-
-// TODO: Move API key to .env file for production
-const TOMORROW_API_KEY = 'JBNAUCmIivVzNBjRyFSHQJxODlAztBtG';
-const TOMORROW_BASE_URL = 'https://api.tomorrow.io/v4';
+import { supabase } from '../lib/supabase';
 
 interface WeatherData {
   temperature: number;
@@ -13,6 +7,12 @@ interface WeatherData {
   weatherDescription: string;
   emoji: string;
   roughneckQuip: string;
+}
+
+interface WeatherForecast {
+  snowAccumulation: number;
+  temperature: number;
+  startTime: string;
 }
 
 // Weather code to description mapping (Tomorrow.io weather codes)
@@ -90,7 +90,7 @@ const generateRoughneckQuip = (temp: number, weatherCode: number): string => {
 };
 
 /**
- * Fetches current weather data from Tomorrow.io API
+ * Fetches current weather data from Tomorrow.io API via a Supabase Edge Function
  * Default location: Calgary, Alberta (MPS location)
  */
 export const fetchWeather = async (
@@ -98,16 +98,11 @@ export const fetchWeather = async (
   longitude: number = -114.0719
 ): Promise<WeatherData | null> => {
   try {
-    const url = `${TOMORROW_BASE_URL}/weather/realtime?location=${latitude},${longitude}&apikey=${TOMORROW_API_KEY}`;
+    const { data, error } = await supabase.functions.invoke('fetch-realtime-weather', {
+      body: { location: `${latitude},${longitude}` },
+    });
 
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      console.error('Weather API error:', response.statusText);
-      return null;
-    }
-
-    const data = await response.json();
+    if (error) throw error;
 
     const temp = Math.round(data.data.values.temperature);
     const weatherCode = data.data.values.weatherCode;
@@ -122,7 +117,28 @@ export const fetchWeather = async (
       roughneckQuip: generateRoughneckQuip(temp, weatherCode),
     };
   } catch (error) {
-    console.error('Failed to fetch weather:', error);
+    console.error('Failed to fetch real-time weather:', error);
+    return null;
+  }
+};
+
+/**
+ * Fetches weather forecast data from Tomorrow.io API via a Supabase Edge Function
+ */
+export const fetchWeatherForecast = async (
+  latitude: number = 51.0447,
+  longitude: number = -114.0719
+): Promise<WeatherForecast | null> => {
+  try {
+    const { data, error } = await supabase.functions.invoke('fetch-weather-forecast', {
+      body: { location: `${latitude},${longitude}` },
+    });
+
+    if (error) throw error;
+    
+    return data.forecast;
+  } catch (error) {
+    console.error('Failed to fetch weather forecast:', error);
     return null;
   }
 };

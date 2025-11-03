@@ -11,6 +11,7 @@ import {
   useDocuments,
   useYards,
   useTruckLoads,
+  useShipments,
   useAddCompany,
   useAddRequest,
   useUpdateRequest,
@@ -19,7 +20,7 @@ import {
   useUpdateRack,
   queryKeys,
 } from './hooks/useSupabaseData';
-import type { AppSession, Session, StorageRequest, Company, TruckLoad, Pipe } from './types';
+import type { AppSession, Session, StorageRequest, Company, TruckLoad, Pipe, Shipment } from './types';
 import * as emailService from './services/emailService';
 import { queryClient } from './lib/QueryProvider';
 
@@ -33,6 +34,7 @@ function App() {
   const { data: documents = [], isLoading: loadingDocuments } = useDocuments();
   const { data: yards = [], isLoading: loadingYards } = useYards();
   const { data: truckLoads = [], isLoading: loadingTruckLoads } = useTruckLoads();
+  const { data: shipments = [], isLoading: loadingShipments } = useShipments();
 
   // Mutations
   const addCompanyMutation = useAddCompany();
@@ -191,7 +193,7 @@ function App() {
   };
 
   // Show loading state
-  if (authLoading || loadingCompanies || loadingRequests || loadingInventory || loadingDocuments || loadingYards || loadingTruckLoads) {
+  if (authLoading || loadingCompanies || loadingRequests || loadingInventory || loadingDocuments || loadingYards || loadingTruckLoads || loadingShipments) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 font-sans flex items-center justify-center">
         <div className="text-center">
@@ -219,6 +221,7 @@ function App() {
                 yards={yards}
                 inventory={inventory}
                 truckLoads={truckLoads}
+                shipments={shipments}
                 approveRequest={approveRequest}
                 rejectRequest={rejectRequest}
                 addTruckLoad={addTruckLoad}

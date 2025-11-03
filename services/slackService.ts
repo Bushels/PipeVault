@@ -99,6 +99,180 @@ export const sendNewRequestNotification = async (
 };
 
 /**
+ * Sends a notification to Slack when a trucking quote is requested
+ * @param quoteNumber - The quote number (e.g., PV-0001)
+ * @param companyName - The company name
+ * @param contactEmail - Contact email of the requestor
+ * @param originAddress - Storage yard address where pipe is located
+ * @param referenceId - The project reference ID
+ */
+export const sendTruckingQuoteRequest = async (
+  quoteNumber: string,
+  companyName: string,
+  contactEmail: string,
+  originAddress: string,
+  referenceId: string
+): Promise<void> => {
+  const message = {
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: '🚛 New Trucking Quote Request',
+          emoji: true
+        }
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Quote Number:*\n${quoteNumber}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Project Reference:*\n${referenceId}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Company:*\n${companyName}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Contact Email:*\n${contactEmail}`
+          }
+        ]
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Pickup Location:*\n${originAddress}`
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '⏰ *Action Required:* Calculate distance and provide trucking quote in PipeVault Admin Dashboard.'
+        }
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: '💰 Create Quote',
+              emoji: true
+            },
+            url: 'https://kylegronning.github.io/PipeVault/',
+            style: 'primary'
+          }
+        ]
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `📅 Requested: <!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|just now> | ⏱️ Customer expects quote within 24-48 hours`
+          }
+        ]
+      }
+    ]
+  };
+
+  await sendSlackMessage(message);
+};
+
+/**
+ * Sends a notification to Slack when a trucking quote is approved by customer
+ * @param quoteNumber - The quote number (e.g., PV-0001)
+ * @param companyName - The company name
+ * @param quotedAmount - The approved quote amount
+ * @param originAddress - Storage yard address
+ */
+export const sendTruckingQuoteApproved = async (
+  quoteNumber: string,
+  companyName: string,
+  quotedAmount: number,
+  originAddress: string
+): Promise<void> => {
+  const message = {
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: '✅ Trucking Quote Approved',
+          emoji: true
+        }
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Quote Number:*\n${quoteNumber}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Company:*\n${companyName}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Approved Amount:*\n$${quotedAmount.toFixed(2)}`
+          }
+        ]
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Pickup Location:*\n${originAddress}`
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '🎉 *Action Required:* Coordinate trucking logistics and schedule delivery.'
+        }
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: '📋 View Details',
+              emoji: true
+            },
+            url: 'https://kylegronning.github.io/PipeVault/',
+            style: 'primary'
+          }
+        ]
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `📅 Approved: <!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|just now>`
+          }
+        ]
+      }
+    ]
+  };
+
+  await sendSlackMessage(message);
+};
+
+/**
  * Helper function to send messages to Slack via webhook
  */
 async function sendSlackMessage(payload: any): Promise<void> {

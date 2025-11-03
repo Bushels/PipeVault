@@ -147,6 +147,177 @@ CREATE INDEX idx_truck_loads_arrival ON truck_loads(arrival_time);
 CREATE INDEX idx_truck_loads_request ON truck_loads(related_request_id);
 
 -- ============================================================================
+-- SHIPMENTS
+-- ============================================================================
+
+CREATE TYPE IF NOT EXISTS shipment_status AS ENUM (
+  'DRAFT',
+  'SCHEDULING',
+  'SCHEDULED',
+  'IN_TRANSIT',
+  'RECEIVED',
+  'CANCELLED'
+);
+
+CREATE TYPE IF NOT EXISTS trucking_method AS ENUM (
+  'MPS_QUOTE',
+  'CUSTOMER_PROVIDED'
+);
+
+CREATE TYPE IF NOT EXISTS shipment_truck_status AS ENUM (
+  'PENDING',
+  'SCHEDULED',
+  'INBOUND',
+  'ON_SITE',
+  'RECEIVED',
+  'CANCELLED'
+);
+
+CREATE TYPE IF NOT EXISTS appointment_status AS ENUM (
+  'PENDING',
+  'CONFIRMED',
+  'COMPLETED',
+  'CANCELLED'
+);
+
+CREATE TYPE IF NOT EXISTS manifest_document_status AS ENUM (
+  'UPLOADED',
+  'PROCESSING',
+  'PARSED',
+  'FAILED',
+  'APPROVED'
+);
+
+CREATE TYPE IF NOT EXISTS shipment_item_status AS ENUM (
+  'IN_TRANSIT',
+  'IN_STORAGE',
+  'MISSING',
+  'DAMAGED'
+);
+
+CREATE TABLE IF NOT EXISTS shipments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id UUID NOT NULL REFERENCES storage_requests(id) ON DELETE CASCADE,
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  created_by TEXT NOT NULL,
+  status shipment_status NOT NULL DEFAULT 'DRAFT',
+  trucking_method trucking_method NOT NULL,
+  trucking_company TEXT,
+  trucking_contact_name TEXT,
+  trucking_contact_phone TEXT,
+  trucking_contact_email TEXT,
+  number_of_trucks INTEGER NOT NULL DEFAULT 1 CHECK (number_of_trucks > 0),
+  estimated_joint_count INTEGER,
+  estimated_total_length_ft NUMERIC(12, 2),
+  special_instructions TEXT,
+  surcharge_applicable BOOLEAN DEFAULT FALSE,
+  surcharge_amount NUMERIC(10, 2) DEFAULT 0,
+  documents_status TEXT,
+  calendar_sync_status TEXT DEFAULT 'PENDING',
+  latest_customer_notification_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_shipments_request ON shipments(request_id);
+CREATE INDEX idx_shipments_company ON shipments(company_id);
+CREATE INDEX idx_shipments_status ON shipments(status);
+
+CREATE TABLE IF NOT EXISTS shipment_trucks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shipment_id UUID NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
+  sequence_number INTEGER NOT NULL DEFAULT 1,
+  status shipment_truck_status NOT NULL DEFAULT 'PENDING',
+  trucking_company TEXT,
+  contact_name TEXT,
+  contact_phone TEXT,
+  contact_email TEXT,
+  scheduled_slot_start TIMESTAMPTZ,
+  scheduled_slot_end TIMESTAMPTZ,
+  arrival_time TIMESTAMPTZ,
+  departure_time TIMESTAMPTZ,
+  joints_count INTEGER,
+  total_length_ft NUMERIC(12, 2),
+  manifest_received BOOLEAN DEFAULT FALSE,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (shipment_id, sequence_number)
+);
+
+CREATE INDEX idx_shipment_trucks_shipment ON shipment_trucks(shipment_id);
+CREATE INDEX idx_shipment_trucks_status ON shipment_trucks(status);
+
+CREATE TABLE IF NOT EXISTS dock_appointments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shipment_id UUID NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
+  truck_id UUID REFERENCES shipment_trucks(id) ON DELETE SET NULL,
+  slot_start TIMESTAMPTZ NOT NULL,
+  slot_end TIMESTAMPTZ NOT NULL,
+  after_hours BOOLEAN DEFAULT FALSE,
+  surcharge_applied BOOLEAN DEFAULT FALSE,
+  status appointment_status NOT NULL DEFAULT 'PENDING',
+  calendar_event_id TEXT,
+  calendar_sync_status TEXT DEFAULT 'PENDING',
+  reminder_24h_sent_at TIMESTAMPTZ,
+  reminder_1h_sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX dock_appointments_unique_active_slot
+  ON dock_appointments(slot_start)
+  WHERE status IN ('PENDING', 'CONFIRMED');
+
+CREATE INDEX idx_dock_appointments_shipment ON dock_appointments(shipment_id);
+CREATE INDEX idx_dock_appointments_status ON dock_appointments(status);
+
+CREATE TABLE IF NOT EXISTS shipment_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shipment_id UUID NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
+  truck_id UUID REFERENCES shipment_trucks(id) ON DELETE CASCADE,
+  document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  document_type TEXT NOT NULL,
+  status manifest_document_status NOT NULL DEFAULT 'UPLOADED',
+  parsed_payload JSONB,
+  processing_notes TEXT,
+  uploaded_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  processed_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_shipment_documents_shipment ON shipment_documents(shipment_id);
+CREATE INDEX idx_shipment_documents_truck ON shipment_documents(truck_id);
+CREATE INDEX idx_shipment_documents_status ON shipment_documents(status);
+
+CREATE TABLE IF NOT EXISTS shipment_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shipment_id UUID NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
+  truck_id UUID REFERENCES shipment_trucks(id) ON DELETE SET NULL,
+  document_id UUID REFERENCES shipment_documents(id) ON DELETE SET NULL,
+  inventory_id UUID REFERENCES inventory(id) ON DELETE SET NULL,
+  manufacturer TEXT,
+  heat_number TEXT,
+  serial_number TEXT,
+  tally_length_ft NUMERIC(12, 3),
+  quantity INTEGER DEFAULT 1,
+  status shipment_item_status NOT NULL DEFAULT 'IN_TRANSIT',
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_shipment_items_shipment ON shipment_items(shipment_id);
+CREATE INDEX idx_shipment_items_truck ON shipment_items(truck_id);
+CREATE INDEX idx_shipment_items_status ON shipment_items(status);
+
+ALTER TABLE inventory
+  ADD COLUMN IF NOT EXISTS manifest_item_id UUID REFERENCES shipment_items(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_inventory_manifest_item ON inventory(manifest_item_id);
+
+-- ============================================================================
 -- CONVERSATIONS TABLE (for AI chat history)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS conversations (
@@ -322,6 +493,21 @@ CREATE TRIGGER update_inventory_updated_at BEFORE UPDATE ON inventory
 CREATE TRIGGER update_truck_loads_updated_at BEFORE UPDATE ON truck_loads
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_shipments_updated_at BEFORE UPDATE ON shipments
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_shipment_trucks_updated_at BEFORE UPDATE ON shipment_trucks
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_dock_appointments_updated_at BEFORE UPDATE ON dock_appointments
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_shipment_documents_updated_at BEFORE UPDATE ON shipment_documents
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_shipment_items_updated_at BEFORE UPDATE ON shipment_items
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_racks_updated_at BEFORE UPDATE ON racks
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -337,6 +523,11 @@ ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE storage_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE truck_loads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shipments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shipment_trucks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dock_appointments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shipment_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shipment_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
@@ -360,6 +551,53 @@ CREATE POLICY "Users can view own company inventory"
   TO authenticated
   USING (company_id IN (
     SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+  ));
+
+CREATE POLICY "Users can view own company shipments"
+  ON shipments FOR SELECT
+  TO authenticated
+  USING (company_id IN (
+    SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+  ));
+
+CREATE POLICY "Users can view own company shipment trucks"
+  ON shipment_trucks FOR SELECT
+  TO authenticated
+  USING (shipment_id IN (
+    SELECT s.id FROM shipments s
+    WHERE s.company_id IN (
+      SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+    )
+  ));
+
+CREATE POLICY "Users can view own company appointments"
+  ON dock_appointments FOR SELECT
+  TO authenticated
+  USING (shipment_id IN (
+    SELECT s.id FROM shipments s
+    WHERE s.company_id IN (
+      SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+    )
+  ));
+
+CREATE POLICY "Users can view own shipment documents"
+  ON shipment_documents FOR SELECT
+  TO authenticated
+  USING (shipment_id IN (
+    SELECT s.id FROM shipments s
+    WHERE s.company_id IN (
+      SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+    )
+  ));
+
+CREATE POLICY "Users can view own shipment items"
+  ON shipment_items FOR SELECT
+  TO authenticated
+  USING (shipment_id IN (
+    SELECT s.id FROM shipments s
+    WHERE s.company_id IN (
+      SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+    )
   ));
 
 CREATE POLICY "Users can view own conversations"
@@ -427,6 +665,11 @@ END $$;
 ALTER PUBLICATION supabase_realtime ADD TABLE storage_requests;
 ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
 ALTER PUBLICATION supabase_realtime ADD TABLE inventory;
+ALTER PUBLICATION supabase_realtime ADD TABLE shipments;
+ALTER PUBLICATION supabase_realtime ADD TABLE shipment_trucks;
+ALTER PUBLICATION supabase_realtime ADD TABLE dock_appointments;
+ALTER PUBLICATION supabase_realtime ADD TABLE shipment_documents;
+ALTER PUBLICATION supabase_realtime ADD TABLE shipment_items;
 
 -- ============================================================================
 -- VIEWS (helpful queries)
@@ -486,6 +729,11 @@ GROUP BY y.id, y.name, ya.id, ya.name;
 GRANT SELECT ON companies TO authenticated;
 GRANT SELECT ON storage_requests TO authenticated;
 GRANT SELECT ON inventory TO authenticated;
+GRANT SELECT ON shipments TO authenticated;
+GRANT SELECT ON shipment_trucks TO authenticated;
+GRANT SELECT ON dock_appointments TO authenticated;
+GRANT SELECT ON shipment_documents TO authenticated;
+GRANT SELECT ON shipment_items TO authenticated;
 GRANT SELECT ON conversations TO authenticated;
 
 -- Grant access to anon users (for public endpoints)
@@ -495,6 +743,11 @@ COMMENT ON TABLE companies IS 'Customer companies using PipeVault';
 COMMENT ON TABLE storage_requests IS 'Pipe storage requests from customers';
 COMMENT ON TABLE inventory IS 'Current pipe inventory in storage';
 COMMENT ON TABLE truck_loads IS 'Delivery and pickup truck load tracking';
+COMMENT ON TABLE shipments IS 'Inbound shipping workflow records per request';
+COMMENT ON TABLE shipment_trucks IS 'Individual truck loads associated with shipments';
+COMMENT ON TABLE dock_appointments IS 'Scheduled dock appointments and calendar sync data';
+COMMENT ON TABLE shipment_documents IS 'Uploaded shipping/manifest documents';
+COMMENT ON TABLE shipment_items IS 'Parsed manifest entries for inbound pipe';
 COMMENT ON TABLE conversations IS 'AI chat conversation history';
 COMMENT ON TABLE documents IS 'Uploaded documents (PDFs, photos)';
 COMMENT ON TABLE notifications IS 'Admin notification queue';

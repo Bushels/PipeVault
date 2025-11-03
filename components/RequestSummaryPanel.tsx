@@ -77,18 +77,18 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
         </div>
 
         {/* New User Onboarding Card */}
-        <div className="relative">
+        <div className="relative max-w-[600px]">
           {/* 3D Glow Effect */}
           <div className="absolute -inset-1 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl blur-lg opacity-30 animate-pulse"></div>
 
-          <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl border border-gray-700/50 shadow-2xl overflow-hidden">
+          <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl border border-gray-700/50 shadow-2xl overflow-hidden h-[480px]">
             {/* Subtle background pattern */}
             <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
 
             {/* Status glow */}
             <div className="absolute inset-0 opacity-10 bg-gradient-to-br from-indigo-500 to-transparent"></div>
 
-            <div className="relative p-6 space-y-5">
+            <div className="relative p-6 h-full flex flex-col">
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-gray-700/50">
                 <div>
@@ -99,44 +99,43 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                 </div>
               </div>
 
-              {/* Welcome Message */}
-              <div className="bg-gradient-to-r from-indigo-600/10 to-purple-600/10 border border-indigo-500/20 rounded-xl p-5">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-indigo-600/30 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <svg className="w-6 h-6 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
+              {/* Content Area */}
+              <div className="flex-1 flex flex-col justify-center space-y-5 py-4">
+                {/* Welcome Message */}
+                <div className="bg-gradient-to-r from-indigo-600/10 to-purple-600/10 border border-indigo-500/20 rounded-xl p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-indigo-600/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg className="w-6 h-6 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white mb-1">Welcome to PipeVault!</h3>
+                      <p className="text-sm text-gray-300">
+                        Click the <span className="text-indigo-300 font-semibold">"Request Storage"</span> button to get started with your first pipe storage request.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-white mb-1">Welcome to PipeVault!</h3>
-                    <p className="text-sm text-gray-300">
-                      Let's get started with your first pipe storage request. Fill in the details below or use the <span className="text-indigo-300 font-semibold">"New Storage"</span> button below to launch our guided wizard with AI assistance.
-                    </p>
+                </div>
+
+                {/* Quick Stats */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/30">
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Active Requests</p>
+                    <p className="text-2xl font-bold text-white">0</p>
+                  </div>
+                  <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/30">
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Ready to Start</p>
+                    <p className="text-2xl font-bold text-green-300">✓</p>
                   </div>
                 </div>
-              </div>
 
-              {/* Quick Stats */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/30">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Active Requests</p>
-                  <p className="text-2xl font-bold text-white">0</p>
-                </div>
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/30">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Ready to Start</p>
-                  <p className="text-2xl font-bold text-green-300">✓</p>
-                </div>
-              </div>
-
-              {/* Call to Action */}
-              <div className="bg-gray-800/20 rounded-lg p-5 border border-gray-700/30 text-center">
-                <p className="text-sm text-gray-300 mb-4 flex items-center justify-center gap-2">
-                  <span>👇</span>
-                  <span>Click <span className="text-indigo-300 font-bold">"New Storage"</span> below to begin your first request</span>
-                </p>
-                <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-                  <span>💡</span>
-                  <span>Tip: Our Roughneck AI assistant will guide you through every step</span>
+                {/* Call to Action */}
+                <div className="bg-gray-800/20 rounded-lg p-4 border border-gray-700/30 text-center">
+                  <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+                    <span>💡</span>
+                    <span>Roughneck AI assistant will guide you through every step</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -202,50 +201,62 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
         </div>
       )}
 
-      <div className="space-y-4">
-        {visibleRequests.map((request, index) => {
-          const status = (request.status ?? 'PENDING') as StatusBadge;
-          const badgeStyle = statusStyles[status] ?? statusStyles.PENDING;
-          const requestDetails = request.requestDetails;
-          const storageStartDate = requestDetails?.storageStartDate ?? null;
-          const storageEndDate = requestDetails?.storageEndDate ?? null;
-          const daysRemaining = storageEndDate
-            ? calculateDaysBetween(nowIso, storageEndDate)
-            : null;
-          const daysUntilDropoff = storageStartDate
-            ? calculateDaysBetween(nowIso, storageStartDate)
-            : null;
-          const referenceId = request.referenceId;
+      {/* Horizontal Scrolling Carousel */}
+      <div className="relative -mx-4 px-4">
+        <style>{`
+          .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+          }
+          .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+          }
+        `}</style>
 
-          const handleExtensionRequest = () => {
-            if (!referenceId) return;
-            const subject = encodeURIComponent(`PipeVault Storage Extension Request (${referenceId})`);
-            const body = encodeURIComponent(
-              [
-                `Hello MPS Team,`,
-                '',
-                `I would like to discuss extending storage for project reference ${referenceId}.`,
-                '',
-                'Current status/details:',
-                `- Status: ${status}`,
-                requestDetails?.storageEndDate ? `- Current end date: ${requestDetails.storageEndDate}` : '',
-                '',
-                'Please let me know next steps.',
-                '',
-                'Thank you,',
-              ].filter(Boolean).join('\n')
-            );
-            window.location.href = `mailto:pipevault@mpsgroup.ca?subject=${subject}&body=${body}`;
-          };
+        <div className="flex gap-6 overflow-x-auto overflow-y-visible pb-6 snap-x snap-mandatory scrollbar-hide">
+          {visibleRequests.map((request, index) => {
+            const status = (request.status ?? 'PENDING') as StatusBadge;
+            const badgeStyle = statusStyles[status] ?? statusStyles.PENDING;
+            const requestDetails = request.requestDetails;
+            const storageStartDate = requestDetails?.storageStartDate ?? null;
+            const storageEndDate = requestDetails?.storageEndDate ?? null;
+            const daysRemaining = storageEndDate
+              ? calculateDaysBetween(nowIso, storageEndDate)
+              : null;
+            const daysUntilDropoff = storageStartDate
+              ? calculateDaysBetween(nowIso, storageStartDate)
+              : null;
+            const referenceId = request.referenceId;
 
-          const isProcessingArchive = archivingRequestId === request.id;
+            const handleExtensionRequest = () => {
+              if (!referenceId) return;
+              const subject = encodeURIComponent(`PipeVault Storage Extension Request (${referenceId})`);
+              const body = encodeURIComponent(
+                [
+                  `Hello MPS Team,`,
+                  '',
+                  `I would like to discuss extending storage for project reference ${referenceId}.`,
+                  '',
+                  'Current status/details:',
+                  `- Status: ${status}`,
+                  requestDetails?.storageEndDate ? `- Current end date: ${requestDetails.storageEndDate}` : '',
+                  '',
+                  'Please let me know next steps.',
+                  '',
+                  'Thank you,',
+                ].filter(Boolean).join('\n')
+              );
+              window.location.href = `mailto:pipevault@mpsgroup.ca?subject=${subject}&body=${body}`;
+            };
 
-          return (
-            <div
-              key={request.id}
-              className="relative"
-            >
-              <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl border border-gray-700/50 shadow-2xl overflow-hidden">
+            const isProcessingArchive = archivingRequestId === request.id;
+
+            return (
+              <div
+                key={request.id}
+                className="flex-none w-full sm:w-[calc(100%-2rem)] lg:w-[600px] snap-center"
+              >
+              <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl border border-gray-700/50 shadow-2xl overflow-hidden h-[480px]">
                 {/* Subtle background pattern */}
                 <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
 
@@ -257,9 +268,9 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                   'bg-gradient-to-br from-blue-500 to-transparent'
                 }`}></div>
 
-                <div className="relative p-6 space-y-5">
+                <div className="relative p-6 h-full flex flex-col overflow-y-auto">
                   {/* Status and Next Steps Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-gray-700/50">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-gray-700/50 flex-shrink-0">
                     <div className="flex items-center gap-4">
                       <div>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-2">Current Status</p>
@@ -299,7 +310,7 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                   </div>
 
                   {/* Reference ID and Request Info */}
-                  <div>
+                  <div className="pt-4 flex-shrink-0">
                     <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
                       Request {index + 1} of {visibleRequests.length}
                     </p>
@@ -312,7 +323,7 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                   </div>
 
                   {/* Details Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800/30 rounded-xl p-5 border border-gray-700/30">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800/30 rounded-xl p-5 border border-gray-700/30 mt-4 flex-shrink-0">
                     <div className="space-y-4">
                       {request.assignedLocation && (
                         <div className="bg-gray-800/50 rounded-lg p-3 border border-green-500/20">
@@ -382,9 +393,10 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

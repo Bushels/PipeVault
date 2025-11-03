@@ -338,3 +338,38 @@ Respond helpfully to the user's question about the storage request form.`;
     }
 };
 
+import { fetchWeatherForecast } from './weatherService';
+
+export const generateProactiveInsight = async (
+    companyName: string,
+    requests: StorageRequest[],
+    inventory: Pipe[]
+): Promise<string> => {
+    const forecast = await fetchWeatherForecast();
+    let weatherQuip = '';
+
+    if (forecast && forecast.snowAccumulation > 0) {
+        weatherQuip = `Looks like there's some snow in the forecast for tomorrow. Might wanna bring your boots!\n\n`;
+    }
+
+    const approvedNotDelivered = requests.find(r => 
+        r.status === 'APPROVED' && 
+        !inventory.some(item => item.referenceId === r.referenceId)
+    );
+
+    if (approvedNotDelivered) {
+        const { referenceId, requestDetails } = approvedNotDelivered;
+        const totalJoints = requestDetails?.totalJoints || 'some';
+        const itemType = requestDetails?.itemType || 'pipe';
+        return `${weatherQuip}Howdy! I see your request '${referenceId}' for ${totalJoints} joints of ${itemType} has been approved. Would you like to schedule a delivery to the MPS yard?`;
+    }
+
+    const recentDeliveries = inventory.filter(p => p.dropOffTimestamp && new Date(p.dropOffTimestamp) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    if (recentDeliveries.length > 0) {
+        const totalJoints = recentDeliveries.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        return `${weatherQuip}Howdy! Looks like you've delivered ${totalJoints} joints to the yard in the last 30 days. What can I help you with today?`;
+    }
+
+    return `${weatherQuip}Howdy! I'm Roughneck, your PipeVault field hand for ${companyName}. What can I get for you?`;
+};
+

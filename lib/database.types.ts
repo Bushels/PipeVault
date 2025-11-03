@@ -1,5 +1,5 @@
 // Database types - Auto-generated from Supabase schema
-// To regenerate: npx supabase gen types typescript --project-id cvevhvjxnklbbhtqzyvw > lib/database.types.ts
+// To regenerate: npx supabase gen types typescript --project-id YOUR_PROJECT_REF > lib/database.types.ts
 
 export type Json =
   | string
@@ -117,6 +117,7 @@ export interface Database {
           assigned_well_name: string | null;
           delivery_truck_load_id: string | null;
           pickup_truck_load_id: string | null;
+          manifest_item_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -139,6 +140,7 @@ export interface Database {
           assigned_well_name?: string | null;
           delivery_truck_load_id?: string | null;
           pickup_truck_load_id?: string | null;
+          manifest_item_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -161,6 +163,7 @@ export interface Database {
           assigned_well_name?: string | null;
           delivery_truck_load_id?: string | null;
           pickup_truck_load_id?: string | null;
+          manifest_item_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -220,6 +223,283 @@ export interface Database {
           assigned_well_name?: string | null;
           notes?: string | null;
           photo_urls?: string[] | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      shipments: {
+        Row: {
+          id: string;
+          request_id: string;
+          company_id: string;
+          created_by: string;
+          status: 'DRAFT' | 'SCHEDULING' | 'SCHEDULED' | 'IN_TRANSIT' | 'RECEIVED' | 'CANCELLED';
+          trucking_method: 'MPS_QUOTE' | 'CUSTOMER_PROVIDED';
+          trucking_company: string | null;
+          trucking_contact_name: string | null;
+          trucking_contact_phone: string | null;
+          trucking_contact_email: string | null;
+          number_of_trucks: number;
+          estimated_joint_count: number | null;
+          estimated_total_length_ft: number | null;
+          special_instructions: string | null;
+          surcharge_applicable: boolean | null;
+          surcharge_amount: number | null;
+          documents_status: string | null;
+          calendar_sync_status: string | null;
+          latest_customer_notification_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          company_id: string;
+          created_by: string;
+          status?: 'DRAFT' | 'SCHEDULING' | 'SCHEDULED' | 'IN_TRANSIT' | 'RECEIVED' | 'CANCELLED';
+          trucking_method: 'MPS_QUOTE' | 'CUSTOMER_PROVIDED';
+          trucking_company?: string | null;
+          trucking_contact_name?: string | null;
+          trucking_contact_phone?: string | null;
+          trucking_contact_email?: string | null;
+          number_of_trucks?: number;
+          estimated_joint_count?: number | null;
+          estimated_total_length_ft?: number | null;
+          special_instructions?: string | null;
+          surcharge_applicable?: boolean | null;
+          surcharge_amount?: number | null;
+          documents_status?: string | null;
+          calendar_sync_status?: string | null;
+          latest_customer_notification_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          request_id?: string;
+          company_id?: string;
+          created_by?: string;
+          status?: 'DRAFT' | 'SCHEDULING' | 'SCHEDULED' | 'IN_TRANSIT' | 'RECEIVED' | 'CANCELLED';
+          trucking_method?: 'MPS_QUOTE' | 'CUSTOMER_PROVIDED';
+          trucking_company?: string | null;
+          trucking_contact_name?: string | null;
+          trucking_contact_phone?: string | null;
+          trucking_contact_email?: string | null;
+          number_of_trucks?: number;
+          estimated_joint_count?: number | null;
+          estimated_total_length_ft?: number | null;
+          special_instructions?: string | null;
+          surcharge_applicable?: boolean | null;
+          surcharge_amount?: number | null;
+          documents_status?: string | null;
+          calendar_sync_status?: string | null;
+          latest_customer_notification_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      shipment_trucks: {
+        Row: {
+          id: string;
+          shipment_id: string;
+          sequence_number: number;
+          status: 'PENDING' | 'SCHEDULED' | 'INBOUND' | 'ON_SITE' | 'RECEIVED' | 'CANCELLED';
+          trucking_company: string | null;
+          contact_name: string | null;
+          contact_phone: string | null;
+          contact_email: string | null;
+          scheduled_slot_start: string | null;
+          scheduled_slot_end: string | null;
+          arrival_time: string | null;
+          departure_time: string | null;
+          joints_count: number | null;
+          total_length_ft: number | null;
+          manifest_received: boolean | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          shipment_id: string;
+          sequence_number?: number;
+          status?: 'PENDING' | 'SCHEDULED' | 'INBOUND' | 'ON_SITE' | 'RECEIVED' | 'CANCELLED';
+          trucking_company?: string | null;
+          contact_name?: string | null;
+          contact_phone?: string | null;
+          contact_email?: string | null;
+          scheduled_slot_start?: string | null;
+          scheduled_slot_end?: string | null;
+          arrival_time?: string | null;
+          departure_time?: string | null;
+          joints_count?: number | null;
+          total_length_ft?: number | null;
+          manifest_received?: boolean | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          shipment_id?: string;
+          sequence_number?: number;
+          status?: 'PENDING' | 'SCHEDULED' | 'INBOUND' | 'ON_SITE' | 'RECEIVED' | 'CANCELLED';
+          trucking_company?: string | null;
+          contact_name?: string | null;
+          contact_phone?: string | null;
+          contact_email?: string | null;
+          scheduled_slot_start?: string | null;
+          scheduled_slot_end?: string | null;
+          arrival_time?: string | null;
+          departure_time?: string | null;
+          joints_count?: number | null;
+          total_length_ft?: number | null;
+          manifest_received?: boolean | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      dock_appointments: {
+        Row: {
+          id: string;
+          shipment_id: string;
+          truck_id: string | null;
+          slot_start: string;
+          slot_end: string;
+          after_hours: boolean | null;
+          surcharge_applied: boolean | null;
+          status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+          calendar_event_id: string | null;
+          calendar_sync_status: string | null;
+          reminder_24h_sent_at: string | null;
+          reminder_1h_sent_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          shipment_id: string;
+          truck_id?: string | null;
+          slot_start: string;
+          slot_end: string;
+          after_hours?: boolean | null;
+          surcharge_applied?: boolean | null;
+          status?: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+          calendar_event_id?: string | null;
+          calendar_sync_status?: string | null;
+          reminder_24h_sent_at?: string | null;
+          reminder_1h_sent_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          shipment_id?: string;
+          truck_id?: string | null;
+          slot_start?: string;
+          slot_end?: string;
+          after_hours?: boolean | null;
+          surcharge_applied?: boolean | null;
+          status?: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+          calendar_event_id?: string | null;
+          calendar_sync_status?: string | null;
+          reminder_24h_sent_at?: string | null;
+          reminder_1h_sent_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      shipment_documents: {
+        Row: {
+          id: string;
+          shipment_id: string;
+          truck_id: string | null;
+          document_id: string;
+          document_type: string;
+          status: 'UPLOADED' | 'PROCESSING' | 'PARSED' | 'FAILED' | 'APPROVED';
+          parsed_payload: Json | null;
+          processing_notes: string | null;
+          uploaded_by: string | null;
+          created_at: string;
+          processed_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          shipment_id: string;
+          truck_id?: string | null;
+          document_id: string;
+          document_type: string;
+          status?: 'UPLOADED' | 'PROCESSING' | 'PARSED' | 'FAILED' | 'APPROVED';
+          parsed_payload?: Json | null;
+          processing_notes?: string | null;
+          uploaded_by?: string | null;
+          created_at?: string;
+          processed_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          shipment_id?: string;
+          truck_id?: string | null;
+          document_id?: string;
+          document_type?: string;
+          status?: 'UPLOADED' | 'PROCESSING' | 'PARSED' | 'FAILED' | 'APPROVED';
+          parsed_payload?: Json | null;
+          processing_notes?: string | null;
+          uploaded_by?: string | null;
+          created_at?: string;
+          processed_at?: string | null;
+          updated_at?: string;
+        };
+      };
+      shipment_items: {
+        Row: {
+          id: string;
+          shipment_id: string;
+          truck_id: string | null;
+          document_id: string | null;
+          inventory_id: string | null;
+          manufacturer: string | null;
+          heat_number: string | null;
+          serial_number: string | null;
+          tally_length_ft: number | null;
+          quantity: number | null;
+          status: 'IN_TRANSIT' | 'IN_STORAGE' | 'MISSING' | 'DAMAGED';
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          shipment_id: string;
+          truck_id?: string | null;
+          document_id?: string | null;
+          inventory_id?: string | null;
+          manufacturer?: string | null;
+          heat_number?: string | null;
+          serial_number?: string | null;
+          tally_length_ft?: number | null;
+          quantity?: number | null;
+          status?: 'IN_TRANSIT' | 'IN_STORAGE' | 'MISSING' | 'DAMAGED';
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          shipment_id?: string;
+          truck_id?: string | null;
+          document_id?: string | null;
+          inventory_id?: string | null;
+          manufacturer?: string | null;
+          heat_number?: string | null;
+          serial_number?: string | null;
+          tally_length_ft?: number | null;
+          quantity?: number | null;
+          status?: 'IN_TRANSIT' | 'IN_STORAGE' | 'MISSING' | 'DAMAGED';
+          notes?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -312,6 +592,12 @@ export interface Database {
       pipe_type: 'Drill Pipe' | 'Casing' | 'Tubing' | 'Line Pipe';
       pipe_status: 'PENDING_DELIVERY' | 'IN_STORAGE' | 'PICKED_UP' | 'IN_TRANSIT';
       truck_load_type: 'DELIVERY' | 'PICKUP';
+      shipment_status: 'DRAFT' | 'SCHEDULING' | 'SCHEDULED' | 'IN_TRANSIT' | 'RECEIVED' | 'CANCELLED';
+      trucking_method: 'MPS_QUOTE' | 'CUSTOMER_PROVIDED';
+      shipment_truck_status: 'PENDING' | 'SCHEDULED' | 'INBOUND' | 'ON_SITE' | 'RECEIVED' | 'CANCELLED';
+      appointment_status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+      manifest_document_status: 'UPLOADED' | 'PROCESSING' | 'PARSED' | 'FAILED' | 'APPROVED';
+      shipment_item_status: 'IN_TRANSIT' | 'IN_STORAGE' | 'MISSING' | 'DAMAGED';
       notification_type: 'NEW_REQUEST' | 'DELIVERY_SCHEDULED' | 'PICKUP_SCHEDULED' | 'URGENT_REQUEST' | 'CUSTOMER_MESSAGE';
     };
   };

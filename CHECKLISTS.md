@@ -1,6 +1,6 @@
 # PipeVault Quick Checklists
 
-This reference keeps the admin and customer journeys tight so new team members can get productive fast. All items assume the Supabase project at `https://cvevhvjxnklbbhtqzyvw.supabase.co` and Gemini API access.
+This reference keeps the admin and customer journeys tight so new team members can get productive fast. All items assume the Supabase project at `https://YOUR_PROJECT_REF.supabase.co` and Gemini API access.
 
 ## Admin Setup Checklist
 

@@ -131,8 +131,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signInWithEmail = async (email: string, password: string) => {
+    const trimmedEmail = email.trim();
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: trimmedEmail || email,
       password,
     });
 
@@ -147,13 +148,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     profile?: { companyName?: string; firstName?: string; lastName?: string; contactNumber?: string }
   ) => {
     const metadata: Record<string, string> = {};
+    const trimmedEmail = email.trim();
+    if (trimmedEmail) {
+      metadata.contact_email = trimmedEmail.toLowerCase();
+    }
     if (profile?.companyName) metadata.company_name = profile.companyName.trim();
     if (profile?.firstName) metadata.first_name = profile.firstName.trim();
     if (profile?.lastName) metadata.last_name = profile.lastName.trim();
     if (profile?.contactNumber) metadata.contact_number = profile.contactNumber.trim();
 
     const { error } = await supabase.auth.signUp({
-      email,
+      email: trimmedEmail || email,
       password,
       options: Object.keys(metadata).length ? { data: metadata } : undefined,
     });

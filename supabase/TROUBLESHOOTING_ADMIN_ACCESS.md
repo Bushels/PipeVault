@@ -14,7 +14,7 @@ The `admin_users` table was missing the `user_id` column, causing RLS policies t
 ### Step 1: Run the Schema Fix
 Open your Supabase SQL Editor and run the `FIX_ADMIN_SCHEMA.sql` file:
 
-1. Go to https://supabase.com/dashboard/project/cvevhvjxnklbbhtqzyvw
+1. Go to https://supabase.com/dashboard/project/YOUR_PROJECT_REF
 2. Navigate to **SQL Editor**
 3. Copy and paste the contents of `FIX_ADMIN_SCHEMA.sql`
 4. Click **Run**

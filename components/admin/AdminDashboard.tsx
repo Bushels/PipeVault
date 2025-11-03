@@ -4,12 +4,35 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import type { AdminSession, StorageRequest, Company, Yard, Pipe, TruckLoad, RequestStatus } from '../../types';
+import type {
+  AdminSession,
+  StorageRequest,
+  Company,
+  Yard,
+  Pipe,
+  TruckLoad,
+  RequestStatus,
+  Shipment,
+  ShipmentTruck,
+  ShipmentItem,
+  ShipmentDocument,
+  DockAppointment,
+} from '../../types';
 import AdminHeader from './AdminHeader';
 import AdminAIAssistant from './AdminAIAssistant';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
-import { formatDate } from '../../utils/dateUtils';
+import { formatDate, formatStatus } from '../../utils/dateUtils';
+import { supabase } from '../../lib/supabase';
+import * as calendarService from '../../services/calendarService';
+import * as emailService from '../../services/emailService';
+import {
+  useUpdateShipment,
+  useUpdateShipmentTruck,
+  useUpdateShipmentItem,
+  useUpdateDockAppointment,
+  useUpdateInventoryItem,
+} from '../../hooks/useSupabaseData';
 
 interface AdminDashboardProps {
   session: AdminSession;
@@ -19,6 +42,7 @@ interface AdminDashboardProps {
   yards: Yard[];
   inventory: Pipe[];
   truckLoads: TruckLoad[];
+  shipments: Shipment[];
   approveRequest: (requestId: string, assignedRackIds: string[], requiredJoints: number, notes?: string) => void;
   rejectRequest: (requestId: string, reason: string) => void;
   addTruckLoad: (truckLoad: Omit<TruckLoad, 'id'>) => void;
@@ -26,7 +50,7 @@ interface AdminDashboardProps {
   updateRequest: (request: StorageRequest) => Promise<unknown>;
 }
 
-type TabType = 'overview' | 'approvals' | 'requests' | 'companies' | 'inventory' | 'storage' | 'ai';
+type TabType = 'overview' | 'approvals' | 'requests' | 'companies' | 'inventory' | 'storage' | 'shipments' | 'ai';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({
   session,
@@ -36,6 +60,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   yards,
   inventory,
   truckLoads,
+  shipments,
   approveRequest,
   rejectRequest,
   addTruckLoad,
@@ -47,6 +72,149 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [requestFilter, setRequestFilter] = useState<'ALL' | RequestStatus>('ALL');
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [notesSavingId, setNotesSavingId] = useState<string | null>(null);
+  const [processingTruckId, setProcessingTruckId] = useState<string | null>(null);
+  const [shipmentsMessage, setShipmentsMessage] = useState<string | null>(null);
+  const [shipmentsError, setShipmentsError] = useState<string | null>(null);
+
+  const updateShipmentMutation = useUpdateShipment();
+  const updateShipmentTruckMutation = useUpdateShipmentTruck();
+  const updateShipmentItemMutation = useUpdateShipmentItem();
+  const updateDockAppointmentMutation = useUpdateDockAppointment();
+  const updateInventoryItemMutation = useUpdateInventoryItem();
+
+  const companyMap = useMemo(() => new Map(companies.map(company => [company.id, company])), [companies]);
+  const requestMap = useMemo(() => new Map(requests.map(request => [request.id, request])), [requests]);
+  const inventoryMap = useMemo(() => new Map(inventory.map(item => [item.id, item])), [inventory]);
+
+  const truckEntries = useMemo<
+    Array<{
+      shipment: Shipment;
+      truck: ShipmentTruck;
+      appointment?: DockAppointment;
+      documents: ShipmentDocument[];
+      manifestItems: ShipmentItem[];
+    }>
+  >(
+    () =>
+      shipments.flatMap(shipment => {
+        const appointmentMap = new Map<string, DockAppointment>();
+        (shipment.appointments ?? []).forEach(appt => {
+          if (appt.truckId) {
+            appointmentMap.set(appt.truckId, appt);
+          }
+        });
+
+        const documentsByTruck = new Map<string, ShipmentDocument[]>();
+        (shipment.documents ?? []).forEach(doc => {
+          const key = doc.truckId ?? 'general';
+          const existing = documentsByTruck.get(key) ?? [];
+          documentsByTruck.set(key, [...existing, doc]);
+        });
+
+        const manifestByTruck = new Map<string, ShipmentItem[]>();
+        (shipment.manifestItems ?? []).forEach(item => {
+          const key = item.truckId ?? 'general';
+          const existing = manifestByTruck.get(key) ?? [];
+          manifestByTruck.set(key, [...existing, item]);
+        });
+
+        return (shipment.trucks ?? []).map(truck => ({
+          shipment,
+          truck,
+          appointment: appointmentMap.get(truck.id),
+          documents: documentsByTruck.get(truck.id) ?? [],
+          manifestItems: manifestByTruck.get(truck.id) ?? [],
+        }));
+      }),
+    [shipments],
+  );
+
+  const pendingTruckEntries = useMemo(
+    () => truckEntries.filter(entry => entry.truck.status !== 'RECEIVED'),
+    [truckEntries],
+  );
+
+  const sortedPendingTruckEntries = useMemo(
+    () =>
+      pendingTruckEntries
+        .slice()
+        .sort((a, b) => {
+          const aTime = a.appointment?.slotStart
+            ? new Date(a.appointment.slotStart).getTime()
+            : Number.POSITIVE_INFINITY;
+          const bTime = b.appointment?.slotStart
+            ? new Date(b.appointment.slotStart).getTime()
+            : Number.POSITIVE_INFINITY;
+          return aTime - bTime;
+        }),
+    [pendingTruckEntries],
+  );
+
+  const recentlyReceivedEntries = useMemo(
+    () =>
+      truckEntries
+        .filter(entry => entry.truck.status === 'RECEIVED')
+        .sort((a, b) => {
+          const aTime = a.truck.departureTime
+            ? new Date(a.truck.departureTime).getTime()
+            : a.truck.updatedAt
+              ? new Date(a.truck.updatedAt).getTime()
+              : 0;
+          const bTime = b.truck.departureTime
+            ? new Date(b.truck.departureTime).getTime()
+            : b.truck.updatedAt
+              ? new Date(b.truck.updatedAt).getTime()
+              : 0;
+          return bTime - aTime;
+        })
+        .slice(0, 6),
+    [truckEntries],
+  );
+
+  const manifestInTransitEntries = useMemo(
+    () =>
+      shipments.flatMap(shipment => {
+        const trucksById = new Map((shipment.trucks ?? []).map(truck => [truck.id, truck]));
+        const documentsById = new Map((shipment.documents ?? []).map(doc => [doc.id, doc]));
+
+        return (shipment.manifestItems ?? [])
+          .filter(item => item.status === 'IN_TRANSIT')
+          .map(item => ({
+            shipment,
+            truck: item.truckId ? trucksById.get(item.truckId) : undefined,
+            document: item.documentId ? documentsById.get(item.documentId) : undefined,
+            inventory: item.inventoryId ? inventoryMap.get(item.inventoryId) : undefined,
+            item,
+          }));
+      }),
+    [shipments, inventoryMap],
+  );
+
+  const getTruckStatusClasses = (status: ShipmentTruck['status']) => {
+    switch (status) {
+      case 'INBOUND':
+      case 'SCHEDULED':
+        return 'border-blue-500/60 text-blue-300 bg-blue-500/10';
+      case 'ON_SITE':
+        return 'border-amber-500/60 text-amber-300 bg-amber-500/10';
+      case 'RECEIVED':
+        return 'border-emerald-500/60 text-emerald-300 bg-emerald-500/10';
+      case 'CANCELLED':
+        return 'border-rose-500/60 text-rose-300 bg-rose-500/10';
+      default:
+        return 'border-gray-600 text-gray-300 bg-gray-700/40';
+    }
+  };
+
+  const formatSlotWindow = (appointment?: DockAppointment) => {
+    if (!appointment?.slotStart) return 'Not scheduled';
+    const start = new Date(appointment.slotStart);
+    const end = appointment.slotEnd ? new Date(appointment.slotEnd) : new Date(start.getTime() + 30 * 60 * 1000);
+    const dateLabel = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const startTime = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const endTime = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return `${dateLabel} • ${startTime} - ${endTime}`;
+  };
 
   const getDraftNote = (request: StorageRequest) =>
     notesDraft.hasOwnProperty(request.id)
@@ -79,8 +247,190 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch (error) {
       console.error('Error saving internal notes:', error);
       alert('Unable to save internal notes. Please try again or contact support.');
+  } finally {
+    setNotesSavingId(null);
+  }
+};
+
+  const handlePreviewShipmentDocument = async (document: ShipmentDocument) => {
+    setShipmentsError(null);
+    if (!document.storagePath) {
+      setShipmentsError('Document path is unavailable for preview.');
+      return;
+    }
+
+    const { data, error } = await supabase.storage.from('documents').createSignedUrl(document.storagePath, 300);
+    if (error || !data?.signedUrl) {
+      setShipmentsError('Unable to open document preview right now.');
+      return;
+    }
+
+    window.open(data.signedUrl, '_blank', 'noopener');
+  };
+
+  const handleMarkTruckReceived = async (entry: {
+    shipment: Shipment;
+    truck: ShipmentTruck;
+    appointment?: DockAppointment;
+    documents: ShipmentDocument[];
+    manifestItems: ShipmentItem[];
+  }) => {
+    setShipmentsError(null);
+    setShipmentsMessage(null);
+    setProcessingTruckId(entry.truck.id);
+
+    try {
+      await updateShipmentTruckMutation.mutateAsync({
+        id: entry.truck.id,
+        shipmentId: entry.shipment.id,
+        updates: {
+          status: 'RECEIVED',
+          arrivalTime: entry.truck.arrivalTime ?? new Date().toISOString(),
+          departureTime: new Date().toISOString(),
+          manifestReceived: true,
+        },
+      });
+
+      if (entry.appointment?.id) {
+        await updateDockAppointmentMutation.mutateAsync({
+          id: entry.appointment.id,
+          shipmentId: entry.shipment.id,
+          updates: {
+            status: 'COMPLETED',
+            truckId: entry.truck.id,
+            calendarSyncStatus: 'PENDING',
+          },
+        });
+      }
+
+      for (const item of entry.manifestItems) {
+        await updateShipmentItemMutation.mutateAsync({
+          id: item.id,
+          shipmentId: entry.shipment.id,
+          updates: { status: 'IN_STORAGE' },
+        });
+
+        if (item.inventoryId) {
+          await updateInventoryItemMutation.mutateAsync({
+            id: item.inventoryId,
+            updates: {
+              status: 'IN_STORAGE',
+              dropOffTimestamp: new Date().toISOString(),
+            },
+          });
+        }
+      }
+
+      const remainingTrucks = (entry.shipment.trucks ?? []).some(
+        truck => truck.id !== entry.truck.id && truck.status !== 'RECEIVED',
+      );
+
+      let notificationTimestamp: string | null = null;
+
+      if (!remainingTrucks) {
+        notificationTimestamp = new Date().toISOString();
+
+        await updateShipmentMutation.mutateAsync({
+          id: entry.shipment.id,
+          updates: { status: 'RECEIVED', latestCustomerNotificationAt: notificationTimestamp },
+        });
+
+        const request = requestMap.get(entry.shipment.requestId);
+        const company = companyMap.get(entry.shipment.companyId);
+
+        if (request?.userId) {
+          try {
+            await emailService.sendShipmentReceivedEmail({
+              to: request.userId,
+              referenceId: request.referenceId ?? entry.shipment.requestId,
+              companyName: company?.name,
+              trucksReceived: entry.shipment.trucks?.length ?? 1,
+              manifestLines: entry.shipment.manifestItems?.length ?? 0,
+              documentsAttached: entry.shipment.documents?.length ?? 0,
+              receivedAt: notificationTimestamp,
+            });
+          } catch (emailError) {
+            console.error('Failed to send shipment receipt email', emailError);
+          }
+        }
+      }
+
+      const message = !remainingTrucks
+        ? `Truck #${entry.truck.sequenceNumber} marked as received. Shipment now in storage and customer notified.`
+        : `Truck #${entry.truck.sequenceNumber} marked as received.`;
+      setShipmentsMessage(message);
+    } catch (error: any) {
+      console.error('Failed to update truck status', error);
+      setShipmentsError(error.message || 'Unable to update truck status. Please try again.');
     } finally {
-      setNotesSavingId(null);
+      setProcessingTruckId(null);
+    }
+  };
+
+  const handleSyncCalendar = async (entry: {
+    shipment: Shipment;
+    truck: ShipmentTruck;
+    appointment?: DockAppointment;
+  }) => {
+    setShipmentsError(null);
+    setShipmentsMessage(null);
+
+    if (!entry.appointment) {
+      setShipmentsError('Schedule an unloading time before syncing to Outlook.');
+      return;
+    }
+
+    setProcessingTruckId(entry.truck.id);
+
+    try {
+      const start = new Date(entry.appointment.slotStart);
+      const slotEndIso =
+        entry.appointment.slotEnd ?? new Date(start.getTime() + 30 * 60 * 1000).toISOString();
+      const reminder24h = new Date(start.getTime() - 24 * 60 * 60 * 1000);
+      const reminder1h = new Date(start.getTime() - 60 * 60 * 1000);
+
+      const reminder24hIso = reminder24h.getTime() > Date.now() ? reminder24h.toISOString() : null;
+      const reminder1hIso = reminder1h.getTime() > Date.now() ? reminder1h.toISOString() : null;
+
+      const company = companyMap.get(entry.shipment.companyId);
+      const request = requestMap.get(entry.shipment.requestId);
+
+      const calendarResult = await calendarService.scheduleDockAppointment({
+        shipmentId: entry.shipment.id,
+        truckId: entry.truck.id,
+        companyName: company?.name ?? 'Unknown Company',
+        referenceId: request?.referenceId ?? entry.shipment.requestId,
+        slotStart: entry.appointment.slotStart,
+        slotEnd: slotEndIso,
+        afterHours: Boolean(entry.appointment.afterHours),
+      });
+
+      await updateDockAppointmentMutation.mutateAsync({
+        id: entry.appointment.id,
+        shipmentId: entry.shipment.id,
+        updates: {
+          status: entry.appointment.status === 'PENDING' ? 'CONFIRMED' : entry.appointment.status,
+          slotEnd: slotEndIso,
+          calendarEventId: calendarResult.eventId,
+          calendarSyncStatus: 'SYNCED',
+          reminder24hSentAt: reminder24hIso,
+          reminder1hSentAt: reminder1hIso,
+        },
+      });
+
+      await updateShipmentMutation.mutateAsync({
+        id: entry.shipment.id,
+        updates: {
+          calendarSyncStatus: 'SYNCED',
+        },
+      });
+
+      setShipmentsMessage(`Outlook invitation prepared for Truck #${entry.truck.sequenceNumber}.`);
+    } catch (error: any) {
+      console.error('Failed to sync shipment calendar', error);
+      setShipmentsError(error.message || 'Unable to sync with Outlook calendar right now.');
+    } finally {
+      setProcessingTruckId(null);
     }
   };
 
@@ -135,6 +485,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       req => req.status === 'PENDING' && req.truckingInfo?.truckingType === 'quote'
     );
 
+    const shipmentsPending = shipments.filter(s =>
+      s.status === 'SCHEDULING' || s.status === 'SCHEDULED' || s.status === 'IN_TRANSIT'
+    ).length;
+
+    const nextTruckEntry = pendingTruckEntries
+      .filter(entry => entry.appointment?.slotStart)
+      .slice()
+      .sort((a, b) => {
+        const aTime = a.appointment?.slotStart ? new Date(a.appointment.slotStart).getTime() : Number.POSITIVE_INFINITY;
+        const bTime = b.appointment?.slotStart ? new Date(b.appointment.slotStart).getTime() : Number.POSITIVE_INFINITY;
+        return aTime - bTime;
+      })[0] ?? null;
+
+    const afterHoursRequests = shipments.reduce(
+      (count, shipment) => count + (shipment.appointments ?? []).filter(appt => appt.afterHours).length,
+      0,
+    );
+
     return {
       requests: { total: requests.length, pending, approved, completed, rejected },
       storage: { totalCapacity, totalOccupied, available: totalCapacity - totalOccupied, utilization },
@@ -146,8 +514,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         nextPickupDate: nextPickupInfo?.load.arrivalTime ?? null,
         pendingTruckingQuotes: pendingTruckingQuotes.length,
       },
+      logistics: {
+        shipmentsPending,
+        trucksPending: pendingTruckEntries.length,
+        nextTruckEta: nextTruckEntry?.appointment?.slotStart ?? null,
+        afterHoursRequests,
+      },
     };
-  }, [requests, yards, companies, inventory, truckLoads]);
+  }, [requests, yards, companies, inventory, truckLoads, shipments, pendingTruckEntries]);
 
   // ===== GLOBAL SEARCH =====
   const searchResults = useMemo(() => {
@@ -179,6 +553,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     { id: 'companies', label: 'Companies', badge: companies.length },
     { id: 'inventory', label: 'Inventory', badge: inventory.length },
     { id: 'storage', label: 'Storage', badge: yards.length },
+    { id: 'shipments', label: 'Shipments', badge: analytics.logistics?.trucksPending },
     { id: 'ai', label: 'AI Assistant' },
   ];
 
@@ -675,6 +1050,437 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     </div>
   );
 
+  const renderShipments = () => {
+    const activeShipments = shipments.filter(
+      shipment => shipment.status !== 'RECEIVED' && shipment.status !== 'CANCELLED',
+    );
+
+    const unsyncedAppointments = activeShipments
+      .flatMap(shipment => shipment.appointments ?? [])
+      .filter(appointment => appointment.status !== 'COMPLETED' && appointment.calendarSyncStatus !== 'SYNCED');
+
+    const nextAppointmentEntry = sortedPendingTruckEntries.find(entry => entry.appointment?.slotStart);
+    const nextAppointmentLabel = nextAppointmentEntry?.appointment
+      ? formatSlotWindow(nextAppointmentEntry.appointment)
+      : 'Not scheduled';
+
+    const docsAwaitingReview = activeShipments.reduce((total, shipment) => {
+      const pendingDocs = (shipment.documents ?? []).filter(doc => doc.status !== 'APPROVED');
+      return total + pendingDocs.length;
+    }, 0);
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-white">Inbound Shipments & Receiving</h2>
+          <span className="text-sm text-gray-400">
+            {activeShipments.length} active shipment{activeShipments.length === 1 ? '' : 's'}
+          </span>
+        </div>
+
+        {shipmentsError && (
+          <div className="border border-red-700 bg-red-900/40 text-red-200 px-4 py-3 rounded-md text-sm">
+            {shipmentsError}
+          </div>
+        )}
+        {shipmentsMessage && (
+          <div className="border border-emerald-700 bg-emerald-900/30 text-emerald-200 px-4 py-3 rounded-md text-sm">
+            {shipmentsMessage}
+          </div>
+        )}
+
+        <Card className="p-6 space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-4">
+              <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Active Shipments</p>
+              <p className="text-3xl font-semibold text-white">{activeShipments.length}</p>
+              <p className="text-xs text-gray-500 mt-2">
+                Includes shipments scheduled, in transit, or awaiting manifest review.
+              </p>
+            </div>
+            <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-4">
+              <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Trucks Awaiting Check-In</p>
+              <p className="text-3xl font-semibold text-white">{sortedPendingTruckEntries.length}</p>
+              <p className="text-xs text-gray-500 mt-2">Ready for receiving workflow.</p>
+            </div>
+            <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-4">
+              <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Calendar Sync Needed</p>
+              <p className="text-3xl font-semibold text-white">{unsyncedAppointments.length}</p>
+              <p className="text-xs text-gray-500 mt-2">Outlook reminders pending confirmation.</p>
+            </div>
+            <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-4">
+              <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Manifest Items In Transit</p>
+              <p className="text-3xl font-semibold text-white">{manifestInTransitEntries.length}</p>
+              <p className="text-xs text-gray-500 mt-2">Track down-line pipe still en route.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 text-sm">
+            <div className="rounded-md border border-gray-700 bg-gray-800/40 p-4">
+              <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Next Dock Appointment</p>
+              <p className="text-white">{nextAppointmentLabel}</p>
+            </div>
+            <div className="rounded-md border border-gray-700 bg-gray-800/40 p-4">
+              <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Documents Awaiting Review</p>
+              <p className="text-white">{docsAwaitingReview}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Inbound Trucks Awaiting Receiving</h3>
+              <p className="text-sm text-gray-400">
+                Review documents, sync calendars, and mark trucks received to move inventory into storage.
+              </p>
+            </div>
+            <span className="text-xs uppercase tracking-wide text-gray-500">
+              {sortedPendingTruckEntries.length} truck{sortedPendingTruckEntries.length === 1 ? '' : 's'}
+            </span>
+          </div>
+
+          {sortedPendingTruckEntries.length === 0 ? (
+            <p className="text-sm text-gray-400">
+              No inbound trucks awaiting receiving. New shipments will appear here automatically.
+            </p>
+          ) : (
+            <div className="space-y-5">
+              {sortedPendingTruckEntries.map(entry => {
+                const company = companyMap.get(entry.shipment.companyId);
+                const request = requestMap.get(entry.shipment.requestId);
+                const appointment = entry.appointment;
+                const manifestCount = entry.manifestItems.length;
+                const manifestJointCount = entry.manifestItems.reduce(
+                  (sum, item) => sum + (item.quantity ?? 0),
+                  0,
+                );
+                const manifestLengthFt = entry.manifestItems.reduce(
+                  (sum, item) => sum + (item.tallyLengthFt ?? 0),
+                  0,
+                );
+                const contactName =
+                  entry.truck.contactName ??
+                  entry.shipment.truckingContactName ??
+                  entry.shipment.truckingCompany ??
+                  'Pending';
+                const contactPhone = entry.truck.contactPhone ?? entry.shipment.truckingContactPhone ?? '';
+                const contactEmail = entry.truck.contactEmail ?? entry.shipment.truckingContactEmail ?? '';
+                const shippingMethod =
+                  entry.shipment.truckingMethod === 'MPS_QUOTE' ? 'MPS Provided' : 'Customer Provided';
+                const calendarLabel =
+                  appointment?.calendarSyncStatus === 'SYNCED' ? 'Resync Outlook' : 'Sync to Outlook';
+                const manifestSummary =
+                  manifestCount > 0
+                    ? `${manifestCount} lines • ${manifestJointCount || 0} joints • ${manifestLengthFt.toFixed(1)} ft`
+                    : 'Awaiting manifest';
+
+                return (
+                  <div
+                    key={`${entry.shipment.id}-${entry.truck.id}`}
+                    className="bg-gray-900/60 border border-gray-800 rounded-lg p-5 space-y-4"
+                  >
+                    <div className="flex flex-wrap justify-between gap-3">
+                      <div>
+                        <h4 className="text-lg font-semibold text-white">
+                          Truck #{entry.truck.sequenceNumber}{' '}
+                          <span className="text-sm font-normal text-gray-400">
+                            • {company?.name ?? 'Unknown Company'}
+                          </span>
+                        </h4>
+                        <p className="text-sm text-gray-400">
+                          Request {request?.referenceId ?? entry.shipment.requestId} •{' '}
+                          {formatStatus(entry.shipment.status)}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-3 py-1 rounded-full border text-xs font-semibold ${getTruckStatusClasses(
+                          entry.truck.status,
+                        )}`}
+                      >
+                        {formatStatus(entry.truck.status)}
+                      </span>
+                    </div>
+
+                    <dl className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm text-gray-300">
+                      <div>
+                        <dt className="text-xs uppercase text-gray-500">Unloading Slot</dt>
+                        <dd className="text-white">{formatSlotWindow(appointment)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs uppercase text-gray-500">Contact</dt>
+                        <dd className="text-white whitespace-pre-line">
+                          {contactName}
+                          {contactPhone ? `\n${contactPhone}` : ''}
+                          {contactEmail ? `\n${contactEmail}` : ''}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs uppercase text-gray-500">Shipping Method</dt>
+                        <dd className="text-white">{shippingMethod}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs uppercase text-gray-500">Manifest</dt>
+                        <dd className="text-white">{manifestSummary}</dd>
+                      </div>
+                    </dl>
+
+                    {entry.documents.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {entry.documents.map(document => (
+                          <Button
+                            key={document.id}
+                            variant="secondary"
+                            type="button"
+                            className="!px-3 !py-1 text-xs"
+                            onClick={() => handlePreviewShipmentDocument(document)}
+                          >
+                            {document.fileName ?? document.documentType ?? 'Manifest'}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="text-xs text-gray-500">
+                        {appointment?.afterHours
+                          ? 'After-hours delivery • $450 unloading surcharge applies.'
+                          : 'Standard receiving window • no surcharge.'}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="secondary"
+                          type="button"
+                          className="!px-4 !py-1.5 text-sm"
+                          disabled={!appointment || processingTruckId === entry.truck.id}
+                          onClick={() =>
+                            handleSyncCalendar({
+                              shipment: entry.shipment,
+                              truck: entry.truck,
+                              appointment,
+                            })
+                          }
+                        >
+                          {calendarLabel}
+                        </Button>
+                        <Button
+                          type="button"
+                          className="!px-4 !py-1.5 text-sm"
+                          disabled={processingTruckId === entry.truck.id}
+                          onClick={() => handleMarkTruckReceived(entry)}
+                        >
+                          {processingTruckId === entry.truck.id ? 'Updating...' : 'Mark Received'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-6 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Manifest Items In Transit</h3>
+              <p className="text-sm text-gray-400">
+                Track pipe still en route. Items move to “In Storage” once the truck is received.
+              </p>
+            </div>
+            <span className="text-xs uppercase tracking-wide text-gray-500">
+              {manifestInTransitEntries.length} line item{manifestInTransitEntries.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          {manifestInTransitEntries.length === 0 ? (
+            <p className="text-sm text-gray-400">All manifest items have been received and reconciled.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-800 text-sm">
+                <thead className="bg-gray-900/40 text-xs uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Company / Request</th>
+                    <th className="px-3 py-2 text-left">Truck</th>
+                    <th className="px-3 py-2 text-left">Manufacturer</th>
+                    <th className="px-3 py-2 text-left">Tally Length (ft)</th>
+                    <th className="px-3 py-2 text-left">Quantity</th>
+                    <th className="px-3 py-2 text-left">Document</th>
+                    <th className="px-3 py-2 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800 text-gray-300">
+                  {manifestInTransitEntries.map(entry => {
+                    const company = companyMap.get(entry.shipment.companyId);
+                    const request = requestMap.get(entry.shipment.requestId);
+                    const truckLabel = entry.truck
+                      ? `Truck #${entry.truck.sequenceNumber}`
+                      : 'Shipment Level';
+                    return (
+                      <tr key={entry.item.id} className="hover:bg-gray-900/40">
+                        <td className="px-3 py-2">
+                          <div className="text-white">{company?.name ?? 'Unknown Company'}</div>
+                          <div className="text-xs text-gray-500">
+                            {request?.referenceId ?? entry.shipment.requestId}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">{truckLabel}</td>
+                        <td className="px-3 py-2">
+                          <div>{entry.item.manufacturer ?? '—'}</div>
+                          <div className="text-xs text-gray-500">
+                            {entry.item.heatNumber ? `Heat ${entry.item.heatNumber}` : ''}
+                            {entry.item.heatNumber && entry.item.serialNumber ? ' · ' : ''}
+                            {entry.item.serialNumber ? `Serial ${entry.item.serialNumber}` : ''}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">{entry.item.tallyLengthFt?.toFixed(1) ?? '—'}</td>
+                        <td className="px-3 py-2">{entry.item.quantity ?? 0}</td>
+                        <td className="px-3 py-2">
+                          {entry.document ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="!px-3 !py-1 text-xs"
+                              onClick={() => handlePreviewShipmentDocument(entry.document!)}
+                            >
+                              {entry.document.fileName ?? entry.document.documentType}
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-gray-500">Manifest pending</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="text-xs font-semibold text-blue-300">
+                            {formatStatus(entry.item.status)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Recently Received Trucks</h3>
+              <p className="text-sm text-gray-400">
+                Quick recap of the last trucks marked as received for audit trail purposes.
+              </p>
+            </div>
+            <span className="text-xs uppercase tracking-wide text-gray-500">
+              Showing {recentlyReceivedEntries.length} recent entr{recentlyReceivedEntries.length === 1 ? 'y' : 'ies'}
+            </span>
+          </div>
+          {recentlyReceivedEntries.length === 0 ? (
+            <p className="text-sm text-gray-400">No trucks have been marked as received yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {recentlyReceivedEntries.map(entry => {
+                const company = companyMap.get(entry.shipment.companyId);
+                const request = requestMap.get(entry.shipment.requestId);
+                const completedAt = entry.truck.departureTime
+                  ?? entry.truck.arrivalTime
+                  ?? entry.truck.updatedAt
+                  ?? null;
+                const completedAtLabel = completedAt ? formatDate(completedAt, true) : 'Timestamp pending';
+                return (
+                  <div
+                    key={`recent-${entry.shipment.id}-${entry.truck.id}`}
+                    className="flex flex-wrap items-center justify-between gap-3 bg-gray-900/40 border border-gray-800 rounded-md px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        Truck #{entry.truck.sequenceNumber} • {company?.name ?? 'Unknown Company'}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Request {request?.referenceId ?? entry.shipment.requestId}
+                      </p>
+                    </div>
+                    <div className="text-xs text-gray-400">Received {completedAtLabel}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Active Shipments Overview</h3>
+              <p className="text-sm text-gray-400">
+                Status snapshot across every in-flight shipment, including logistics readiness.
+              </p>
+            </div>
+            <span className="text-xs uppercase tracking-wide text-gray-500">
+              {shipments.length} total shipment{shipments.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          {shipments.length === 0 ? (
+            <p className="text-sm text-gray-400">No shipments logged yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-800 text-sm">
+                <thead className="bg-gray-900/40 text-xs uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Company / Request</th>
+                    <th className="px-3 py-2 text-left">Status</th>
+                    <th className="px-3 py-2 text-left">Trucks</th>
+                    <th className="px-3 py-2 text-left">Calendar</th>
+                    <th className="px-3 py-2 text-left">Documents</th>
+                    <th className="px-3 py-2 text-left">Last Update</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800 text-gray-300">
+                  {shipments.map(shipment => {
+                    const company = companyMap.get(shipment.companyId);
+                    const request = requestMap.get(shipment.requestId);
+                    const totalTrucks = shipment.trucks?.length ?? 0;
+                    const receivedTrucks = shipment.trucks?.filter(truck => truck.status === 'RECEIVED').length ?? 0;
+                    const calendarStatus = shipment.calendarSyncStatus ?? 'PENDING';
+                    const docsUploaded = shipment.documents?.length ?? 0;
+                    const docsProcessed = shipment.documents?.filter(doc => doc.status === 'APPROVED').length ?? 0;
+                    const updatedAt = shipment.updatedAt ?? shipment.createdAt ?? null;
+                    return (
+                      <tr key={shipment.id} className="hover:bg-gray-900/40">
+                        <td className="px-3 py-2">
+                          <div className="text-white">{company?.name ?? 'Unknown Company'}</div>
+                          <div className="text-xs text-gray-500">
+                            {request?.referenceId ?? shipment.requestId}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="text-xs font-semibold text-indigo-300">
+                            {formatStatus(shipment.status)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          {receivedTrucks}/{totalTrucks} received
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="text-xs text-gray-400">{calendarStatus}</span>
+                        </td>
+                        <td className="px-3 py-2">
+                          {docsProcessed}/{docsUploaded} processed
+                        </td>
+                        <td className="px-3 py-2">
+                          {updatedAt ? formatDate(updatedAt, true) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
+    );
+  };
+
   const renderAI = () => (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-white">AI Assistant</h2>
@@ -733,6 +1539,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'companies' && renderCompanies()}
         {activeTab === 'inventory' && renderInventory()}
         {activeTab === 'storage' && renderStorage()}
+        {activeTab === 'shipments' && renderShipments()}
         {activeTab === 'ai' && renderAI()}
       </div>
     </div>

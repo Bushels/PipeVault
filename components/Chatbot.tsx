@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, Pipe, StorageRequest, StorageDocument } from '../types';
 import Button from './ui/Button';
-import { getChatbotResponse } from '../services/geminiService';
+import { getChatbotResponse, generateProactiveInsight } from '../services/geminiService';
 import Card from './ui/Card';
 import { SendIcon, BotIcon, UserIcon, CloseIcon, ExpandIcon, CollapseIcon } from './icons/Icons';
 
@@ -17,12 +17,20 @@ interface ChatbotProps {
 }
 
 const Chatbot: React.FC<ChatbotProps> = ({ companyName, inventoryData, requests = [], documents = [], onClose, onToggleExpand, isExpanded }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'model', content: `Howdy! I'm Roughneck, your PipeVault field hand for ${companyName}. What do you need help with on this project?` }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start with loading true
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const getInitialMessage = async () => {
+      setIsLoading(true);
+      const initialMessage = await generateProactiveInsight(companyName, requests, inventoryData);
+      setMessages([{ role: 'model', content: initialMessage }]);
+      setIsLoading(false);
+    };
+    getInitialMessage();
+  }, [companyName]); // Rerun if companyName changes, though it's unlikely
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,18 +38,19 @@ const Chatbot: React.FC<ChatbotProps> = ({ companyName, inventoryData, requests 
 
   useEffect(scrollToBottom, [messages]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (input.trim() === '' || isLoading) return;
+  const handleSend = async (e?: React.FormEvent, messageToSend?: string) => {
+    e?.preventDefault();
+    const message = messageToSend || input.trim();
+    if (message === '' || isLoading) return;
 
-    const userMessage: ChatMessage = { role: 'user', content: input };
+    const userMessage: ChatMessage = { role: 'user', content: message };
     const nextHistory = [...messages, userMessage];
     setMessages(nextHistory);
     setInput('');
     setIsLoading(true);
 
     try {
-      const response = await getChatbotResponse(companyName, inventoryData, requests, documents, nextHistory, input);
+      const response = await getChatbotResponse(companyName, inventoryData, requests, documents, nextHistory, message);
       const modelMessage: ChatMessage = { role: 'model', content: response };
       setMessages(prev => [...prev, modelMessage]);
     } catch (error) {
@@ -51,6 +60,17 @@ const Chatbot: React.FC<ChatbotProps> = ({ companyName, inventoryData, requests 
       setIsLoading(false);
     }
   };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    handleSend(undefined, suggestion);
+  };
+
+  const suggestionPrompts = [
+    "How much pipe has been delivered to MPS for BA-78776?",
+    "How many pickups do I have this month?",
+    "What is the status of my request REQ-2024-03-001?",
+    "Show me all my inventory."
+  ];
 
   return (
     <Card className={`flex flex-col ${isExpanded ? 'h-[80vh] w-[60vw]' : 'h-[60vh] w-[400px]'} max-w-full transition-all duration-300`}>
@@ -94,6 +114,21 @@ const Chatbot: React.FC<ChatbotProps> = ({ companyName, inventoryData, requests 
           </div>
         )}
         <div ref={messagesEndRef} />
+        {messages.length === 1 && messages[0].role === 'model' && (
+          <div className="flex flex-wrap gap-2 mt-4">
+            {suggestionPrompts.map((prompt, index) => (
+              <Button
+                key={index}
+                variant="outline"
+                size="sm"
+                onClick={() => handleSuggestionClick(prompt)}
+                className="text-sm"
+              >
+                {prompt}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="flex-shrink-0 p-4 border-t border-gray-700">
         <form onSubmit={handleSend} className="flex items-center gap-2">

@@ -2,7 +2,7 @@
 
 ## ✅ Step 1: Your Supabase Project is Ready!
 
-**Project URL:** https://cvevhvjxnklbbhtqzyvw.supabase.co
+**Project URL:** https://YOUR_PROJECT_REF.supabase.co
 **Status:** Connected ✓
 
 ---
@@ -12,7 +12,7 @@
 You need to create all the tables in your Supabase database.
 
 1. **Open Supabase SQL Editor:**
-   - Go to https://supabase.com/dashboard/project/cvevhvjxnklbbhtqzyvw
+   - Go to https://supabase.com/dashboard/project/YOUR_PROJECT_REF
    - Click on "SQL Editor" in the left sidebar
    - Click "New Query"
 
