@@ -9,6 +9,8 @@ import {
 } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { formatDate } from '../utils/dateUtils';
+import { extractManifestData, type LoadSummary } from '../services/manifestProcessingService';
+import LoadSummaryReview from './LoadSummaryReview';
 
 interface RequestDocumentsPanelProps {
   request: StorageRequest;
@@ -42,6 +44,8 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [isProcessingManifest, setIsProcessingManifest] = useState(false);
+  const [loadSummary, setLoadSummary] = useState<LoadSummary | null>(null);
   const createDocument = useCreateTruckingDocument();
 
   useEffect(() => {
@@ -94,6 +98,7 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
     setFile(null);
     setFileLabel('');
     setDocumentType('');
+    setLoadSummary(null);
   };
 
   const handleUpload = async (event: React.FormEvent) => {
@@ -140,8 +145,45 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
         throw error;
       }
 
+      // Check if this is a manifest document that needs AI extraction
+      const isManifest =
+        documentType.toLowerCase().includes('manifest') ||
+        documentType.toLowerCase().includes('bol') ||
+        documentType.toLowerCase().includes('bill of lading') ||
+        file.type === 'application/pdf';
+
+      // If it's a manifest, extract data using AI
+      if (isManifest && (file.type === 'application/pdf' || file.type.startsWith('image/'))) {
+        try {
+          setIsProcessingManifest(true);
+          setStatusMessage('Document uploaded successfully. AI is now extracting pipe data from your manifest...');
+
+          const summary = await extractManifestData(file);
+          setLoadSummary(summary);
+          setStatusMessage('Document uploaded and manifest data extracted successfully!');
+
+          // Optionally update the trucking load with extracted totals
+          if (summary && selectedLoadId) {
+            await supabase
+              .from('trucking_loads')
+              .update({
+                total_joints_planned: summary.total_joints,
+                total_length_ft_planned: summary.total_length_ft,
+                total_weight_lbs_planned: summary.total_weight_lbs,
+              })
+              .eq('id', selectedLoadId);
+          }
+        } catch (extractionError: any) {
+          console.error('AI extraction failed:', extractionError);
+          setStatusMessage('Document uploaded successfully, but AI could not extract manifest data. Admin will review manually.');
+        } finally {
+          setIsProcessingManifest(false);
+        }
+      } else {
+        setStatusMessage('Document uploaded successfully.');
+      }
+
       resetFormState();
-      setStatusMessage('Document uploaded successfully.');
       await refetchDocuments();
     } catch (error: any) {
       setErrorMessage(error.message || 'Unable to upload the document.');
@@ -261,16 +303,27 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
             <div className="flex gap-2">
               <Button
                 type="submit"
-                disabled={uploading || !file || !selectedLoadId || !loads.length}
+                disabled={uploading || isProcessingManifest || !file || !selectedLoadId || !loads.length}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
-                {uploading ? 'Uploading...' : 'Upload Document'}
+                {uploading ? 'Uploading...' : isProcessingManifest ? 'AI Processing...' : 'Upload Document'}
               </Button>
-              <Button variant="secondary" type="button" onClick={resetFormState}>
+              <Button variant="secondary" type="button" onClick={resetFormState} disabled={uploading || isProcessingManifest}>
                 Clear
               </Button>
             </div>
           </form>
+
+          {/* AI Extracted Load Summary */}
+          {loadSummary && (
+            <div className="mt-4">
+              <LoadSummaryReview
+                loadSummary={loadSummary}
+                isProcessing={false}
+                hasDocuments={true}
+              />
+            </div>
+          )}
         </div>
 
         <div className="bg-gray-900/40 border border-gray-700/60 rounded-xl p-4">
