@@ -85,6 +85,20 @@ All notable changes to the PipeVault project are documented in this file.
   - Fixes: "duplicate key violates unique constraint trucking_loads_storage_request_id_direction_sequence_number_key"
 - **Files**: `components/InboundShipmentWizard.tsx` (lines 676-710, 717-771)
 
+#### AI Manifest Extraction for Post-Submission Uploads
+- **Critical Feature**: AI extraction now works for documents uploaded AFTER initial delivery scheduling
+- **Problem Solved**: Previously only InboundShipmentWizard had AI extraction; RequestDocumentsPanel uploads were not processed
+- **Auto-Detection**: Identifies manifests by document type (Manifest, BOL) or file type (PDF)
+- **AI Processing**: Runs extractManifestData() automatically on detected manifests
+- **Load Summary Display**: Shows LoadSummaryReview component with extracted totals (metric units first)
+- **Auto-Update Loads**: Updates trucking_loads table with AI-extracted joints, length, weight
+- **Graceful Degradation**: Falls back to manual admin review if AI extraction fails
+- **UX Improvements**:
+  - Button shows "AI Processing..." during extraction
+  - Success message: "Document uploaded and manifest data extracted successfully!"
+  - Fallback message: "Admin will review manually" if extraction fails
+- **Files**: `components/RequestDocumentsPanel.tsx` (lines 12-13, 47-48, 97-183, 303-326)
+
 ### 📚 Documentation
 
 #### New Documentation Files
