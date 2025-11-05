@@ -4,6 +4,117 @@ All notable changes to the PipeVault project are documented in this file.
 
 ---
 
+## [2.0.1] - 2025-11-05
+
+### 🐛 Critical Bug Fixes
+
+#### Slack Notification System Restored
+- **Issue**: New storage requests not triggering Slack notifications to MPS team
+- **Root Cause**: Missing trigger and incomplete function (lost during search_path migration)
+- **Solution**: Created `RESTORE_SLACK_NOTIFICATIONS.sql` migration
+  - Restores full `notify_slack_storage_request` function with Block Kit formatting
+  - Retrieves webhook URL securely from Supabase Vault (`vault.decrypted_secrets`)
+  - Creates AFTER INSERT OR UPDATE trigger on `storage_requests` table
+  - Fires only for PENDING status requests (not drafts)
+- **Files**: `supabase/RESTORE_SLACK_NOTIFICATIONS.sql`
+
+#### Gemini API Model Updated for Document Processing
+- **Issue**: Document upload failing with 404 error: "models/gemini-1.5-flash is not found"
+- **Root Cause**: Using deprecated model name in `manifestProcessingService.ts`
+- **Solution**: Updated to current model `gemini-2.0-flash-exp`
+  - Line 190: `extractManifestData()` function
+  - Line 265: `validateManifestData()` function
+- **Impact**: Document upload/manifest extraction now works correctly
+- **Files**: `services/manifestProcessingService.ts`
+
+#### Rack Capacity Correction
+- **Issue**: All racks showing capacity of 1 joint instead of 100
+- **Impact**: Yard A showed "1 pipe free" instead of proper capacity (2,200 joints)
+- **Root Cause**: Initial rack setup used wrong default capacity value
+- **Solution**: Created `FIX_ALL_RACK_CAPACITIES.sql` migration
+  - Updates all racks with `capacity < 100` to `capacity = 100`
+  - Sets `capacity_meters = 1200` (100 joints × 12m average)
+  - Preserves existing `occupied` values
+- **Result**: Yard A now shows 2,198 joints available (22 racks × 100 capacity - 2 occupied)
+- **Files**: `supabase/FIX_ALL_RACK_CAPACITIES.sql`
+
+### ✨ New Features
+
+#### Edit and Delete Trucking Loads
+- **Feature**: Admins can now edit or delete trucking loads before/during processing
+- **Implementation**: Added comprehensive edit modal and delete confirmation dialog
+- **Edit Modal Sections**:
+  - Direction (INBOUND/OUTBOUND) and Sequence Number
+  - Status (NEW, APPROVED, IN_TRANSIT, COMPLETED, CANCELLED)
+  - Scheduled Start/End Times (datetime pickers)
+  - Well Information (Asset Name, Wellpad Name, Well Name, UWI)
+  - Contact Information (Trucking Company, Contact details, Driver info)
+  - Planned Quantities (Total Joints, Length ft, Weight lbs)
+  - Notes (free-form text area)
+- **Delete Features**:
+  - Confirmation dialog with load sequence number
+  - Clear warning that action cannot be undone
+  - Error handling with user-friendly messages
+- **Technical Details**:
+  - State management for `editingLoad` and `loadToDelete`
+  - Automatic UI refresh after save/delete
+  - Scrollable modal with sticky header/footer
+- **Files**: `components/admin/AdminDashboard.tsx` (lines 110-111, 174-215, 1985-1998, 2251-2676)
+
+### 📚 Documentation
+
+#### New Documentation Files
+- **`AI_TROUBLESHOOTING.md`** - Comprehensive guide for AI service issues
+  - Gemini API model updates and version management
+  - Rate limiting and quota handling
+  - Error debugging checklist
+  - Current model configuration reference
+  - Best practices for prompt engineering
+
+#### Updated Documentation
+- **`ADMIN_TROUBLESHOOTING_GUIDE.md`** - Added three new troubleshooting sections:
+  - Slack Notifications Not Working for Storage Requests
+  - Rack Capacity Shows Wrong Values (1 joint instead of 100)
+  - Cannot Edit or Delete Trucking Loads
+- **`CHANGELOG.md`** (this file) - Added version 2.0.1 entry
+
+### 🔧 Technical Improvements
+
+#### Database Migrations Created
+1. `RESTORE_SLACK_NOTIFICATIONS.sql` - Fixes notification system
+2. `FIX_ALL_RACK_CAPACITIES.sql` - Corrects rack capacity values
+3. `FIX_DUPLICATE_ENQUEUE_NOTIFICATION.sql` - Removes duplicate function (referenced in session)
+
+#### Code Quality
+- TypeScript type safety maintained throughout changes
+- Error handling improved in admin dashboard
+- Consistent model naming across AI services
+- Build successful with no errors or warnings
+
+### 🎯 Testing & Verification
+
+All changes tested and verified:
+- ✅ Slack notifications work for new storage requests
+- ✅ Document upload processes manifests correctly
+- ✅ Rack capacities display accurate available space
+- ✅ Edit load modal saves changes and refreshes UI
+- ✅ Delete load confirmation prevents accidental deletion
+- ✅ No TypeScript errors or build warnings
+- ✅ Production build successful
+
+### 📊 Current AI Model Configuration
+
+| Service | File | Model | Purpose |
+|---------|------|-------|---------|
+| Request Summaries | `geminiService.ts` | `gemini-2.5-flash` | Generate storage request summaries |
+| Customer Chatbot | `geminiService.ts` | `gemini-2.5-flash` | Roughneck AI customer assistant |
+| Admin Assistant | `geminiService.ts` | `gemini-2.5-flash` | Admin operations assistant |
+| Form Helper | `geminiService.ts` | `gemini-2.5-flash` | Form completion help |
+| Manifest Extraction | `manifestProcessingService.ts` | `gemini-2.0-flash-exp` | OCR/Vision for pipe data |
+| Manifest Validation | `manifestProcessingService.ts` | `gemini-2.0-flash-exp` | Data quality checks |
+
+---
+
 ## [2.0.0] - 2025-01-27
 
 ### 🎉 Major Redesign - 4-Option Card Landing Page

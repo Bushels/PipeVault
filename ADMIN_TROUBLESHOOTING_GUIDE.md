@@ -286,3 +286,202 @@ If nothing works, share these details:
 - **Symptom:** Vite/esbuild stops with a message like components/...tsx:NNN: The character ">" is not valid inside a JSX element.
 - **Cause:** JSX parses a literal > in text (for example, a button label like dYs> Truck to MPS) as the start of a tag.
 - **Fix:** Wrap the string in a JSX expression ({'dYs> Truck to MPS'}) or escape it (dYs&gt; Truck to MPS), then rerun the build.
+
+---
+
+## Slack Notifications Not Working for Storage Requests
+
+**Date Discovered:** 2025-11-05
+
+### Symptoms
+- New storage requests submitted but MPS team receives no Slack notification
+- Users report storage request went through but team isn't notified
+- No error visible to user but internal notification fails
+
+### Root Cause
+1. **Missing trigger** on `storage_requests` table
+2. **Incomplete function** - `notify_slack_storage_request` was a stub without Block Kit implementation
+3. **Function overwrite** during `FIX_FUNCTION_SEARCH_PATH.sql` migration lost the full webhook code
+
+### Investigation Steps
+```sql
+-- Check for trigger
+SELECT trigger_name, event_manipulation, event_object_table
+FROM information_schema.triggers
+WHERE trigger_name LIKE '%slack%';
+-- Result: No rows (trigger missing)
+
+-- Check function definition
+SELECT pg_get_functiondef(oid)
+FROM pg_proc
+WHERE proname = 'notify_slack_storage_request';
+-- Result: Only calls enqueue_notification, no Block Kit payload
+```
+
+### Solution
+Run the `RESTORE_SLACK_NOTIFICATIONS.sql` migration that:
+
+1. **Recreates full function** with Block Kit formatting
+2. **Retrieves webhook URL** securely from Supabase Vault
+3. **Creates AFTER INSERT OR UPDATE trigger** on storage_requests
+4. **Fires only for PENDING status** requests (not drafts)
+
+**Files:**
+- `supabase/RESTORE_SLACK_NOTIFICATIONS.sql` - Complete restoration migration
+
+**Key Features:**
+- Rich Slack message with project reference, company, contact info, pipe details
+- Action button linking to PipeVault Admin Dashboard
+- Submission timestamp
+- Secure webhook URL retrieval from vault.decrypted_secrets
+
+### Verification
+1. Apply migration in Supabase Dashboard SQL Editor
+2. Submit a test storage request
+3. Check Slack channel for formatted notification
+4. Verify notification includes all request details
+
+### Prevention
+- **Always verify triggers** after running database migrations
+- **Test notification system** after any function changes
+- **Check Supabase Vault** for webhook URL configuration
+- **Monitor notification_queue** table for failed deliveries
+
+---
+
+## Rack Capacity Shows Wrong Values (1 joint instead of 100)
+
+**Date Discovered:** 2025-11-05
+
+### Symptoms
+- Yard A shows "1 pipe free" instead of expected capacity
+- Admin dashboard storage view shows minimal available space
+- Racks display as nearly full when they should be mostly empty
+- Each rack shows capacity of 1 joint instead of 100
+
+### Root Cause
+Initial rack setup used wrong default capacity value during database initialization. All racks were created with `capacity = 1` instead of the intended `capacity = 100`.
+
+### Investigation Steps
+```sql
+-- Check rack capacities in Yard A
+SELECT
+  r.id, r.name, ya.name as area_name,
+  r.capacity, r.occupied, (r.capacity - r.occupied) as free_space
+FROM racks r
+JOIN yard_areas ya ON r.area_id = ya.id
+WHERE ya.yard_id = 'A';
+-- Result: All racks show capacity = 1
+```
+
+### Impact
+- **Yard A**: 22 racks × 1 capacity = 22 joints total (should be 2,200)
+- **Current occupied**: 2 joints
+- **Shown as available**: 20 joints ❌
+- **Should show**: 2,198 joints ✅
+
+### Solution
+Run the `FIX_ALL_RACK_CAPACITIES.sql` migration that:
+
+1. Updates all racks with `capacity < 100` to `capacity = 100`
+2. Sets `capacity_meters = 1200` (100 joints × 12m average)
+3. Preserves existing `occupied` values
+4. Shows before/after statistics for verification
+
+**Files:**
+- `supabase/FIX_ALL_RACK_CAPACITIES.sql` - Capacity restoration migration
+
+### Verification
+```sql
+-- After running migration, verify capacities
+SELECT
+  ya.yard_id,
+  COUNT(*) as rack_count,
+  MIN(r.capacity) as min_capacity,
+  MAX(r.capacity) as max_capacity,
+  SUM(r.capacity) as total_capacity,
+  SUM(r.occupied) as total_occupied,
+  SUM(r.capacity - r.occupied) as total_free_space
+FROM racks r
+JOIN yard_areas ya ON r.area_id = ya.id
+GROUP BY ya.yard_id;
+-- Expected: min_capacity = 100, max_capacity = 100
+```
+
+### Prevention
+- **Verify capacity constraints** in schema.sql
+- **Check default values** during database initialization
+- **Test with sample data** before production deployment
+- **Monitor rack utilization** metrics in admin dashboard
+
+---
+
+## Cannot Edit or Delete Trucking Loads
+
+**Date Discovered:** 2025-11-05
+
+### Symptoms
+- Admin wants to modify trucking load details but no option available
+- Plans change during process but can't update load information
+- Accidentally created load but can't remove it
+- No edit/delete buttons visible on load cards
+
+### Root Cause
+Initial implementation of trucking loads only supported creation and viewing. No edit or delete functionality was built into the admin dashboard.
+
+### Solution Implemented
+Added comprehensive edit and delete functionality to Admin Dashboard:
+
+**Edit Load Modal Features:**
+- Direction (INBOUND/OUTBOUND)
+- Sequence Number
+- Status (NEW, APPROVED, IN_TRANSIT, COMPLETED, CANCELLED)
+- Scheduled Start/End Times (datetime pickers)
+- Well Information (Asset, Wellpad, Well Name, UWI)
+- Contact Information (Trucking Company, Contact details, Driver info)
+- Planned Quantities (Joints, Length, Weight)
+- Notes (free-form text)
+
+**Delete Load Features:**
+- Confirmation dialog before deletion
+- Shows load sequence number for verification
+- Clear warning that action cannot be undone
+- Error handling if deletion fails
+
+**Files Modified:**
+- `components/admin/AdminDashboard.tsx` - Added EditLoadModal component and handlers
+
+### Using Edit/Delete Features
+
+**To Edit a Load:**
+1. Go to Admin Dashboard → View trucking documents for a request
+2. Click "Edit" button on any load card
+3. Modify fields as needed in the modal
+4. Click "Save Changes" (or Cancel to discard)
+5. Changes reflect immediately in UI
+
+**To Delete a Load:**
+1. Click "Delete" button on any load card
+2. Confirm deletion in dialog
+3. Load is permanently removed from database
+4. UI updates automatically
+
+### Technical Implementation
+```typescript
+// State management
+const [editingLoad, setEditingLoad] = useState<{id: string; requestId: string} | null>(null);
+const [loadToDelete, setLoadToDelete] = useState<{...} | null>(null);
+
+// Handlers
+const handleEditLoad = (loadId: string, requestId: string) => {...}
+const handleDeleteLoad = (loadId: string, requestId: string, seq: number) => {...}
+const confirmDeleteLoad = async () => {...}
+```
+
+### Verification
+1. Edit a test load and verify changes persist
+2. Delete a test load and verify it's removed
+3. Check that UI updates without requiring page refresh
+4. Verify no console errors during edit/delete operations
+
+---
