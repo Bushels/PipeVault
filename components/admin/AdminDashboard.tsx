@@ -105,6 +105,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [docViewerRequest, setDocViewerRequest] = useState<StorageRequest | null>(null);
   const [docViewerError, setDocViewerError] = useState<string | null>(null);
   const [docViewerFilters, setDocViewerFilters] = useState<DocViewerFilters>(() => createDefaultDocViewerFilters());
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const [inventoryPerPage, setInventoryPerPage] = useState(50);
 
   const updateShipmentMutation = useUpdateShipment();
   const updateShipmentTruckMutation = useUpdateShipmentTruck();
@@ -1111,46 +1113,145 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     </div>
   );
 
-  const renderInventory = () => (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-white">Inventory</h2>
-      <Card className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="border-b border-gray-700">
-            <tr>
-              <th className="text-left py-3 px-4 text-gray-400">Pipe ID</th>
-              <th className="text-left py-3 px-4 text-gray-400">Company</th>
-              <th className="text-left py-3 px-4 text-gray-400">Reference ID</th>
-              <th className="text-left py-3 px-4 text-gray-400">Rack</th>
-              <th className="text-left py-3 px-4 text-gray-400">Status</th>
-              <th className="text-left py-3 px-4 text-gray-400">Well Name</th>
-            </tr>
-          </thead>
-          <tbody>
-            {inventory.slice(0, 50).map(pipe => (
-              <tr key={pipe.id} className="border-b border-gray-800 hover:bg-gray-800/50">
-                <td className="py-3 px-4 font-mono text-xs text-gray-400">{pipe.id}</td>
-                <td className="py-3 px-4 text-gray-300">
-                  {companies.find(c => c.id === pipe.companyId)?.name || 'Unknown'}
-                </td>
-                <td className="py-3 px-4 text-white font-medium">{pipe.referenceId}</td>
-                <td className="py-3 px-4 text-gray-400">{pipe.rackId || '-'}</td>
-                <td className="py-3 px-4">
-                  <span className={`px-2 py-1 rounded text-xs ${
-                    pipe.status === 'IN_STORAGE' ? 'bg-green-500/20 text-green-400' :
-                    'bg-blue-500/20 text-blue-400'
-                  }`}>
-                    {pipe.status}
-                  </span>
-                </td>
-                <td className="py-3 px-4 text-gray-400">{pipe.assignedWellName || '-'}</td>
+  const renderInventory = () => {
+    // Calculate pagination
+    const totalItems = inventory.length;
+    const totalPages = Math.ceil(totalItems / inventoryPerPage);
+    const startIndex = (inventoryPage - 1) * inventoryPerPage;
+    const endIndex = startIndex + inventoryPerPage;
+    const paginatedInventory = inventory.slice(startIndex, endIndex);
+
+    // Generate page numbers to show (max 7: first, last, current, and 2 on each side)
+    const getPageNumbers = () => {
+      const pages: (number | string)[] = [];
+      if (totalPages <= 7) {
+        for (let i = 1; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        if (inventoryPage > 3) pages.push('...');
+        for (let i = Math.max(2, inventoryPage - 1); i <= Math.min(totalPages - 1, inventoryPage + 1); i++) {
+          pages.push(i);
+        }
+        if (inventoryPage < totalPages - 2) pages.push('...');
+        pages.push(totalPages);
+      }
+      return pages;
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-white">Inventory</h2>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-400">
+              Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} items
+            </span>
+            <select
+              value={inventoryPerPage}
+              onChange={e => {
+                setInventoryPerPage(Number(e.target.value));
+                setInventoryPage(1); // Reset to page 1 when changing per-page
+              }}
+              className="bg-gray-800 border border-gray-700 rounded px-3 py-1 text-sm text-white"
+            >
+              <option value={25}>25 per page</option>
+              <option value={50}>50 per page</option>
+              <option value={100}>100 per page</option>
+              <option value={200}>200 per page</option>
+            </select>
+          </div>
+        </div>
+
+        <Card className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-gray-700">
+              <tr>
+                <th className="text-left py-3 px-4 text-gray-400">Pipe ID</th>
+                <th className="text-left py-3 px-4 text-gray-400">Company</th>
+                <th className="text-left py-3 px-4 text-gray-400">Reference ID</th>
+                <th className="text-left py-3 px-4 text-gray-400">Rack</th>
+                <th className="text-left py-3 px-4 text-gray-400">Status</th>
+                <th className="text-left py-3 px-4 text-gray-400">Well Name</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
+            </thead>
+            <tbody>
+              {paginatedInventory.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-gray-400">
+                    No inventory items found
+                  </td>
+                </tr>
+              ) : (
+                paginatedInventory.map(pipe => (
+                  <tr key={pipe.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                    <td className="py-3 px-4 font-mono text-xs text-gray-400">{pipe.id}</td>
+                    <td className="py-3 px-4 text-gray-300">
+                      {companies.find(c => c.id === pipe.companyId)?.name || 'Unknown'}
+                    </td>
+                    <td className="py-3 px-4 text-white font-medium">{pipe.referenceId}</td>
+                    <td className="py-3 px-4 text-gray-400">{pipe.rackId || '-'}</td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`px-2 py-1 rounded text-xs ${
+                          pipe.status === 'IN_STORAGE'
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-blue-500/20 text-blue-400'
+                        }`}
+                      >
+                        {pipe.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-400">{pipe.assignedWellName || '-'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </Card>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-2">
+            <Button
+              onClick={() => setInventoryPage(prev => Math.max(1, prev - 1))}
+              disabled={inventoryPage === 1}
+              className="px-3 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+            >
+              Previous
+            </Button>
+
+            {getPageNumbers().map((page, idx) =>
+              page === '...' ? (
+                <span key={`ellipsis-${idx}`} className="px-2 text-gray-500">
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={page}
+                  onClick={() => setInventoryPage(page as number)}
+                  className={`px-3 py-1 rounded text-sm ${
+                    inventoryPage === page
+                      ? 'bg-red-600 text-white font-semibold'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {page}
+                </button>
+              )
+            )}
+
+            <Button
+              onClick={() => setInventoryPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={inventoryPage === totalPages}
+              className="px-3 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+            >
+              Next
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderStorage = () => (
     <div className="space-y-6">
@@ -1891,19 +1992,164 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="container mx-auto p-6 space-y-6">
           {/* Global Search */}
           <Card className="p-4">
-            <input
-              type="text"
-              value={globalSearch}
-              onChange={e => setGlobalSearch(e.target.value)}
-              placeholder="Search: requests, companies, inventory..."
-              className="w-full bg-gray-800 text-white placeholder-gray-500 border border-gray-700 rounded-md py-3 px-4 focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={globalSearch}
+                onChange={e => setGlobalSearch(e.target.value)}
+                placeholder="🔍 Search: requests, companies, inventory..."
+                className="w-full bg-gray-800 text-white placeholder-gray-500 border border-gray-700 rounded-md py-3 px-4 focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              {globalSearch && (
+                <button
+                  onClick={() => setGlobalSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
             {searchResults && (
-              <div className="mt-4 space-y-2 text-sm">
-                <p className="text-gray-400">
-                  Found: {searchResults.requests.length} requests, {searchResults.companies.length} companies,{' '}
-                  {searchResults.inventory.length} inventory items
-                </p>
+              <div className="mt-4 space-y-4">
+                {/* Summary */}
+                <div className="flex items-center justify-between text-sm pb-3 border-b border-gray-700">
+                  <p className="text-gray-400">
+                    Found:{' '}
+                    <span className="text-white font-semibold">{searchResults.requests.length}</span> requests,{' '}
+                    <span className="text-white font-semibold">{searchResults.companies.length}</span> companies,{' '}
+                    <span className="text-white font-semibold">{searchResults.inventory.length}</span> inventory items
+                  </p>
+                </div>
+
+                {/* Requests Results */}
+                {searchResults.requests.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-white mb-2">Storage Requests</h4>
+                    <div className="space-y-2">
+                      {searchResults.requests.slice(0, 5).map(req => (
+                        <button
+                          key={req.id}
+                          onClick={() => {
+                            setActiveTab('requests');
+                            setRequestFilter(req.status);
+                          }}
+                          className="w-full text-left p-3 bg-gray-800/50 hover:bg-gray-800 rounded-md border border-gray-700 transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-white font-medium">{req.referenceId}</p>
+                              <p className="text-xs text-gray-400">
+                                {req.requestDetails?.companyName || companies.find(c => c.id === req.companyId)?.name}
+                              </p>
+                            </div>
+                            <span
+                              className={`px-2 py-1 rounded text-xs ${
+                                req.status === 'PENDING'
+                                  ? 'bg-yellow-500/20 text-yellow-400'
+                                  : req.status === 'APPROVED'
+                                  ? 'bg-green-500/20 text-green-400'
+                                  : 'bg-gray-500/20 text-gray-400'
+                              }`}
+                            >
+                              {req.status}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                      {searchResults.requests.length > 5 && (
+                        <p className="text-xs text-gray-500 text-center pt-2">
+                          +{searchResults.requests.length - 5} more results
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Companies Results */}
+                {searchResults.companies.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-white mb-2">Companies</h4>
+                    <div className="space-y-2">
+                      {searchResults.companies.slice(0, 5).map(company => {
+                        const companyRequests = requests.filter(r => r.companyId === company.id);
+                        const companyInventory = inventory.filter(i => i.companyId === company.id);
+                        return (
+                          <button
+                            key={company.id}
+                            onClick={() => setActiveTab('companies')}
+                            className="w-full text-left p-3 bg-gray-800/50 hover:bg-gray-800 rounded-md border border-gray-700 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-white font-medium">{company.name}</p>
+                                <p className="text-xs text-gray-400">{company.domain}</p>
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                {companyRequests.length} requests · {companyInventory.length} pipes
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {searchResults.companies.length > 5 && (
+                        <p className="text-xs text-gray-500 text-center pt-2">
+                          +{searchResults.companies.length - 5} more results
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Inventory Results */}
+                {searchResults.inventory.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-white mb-2">Inventory</h4>
+                    <div className="space-y-2">
+                      {searchResults.inventory.slice(0, 5).map(pipe => (
+                        <button
+                          key={pipe.id}
+                          onClick={() => setActiveTab('inventory')}
+                          className="w-full text-left p-3 bg-gray-800/50 hover:bg-gray-800 rounded-md border border-gray-700 transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-white font-medium">{pipe.referenceId}</p>
+                              <p className="text-xs text-gray-400">
+                                {companies.find(c => c.id === pipe.companyId)?.name || 'Unknown'} · {pipe.rackId || 'No rack'}
+                              </p>
+                            </div>
+                            <span
+                              className={`px-2 py-1 rounded text-xs ${
+                                pipe.status === 'IN_STORAGE'
+                                  ? 'bg-green-500/20 text-green-400'
+                                  : 'bg-blue-500/20 text-blue-400'
+                              }`}
+                            >
+                              {pipe.status}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                      {searchResults.inventory.length > 5 && (
+                        <p className="text-xs text-gray-500 text-center pt-2">
+                          +{searchResults.inventory.length - 5} more results
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* No Results */}
+                {searchResults.requests.length === 0 &&
+                  searchResults.companies.length === 0 &&
+                  searchResults.inventory.length === 0 && (
+                    <div className="text-center py-8 text-gray-400">
+                      <p className="text-lg mb-2">No results found</p>
+                      <p className="text-sm">Try a different search term</p>
+                    </div>
+                  )}
               </div>
             )}
           </Card>
@@ -2061,6 +2307,20 @@ const ApprovalCard: React.FC<{
       alert('Please select at least one rack');
       return;
     }
+
+    // Validate capacity before approving
+    if (selectedRacksCapacity < requiredJoints) {
+      const shortfall = requiredJoints - selectedRacksCapacity;
+      alert(
+        `Cannot approve: Selected racks have insufficient capacity.\n\n` +
+        `Required: ${requiredJoints} joints\n` +
+        `Available: ${selectedRacksCapacity} joints\n` +
+        `Shortfall: ${shortfall} joints\n\n` +
+        `Please select additional racks or contact the customer to split the request.`
+      );
+      return;
+    }
+
     try {
       setActionLoading(true);
       await onApprove(request.id, selectedRacks, requiredJoints, internalNotes);
@@ -2095,6 +2355,31 @@ const ApprovalCard: React.FC<{
         .map(r => ({ ...r, yard: y.name, area: a.name }))
     )
   );
+
+  // Calculate total available capacity from selected racks
+  const selectedRacksCapacity = useMemo(() => {
+    return selectedRacks.reduce((total, rackId) => {
+      const rack = availableRacks.find(r => r.id === rackId);
+      return total + (rack ? rack.capacity - rack.occupied : 0);
+    }, 0);
+  }, [selectedRacks, availableRacks]);
+
+  const capacityStatus = useMemo(() => {
+    if (selectedRacks.length === 0) {
+      return { type: 'none', message: 'No racks selected' };
+    }
+    const diff = selectedRacksCapacity - requiredJoints;
+    if (diff < 0) {
+      return {
+        type: 'insufficient',
+        message: `Insufficient capacity: ${Math.abs(diff)} joints short`,
+      };
+    }
+    if (diff === 0) {
+      return { type: 'exact', message: 'Perfect fit!' };
+    }
+    return { type: 'excess', message: `${diff} joints excess capacity` };
+  }, [selectedRacksCapacity, requiredJoints, selectedRacks.length]);
 
   return (
     <Card className="p-6">
@@ -2173,30 +2458,64 @@ const ApprovalCard: React.FC<{
 
       <div className="mb-6">
         <h4 className="text-sm font-semibold text-white mb-2">Select Storage Racks</h4>
-        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 max-h-48 overflow-y-auto">
-          {availableRacks.map(rack => (
-            <button
-              key={rack.id}
-              onClick={() =>
-                setSelectedRacks(prev =>
-                  prev.includes(rack.id) ? prev.filter(id => id !== rack.id) : [...prev, rack.id]
-                )
-              }
-              className={`p-2 rounded text-xs text-center ${
-                selectedRacks.includes(rack.id)
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              <div className="font-semibold">{rack.name}</div>
-              <div className="text-xs opacity-75">
-                {rack.yard} - {rack.area}
+
+        {/* Capacity Status Banner */}
+        {selectedRacks.length > 0 && (
+          <div
+            className={`mb-3 p-3 rounded-md border ${
+              capacityStatus.type === 'insufficient'
+                ? 'bg-red-900/20 border-red-500/50 text-red-300'
+                : capacityStatus.type === 'exact'
+                ? 'bg-green-900/20 border-green-500/50 text-green-300'
+                : 'bg-blue-900/20 border-blue-500/50 text-blue-300'
+            }`}
+          >
+            <div className="flex items-center justify-between text-sm">
+              <div>
+                <span className="font-semibold">Capacity Check: </span>
+                <span>{capacityStatus.message}</span>
               </div>
               <div className="text-xs">
-                {rack.capacity - rack.occupied} free
+                <span className="opacity-75">Selected: </span>
+                <span className="font-semibold">{selectedRacksCapacity}</span>
+                <span className="opacity-75"> / Required: </span>
+                <span className="font-semibold">{requiredJoints}</span>
+                <span className="opacity-75"> joints</span>
               </div>
-            </button>
-          ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 max-h-48 overflow-y-auto">
+          {availableRacks.length === 0 ? (
+            <div className="col-span-full text-center text-gray-400 text-sm py-4">
+              No racks with available capacity. Please add more racks or free up space.
+            </div>
+          ) : (
+            availableRacks.map(rack => (
+              <button
+                key={rack.id}
+                onClick={() =>
+                  setSelectedRacks(prev =>
+                    prev.includes(rack.id) ? prev.filter(id => id !== rack.id) : [...prev, rack.id]
+                  )
+                }
+                className={`p-2 rounded text-xs text-center transition-colors ${
+                  selectedRacks.includes(rack.id)
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                <div className="font-semibold">{rack.name}</div>
+                <div className="text-xs opacity-75">
+                  {rack.yard} - {rack.area}
+                </div>
+                <div className="text-xs">
+                  {rack.capacity - rack.occupied} free
+                </div>
+              </button>
+            ))
+          )}
         </div>
         {selectedRacks.length > 0 && (
           <p className="text-xs text-gray-400 mt-2">Selected: {selectedRacks.join(', ')}</p>
@@ -2206,10 +2525,15 @@ const ApprovalCard: React.FC<{
       <div className="flex gap-3">
         <Button
           onClick={handleApprove}
-          disabled={actionLoading}
+          disabled={actionLoading || capacityStatus.type === 'insufficient'}
           className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
+          title={
+            capacityStatus.type === 'insufficient'
+              ? 'Cannot approve: insufficient rack capacity'
+              : 'Approve this storage request'
+          }
         >
-          Approve
+          {capacityStatus.type === 'insufficient' ? 'Insufficient Capacity' : 'Approve'}
         </Button>
         <Button
           onClick={handleReject}
