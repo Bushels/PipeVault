@@ -54,7 +54,7 @@ const initialFormState: NewRequestDetails = {
     sandControlScreenType: 'DWW',
     casingSpec: null,
     grade: 'J55',
-    connection: 'BTC',
+    connection: 'Blank',
     threadType: '',
     avgJointLength: 12.00,
     totalJoints: 100,
@@ -441,7 +441,7 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
                          <div>
                             <Label htmlFor="connection">Connection</Label>
                             <Select id="connection" value={formData.connection} onChange={e => setFormData({...formData, connection: e.target.value as any})}>
-                                <option>NUE</option><option>EUE</option><option>BTC</option><option>Premium</option><option>Semi-Premium</option><option>Other</option>
+                                <option>Blank</option><option>NUE</option><option>EUE</option><option>BTC</option><option>Premium</option><option>Semi-Premium</option><option>Other</option>
                             </Select>
                         </div>
                         {formData.connection === 'Other' && (
