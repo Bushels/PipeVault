@@ -107,6 +107,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [docViewerFilters, setDocViewerFilters] = useState<DocViewerFilters>(() => createDefaultDocViewerFilters());
   const [inventoryPage, setInventoryPage] = useState(1);
   const [inventoryPerPage, setInventoryPerPage] = useState(50);
+  const [editingLoad, setEditingLoad] = useState<{id: string; requestId: string} | null>(null);
+  const [loadToDelete, setLoadToDelete] = useState<{id: string; requestId: string; sequenceNumber: number} | null>(null);
 
   const updateShipmentMutation = useUpdateShipment();
   const updateShipmentTruckMutation = useUpdateShipmentTruck();
@@ -167,6 +169,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return;
     }
     window.open(data.signedUrl, '_blank', 'noopener');
+  };
+
+  const handleEditLoad = (loadId: string, requestId: string) => {
+    setEditingLoad({ id: loadId, requestId });
+  };
+
+  const handleDeleteLoad = async (loadId: string, requestId: string, sequenceNumber: number) => {
+    setLoadToDelete({ id: loadId, requestId, sequenceNumber });
+  };
+
+  const confirmDeleteLoad = async () => {
+    if (!loadToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('trucking_loads')
+        .delete()
+        .eq('id', loadToDelete.id);
+
+      if (error) throw error;
+
+      // Reload the request to get updated data
+      const { data: updatedRequest, error: fetchError } = await supabase
+        .from('storage_requests')
+        .select(`
+          *,
+          truckingLoads:trucking_loads(
+            *,
+            documents:trucking_documents(*)
+          )
+        `)
+        .eq('id', loadToDelete.requestId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      await updateRequest(updatedRequest);
+      setLoadToDelete(null);
+      setDocViewerError(null);
+    } catch (error) {
+      console.error('Error deleting load:', error);
+      setDocViewerError('Failed to delete load. Please try again.');
+    }
   };
 
   const companyMap = useMemo(() => new Map(companies.map(company => [company.id, company])), [companies]);
@@ -1933,9 +1978,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           Status: {load.status.replace(/_/g, ' ')}
                         </p>
                       </div>
-                      <span className="text-sm text-gray-400">
-                        {docCount} document{docCount === 1 ? '' : 's'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-400">
+                          {docCount} document{docCount === 1 ? '' : 's'}
+                        </span>
+                        <Button
+                          variant="secondary"
+                          onClick={() => handleEditLoad(load.id, docViewerRequest!.id)}
+                          className="text-xs"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="danger"
+                          onClick={() => handleDeleteLoad(load.id, docViewerRequest!.id, load.sequenceNumber)}
+                          className="text-xs"
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     </div>
                     {docCount === 0 ? (
                       <p className="text-xs text-gray-500">No documents uploaded yet.</p>
@@ -2186,7 +2247,431 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       </div>
       {renderDocumentsViewer()}
+
+      {/* Delete Load Confirmation Dialog */}
+      {loadToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="bg-gray-900 w-full max-w-md rounded-xl border border-gray-700 p-6 space-y-4">
+            <h3 className="text-xl font-bold text-white">Delete Load #{loadToDelete.sequenceNumber}?</h3>
+            <p className="text-gray-300">
+              Are you sure you want to delete this trucking load? This action cannot be undone.
+            </p>
+            {docViewerError && (
+              <div className="p-3 bg-red-900/20 border border-red-800 rounded-lg text-sm text-red-300">
+                {docViewerError}
+              </div>
+            )}
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setLoadToDelete(null);
+                  setDocViewerError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={confirmDeleteLoad}
+              >
+                Delete Load
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Load Modal */}
+      {editingLoad && (() => {
+        const request = requests.find(r => r.id === editingLoad.requestId);
+        const load = request?.truckingLoads?.find(l => l.id === editingLoad.id);
+        if (!load) return null;
+
+        return (
+          <EditLoadModal
+            load={load}
+            onClose={() => setEditingLoad(null)}
+            onSave={async (updatedLoad) => {
+              try {
+                const { error } = await supabase
+                  .from('trucking_loads')
+                  .update({
+                    direction: updatedLoad.direction,
+                    sequence_number: updatedLoad.sequenceNumber,
+                    status: updatedLoad.status,
+                    scheduled_slot_start: updatedLoad.scheduledSlotStart,
+                    scheduled_slot_end: updatedLoad.scheduledSlotEnd,
+                    asset_name: updatedLoad.assetName,
+                    wellpad_name: updatedLoad.wellpadName,
+                    well_name: updatedLoad.wellName,
+                    uwi: updatedLoad.uwi,
+                    trucking_company: updatedLoad.truckingCompany,
+                    contact_company: updatedLoad.contactCompany,
+                    contact_name: updatedLoad.contactName,
+                    contact_phone: updatedLoad.contactPhone,
+                    contact_email: updatedLoad.contactEmail,
+                    driver_name: updatedLoad.driverName,
+                    driver_phone: updatedLoad.driverPhone,
+                    notes: updatedLoad.notes,
+                    total_joints_planned: updatedLoad.totalJointsPlanned,
+                    total_length_ft_planned: updatedLoad.totalLengthFtPlanned,
+                    total_weight_lbs_planned: updatedLoad.totalWeightLbsPlanned,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', load.id);
+
+                if (error) throw error;
+
+                // Reload the request to get updated data
+                const { data: updatedRequest, error: fetchError } = await supabase
+                  .from('storage_requests')
+                  .select(`
+                    *,
+                    truckingLoads:trucking_loads(
+                      *,
+                      documents:trucking_documents(*)
+                    )
+                  `)
+                  .eq('id', editingLoad.requestId)
+                  .single();
+
+                if (fetchError) throw fetchError;
+
+                await updateRequest(updatedRequest);
+                setEditingLoad(null);
+                setDocViewerError(null);
+              } catch (error) {
+                console.error('Error updating load:', error);
+                setDocViewerError('Failed to update load. Please try again.');
+              }
+            }}
+          />
+        );
+      })()}
     </>
+  );
+};
+
+// Edit Load Modal Component
+const EditLoadModal: React.FC<{
+  load: TruckingLoad;
+  onClose: () => void;
+  onSave: (load: TruckingLoad) => Promise<void>;
+}> = ({ load, onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    direction: load.direction,
+    sequenceNumber: load.sequenceNumber,
+    status: load.status,
+    scheduledSlotStart: load.scheduledSlotStart || '',
+    scheduledSlotEnd: load.scheduledSlotEnd || '',
+    assetName: load.assetName || '',
+    wellpadName: load.wellpadName || '',
+    wellName: load.wellName || '',
+    uwi: load.uwi || '',
+    truckingCompany: load.truckingCompany || '',
+    contactCompany: load.contactCompany || '',
+    contactName: load.contactName || '',
+    contactPhone: load.contactPhone || '',
+    contactEmail: load.contactEmail || '',
+    driverName: load.driverName || '',
+    driverPhone: load.driverPhone || '',
+    notes: load.notes || '',
+    totalJointsPlanned: load.totalJointsPlanned || null,
+    totalLengthFtPlanned: load.totalLengthFtPlanned || null,
+    totalWeightLbsPlanned: load.totalWeightLbsPlanned || null,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave({
+      ...load,
+      ...formData,
+      scheduledSlotStart: formData.scheduledSlotStart || null,
+      scheduledSlotEnd: formData.scheduledSlotEnd || null,
+      assetName: formData.assetName || null,
+      wellpadName: formData.wellpadName || null,
+      wellName: formData.wellName || null,
+      uwi: formData.uwi || null,
+      truckingCompany: formData.truckingCompany || null,
+      contactCompany: formData.contactCompany || null,
+      contactName: formData.contactName || null,
+      contactPhone: formData.contactPhone || null,
+      contactEmail: formData.contactEmail || null,
+      driverName: formData.driverName || null,
+      driverPhone: formData.driverPhone || null,
+      notes: formData.notes || null,
+    });
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8 overflow-y-auto">
+      <div className="bg-gray-900 w-full max-w-3xl rounded-xl border border-gray-700 my-8">
+        <div className="flex items-start justify-between p-5 border-b border-gray-800 sticky top-0 bg-gray-900 z-10 rounded-t-xl">
+          <h3 className="text-xl font-bold text-white">Edit Load #{load.sequenceNumber}</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white transition-colors"
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+          {/* Direction and Status */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Direction</label>
+              <select
+                value={formData.direction}
+                onChange={(e) => setFormData({...formData, direction: e.target.value as TruckingLoadDirection})}
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="INBOUND">INBOUND (to MPS)</option>
+                <option value="OUTBOUND">OUTBOUND (from MPS)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Sequence #</label>
+              <input
+                type="number"
+                value={formData.sequenceNumber}
+                onChange={(e) => setFormData({...formData, sequenceNumber: parseInt(e.target.value) || 1})}
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                min="1"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({...formData, status: e.target.value as TruckingLoadStatus})}
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="NEW">NEW</option>
+                <option value="APPROVED">APPROVED</option>
+                <option value="IN_TRANSIT">IN TRANSIT</option>
+                <option value="COMPLETED">COMPLETED</option>
+                <option value="CANCELLED">CANCELLED</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Schedule */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Scheduled Start</label>
+              <input
+                type="datetime-local"
+                value={formData.scheduledSlotStart ? new Date(formData.scheduledSlotStart).toISOString().slice(0, 16) : ''}
+                onChange={(e) => setFormData({...formData, scheduledSlotStart: e.target.value ? new Date(e.target.value).toISOString() : ''})}
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Scheduled End</label>
+              <input
+                type="datetime-local"
+                value={formData.scheduledSlotEnd ? new Date(formData.scheduledSlotEnd).toISOString().slice(0, 16) : ''}
+                onChange={(e) => setFormData({...formData, scheduledSlotEnd: e.target.value ? new Date(e.target.value).toISOString() : ''})}
+                className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          {/* Well Information */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-300 mb-3">Well Information</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Asset Name</label>
+                <input
+                  type="text"
+                  value={formData.assetName}
+                  onChange={(e) => setFormData({...formData, assetName: e.target.value})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Wellpad Name</label>
+                <input
+                  type="text"
+                  value={formData.wellpadName}
+                  onChange={(e) => setFormData({...formData, wellpadName: e.target.value})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Well Name</label>
+                <input
+                  type="text"
+                  value={formData.wellName}
+                  onChange={(e) => setFormData({...formData, wellName: e.target.value})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">UWI</label>
+                <input
+                  type="text"
+                  value={formData.uwi}
+                  onChange={(e) => setFormData({...formData, uwi: e.target.value})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Contact Information */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-300 mb-3">Contact Information</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Trucking Company</label>
+                <input
+                  type="text"
+                  value={formData.truckingCompany}
+                  onChange={(e) => setFormData({...formData, truckingCompany: e.target.value})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Contact Company</label>
+                <input
+                  type="text"
+                  value={formData.contactCompany}
+                  onChange={(e) => setFormData({...formData, contactCompany: e.target.value})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Contact Name</label>
+                <input
+                  type="text"
+                  value={formData.contactName}
+                  onChange={(e) => setFormData({...formData, contactName: e.target.value})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Contact Phone</label>
+                <input
+                  type="tel"
+                  value={formData.contactPhone}
+                  onChange={(e) => setFormData({...formData, contactPhone: e.target.value})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Contact Email</label>
+                <input
+                  type="email"
+                  value={formData.contactEmail}
+                  onChange={(e) => setFormData({...formData, contactEmail: e.target.value})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Driver Information */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-300 mb-3">Driver Information</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Driver Name</label>
+                <input
+                  type="text"
+                  value={formData.driverName}
+                  onChange={(e) => setFormData({...formData, driverName: e.target.value})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Driver Phone</label>
+                <input
+                  type="tel"
+                  value={formData.driverPhone}
+                  onChange={(e) => setFormData({...formData, driverPhone: e.target.value})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Planned Quantities */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-300 mb-3">Planned Quantities</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Total Joints</label>
+                <input
+                  type="number"
+                  value={formData.totalJointsPlanned || ''}
+                  onChange={(e) => setFormData({...formData, totalJointsPlanned: e.target.value ? parseInt(e.target.value) : null})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Total Length (ft)</label>
+                <input
+                  type="number"
+                  value={formData.totalLengthFtPlanned || ''}
+                  onChange={(e) => setFormData({...formData, totalLengthFtPlanned: e.target.value ? parseFloat(e.target.value) : null})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  step="0.1"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Total Weight (lbs)</label>
+                <input
+                  type="number"
+                  value={formData.totalWeightLbsPlanned || ''}
+                  onChange={(e) => setFormData({...formData, totalWeightLbsPlanned: e.target.value ? parseFloat(e.target.value) : null})}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  step="0.1"
+                  min="0"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Notes</label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({...formData, notes: e.target.value})}
+              rows={3}
+              className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Additional notes or instructions..."
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3 justify-end p-5 border-t border-gray-800 bg-gray-900 rounded-b-xl sticky bottom-0">
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 };
 
