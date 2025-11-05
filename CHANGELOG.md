@@ -61,6 +61,30 @@ All notable changes to the PipeVault project are documented in this file.
   - Scrollable modal with sticky header/footer
 - **Files**: `components/admin/AdminDashboard.tsx` (lines 110-111, 174-215, 1985-1998, 2251-2676)
 
+#### Delivery Workflow UX Improvements
+- **Metric Units First**: Display meters and kg before feet and lbs
+  - Total length: meters (primary) with feet in parentheses
+  - Total weight: kg (primary) with lbs in parentheses
+  - Aligns with Canadian measurement standards
+- **Enhanced AI Processing Indicator**: Large, prominent loading state during document analysis
+  - 132x132px animated icon with pulsing gradient effects
+  - "🤖 AI Reading Your Manifest" heading (3xl font)
+  - Three animated progress indicators showing scanning, extraction, calculation steps
+  - Typical processing time estimate: 5-15 seconds
+  - 400px minimum height for high visibility
+- **Files**: `components/LoadSummaryReview.tsx` (lines 32-80, 125-150)
+
+#### Duplicate Constraint Prevention
+- **Idempotent Dock Appointments**: Prevent duplicate constraint violations on retry
+  - Check for existing appointment by shipment_id before insert
+  - Reuse existing appointment if found
+  - Fixes: "duplicate key violates unique constraint dock_appointments_unique_active_slot"
+- **Idempotent Trucking Loads**: Prevent duplicate constraint violations on retry
+  - Check for existing load by storage_request_id, direction, sequence_number before insert
+  - Reuse existing load if found
+  - Fixes: "duplicate key violates unique constraint trucking_loads_storage_request_id_direction_sequence_number_key"
+- **Files**: `components/InboundShipmentWizard.tsx` (lines 676-710, 717-771)
+
 ### 📚 Documentation
 
 #### New Documentation Files
@@ -70,6 +94,12 @@ All notable changes to the PipeVault project are documented in this file.
   - Error debugging checklist
   - Current model configuration reference
   - Best practices for prompt engineering
+- **`SETUP_STORAGE_BUCKET.md`** - Complete guide for Supabase storage bucket setup
+  - Step-by-step bucket creation instructions
+  - RLS policies for authenticated users and admins
+  - File path format and organization structure
+  - Troubleshooting section
+  - Security considerations
 
 #### Updated Documentation
 - **`ADMIN_TROUBLESHOOTING_GUIDE.md`** - Added three new troubleshooting sections:
@@ -85,11 +115,24 @@ All notable changes to the PipeVault project are documented in this file.
 2. `FIX_ALL_RACK_CAPACITIES.sql` - Corrects rack capacity values
 3. `FIX_DUPLICATE_ENQUEUE_NOTIFICATION.sql` - Removes duplicate function (referenced in session)
 
+#### Supabase Storage Bucket Setup
+- **Created**: Private `documents` bucket for shipping manifest storage
+- **Configuration**:
+  - Bucket: `documents` (private, 50 MB file size limit)
+  - RLS Policies:
+    - Authenticated users can upload documents (INSERT)
+    - Authenticated users can view documents (SELECT)
+    - Admin users can view all documents (SELECT)
+    - Admin users can delete documents (DELETE)
+- **Impact**: Resolves "Bucket not found" error in delivery workflow
+- **File Path Structure**: `documents/shipments/{shipment_id}/{filename}`
+
 #### Code Quality
 - TypeScript type safety maintained throughout changes
 - Error handling improved in admin dashboard
 - Consistent model naming across AI services
 - Build successful with no errors or warnings
+- Idempotent database operations prevent duplicate constraint violations
 
 ### 🎯 Testing & Verification
 
