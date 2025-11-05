@@ -49,6 +49,14 @@ const AdminAIAssistant: React.FC<AdminAIAssistantProps> = ({ requests, companies
       sum + yard.areas.reduce((asum, area) =>
         asum + area.racks.reduce((rsum, rack) => rsum + (rack.occupiedMeters || 0), 0), 0), 0);
     const availableCapacity = totalCapacity - totalOccupied;
+    const totalStoredKg = inventory.reduce((sum, pipe) => {
+      if (pipe.status !== 'IN_STORAGE') return sum;
+      if (typeof pipe.weight !== 'number' || typeof pipe.length !== 'number' || typeof pipe.quantity !== 'number') {
+        return sum;
+      }
+      const totalWeightLbs = pipe.weight * pipe.length * pipe.quantity;
+      return sum + totalWeightLbs * 0.45359237;
+    }, 0);
 
     return {
       requests: {
@@ -83,12 +91,14 @@ const AdminAIAssistant: React.FC<AdminAIAssistantProps> = ({ requests, companies
         totalCapacity,
         totalOccupied,
         availableCapacity,
-        utilizationPercent: (totalOccupied / totalCapacity * 100).toFixed(1)
+        utilizationPercent: (totalOccupied / totalCapacity * 100).toFixed(1),
+        totalStoredKg: Number(totalStoredKg.toFixed(1)),
       },
       inventory: {
         total: inventory.length,
         inStorage: inventory.filter(p => p.status === 'IN_STORAGE').length,
         pickedUp: inventory.filter(p => p.status === 'PICKED_UP').length,
+        totalWeightKg: Number(totalStoredKg.toFixed(1)),
       }
     };
   };

@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import Card from './ui/Card';
 import Button from './ui/Button';
+import { TruckIcon } from './icons/Icons';
 import type { StorageRequest } from '../types';
 import { calculateDaysBetween, formatDate } from '../utils/dateUtils';
+import {
+  getRequestLogisticsSnapshot,
+  getStatusBadgeTone,
+  type StatusBadgeTone,
+} from '../utils/truckingStatus';
 
 interface RequestSummaryPanelProps {
   heading?: string;
@@ -15,14 +21,12 @@ interface RequestSummaryPanelProps {
   onUploadDocuments?: (request: StorageRequest) => void;
 }
 
-type StatusBadge = 'PENDING' | 'APPROVED' | 'REJECTED' | 'COMPLETED' | 'DRAFT';
-
-const statusStyles: Record<StatusBadge, string> = {
-  PENDING: 'bg-yellow-900/30 text-yellow-300 border-yellow-700',
-  APPROVED: 'bg-green-900/30 text-green-300 border-green-700',
-  REJECTED: 'bg-red-900/30 text-red-300 border-red-700',
-  COMPLETED: 'bg-blue-900/30 text-blue-300 border-blue-700',
-  DRAFT: 'bg-gray-800 text-gray-300 border-gray-700',
+const badgeThemes: Record<StatusBadgeTone, string> = {
+  pending: 'bg-yellow-900/30 text-yellow-300 border-yellow-700',
+  success: 'bg-green-900/30 text-green-300 border-green-700',
+  info: 'bg-blue-900/30 text-blue-300 border-blue-700',
+  danger: 'bg-red-900/30 text-red-300 border-red-700',
+  neutral: 'bg-gray-800 text-gray-300 border-gray-700',
 };
 
 const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
@@ -92,6 +96,21 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
       };
     }
   }, [visibleRequests]);
+
+  const handleWheelScroll = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!scrollContainerRef.current) return;
+
+    const isVerticalIntent = Math.abs(event.deltaY) > Math.abs(event.deltaX);
+    if (!isVerticalIntent) {
+      return;
+    }
+
+    event.preventDefault();
+    scrollContainerRef.current.scrollBy({
+      left: event.deltaY,
+      behavior: 'smooth',
+    });
+  };
 
   const scrollToNext = () => {
     if (!scrollContainerRef.current) return;
@@ -208,11 +227,7 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
     );
   }
 
-  const statusCounts = sortedRequests.reduce<Record<StatusBadge, number>>((acc, req) => {
-    const key = (req.status || 'DRAFT') as StatusBadge;
-    acc[key] = (acc[key] ?? 0) + 1;
-    return acc;
-  }, { PENDING: 0, APPROVED: 0, REJECTED: 0, COMPLETED: 0, DRAFT: 0 });
+
 
   return (
     <div className="space-y-3">
@@ -292,20 +307,90 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
         <div
           ref={scrollContainerRef}
           className="flex gap-6 overflow-x-auto overflow-y-visible pb-6 snap-x snap-mandatory scrollbar-hide"
+          onWheel={handleWheelScroll}
         >
           {visibleRequests.map((request, index) => {
-            const status = (request.status ?? 'PENDING') as StatusBadge;
-            const badgeStyle = statusStyles[status] ?? statusStyles.PENDING;
             const requestDetails = request.requestDetails;
             const storageStartDate = requestDetails?.storageStartDate ?? null;
             const storageEndDate = requestDetails?.storageEndDate ?? null;
-            const daysRemaining = storageEndDate
-              ? calculateDaysBetween(nowIso, storageEndDate)
-              : null;
-            const daysUntilDropoff = storageStartDate
-              ? calculateDaysBetween(nowIso, storageStartDate)
-              : null;
+            const daysRemaining = storageEndDate ? calculateDaysBetween(nowIso, storageEndDate) : null;
+            const daysUntilDropoff = storageStartDate ? calculateDaysBetween(nowIso, storageStartDate) : null;
             const referenceId = request.referenceId;
+
+            const logistics = getRequestLogisticsSnapshot(request);
+            const {
+              inboundLoads,
+              outboundLoads,
+              inboundState,
+              outboundState,
+              customerStatusLabel,
+              inboundStatusLabel,
+              outboundStatusLabel,
+              inboundProgress,
+              outboundProgress,
+            } = logistics;
+            const inboundDocCount = inboundLoads.reduce(
+              (sum, load) => sum + (load.documents?.length ?? 0),
+              0
+            );
+            const outboundDocCount = outboundLoads.reduce(
+              (sum, load) => sum + (load.documents?.length ?? 0),
+              0
+            );
+            const hasAnyDocs =
+              inboundLoads.length > 0 ||
+              outboundLoads.length > 0 ||
+              inboundDocCount > 0 ||
+              outboundDocCount > 0;
+
+            const badgeTone = getStatusBadgeTone(customerStatusLabel);
+            const badgeStyle = badgeThemes[badgeTone];
+            const backgroundGlowClass = (() => {
+              if (/Rejected/i.test(customerStatusLabel)) return 'bg-gradient-to-br from-red-500 to-transparent';
+              if (/Pending/i.test(customerStatusLabel)) return 'bg-gradient-to-br from-yellow-500 to-transparent';
+              if (/Trucking/i.test(customerStatusLabel)) return 'bg-gradient-to-br from-blue-500 to-transparent';
+              if (/Stored|Approved|Complete/i.test(customerStatusLabel)) return 'bg-gradient-to-br from-green-500 to-transparent';
+              return 'bg-gradient-to-br from-blue-500 to-transparent';
+            })();
+            const inboundInProgress = ['PENDING', 'APPROVED', 'IN_PROGRESS'].includes(inboundState);
+            const outboundInProgress = ['PENDING', 'APPROVED', 'IN_PROGRESS'].includes(outboundState);
+            const hasOpenDeliveryRequest = inboundInProgress || outboundInProgress;
+            const inboundCompleted = inboundState === 'COMPLETED';
+            const activeLogisticsLabel = outboundInProgress ? outboundStatusLabel : inboundInProgress ? inboundStatusLabel : null;
+            const deliveredQuantity =
+              inboundProgress.plannedJoints > 0 || inboundProgress.completedJoints > 0
+                ? inboundProgress.completedJoints
+                : null;
+            const remainingQuantity =
+              inboundProgress.plannedJoints > 0 ? inboundProgress.remainingJoints : null;
+            const outboundRemaining =
+              outboundProgress.plannedJoints > 0 ? outboundProgress.remainingJoints : null;
+            const hasInboundLoads = inboundLoads.length > 0;
+            const outboundReady = inboundCompleted && outboundState === 'NONE';
+            const canStartInbound = request.status === 'APPROVED' || hasInboundLoads;
+            let scheduleActionLabel = hasInboundLoads ? 'Load to MPS' : 'Truck to MPS';
+            let scheduleActionHelper = hasInboundLoads
+              ? 'Reuse your previous submission to request the next inbound load.'
+              : 'Kick off trucking to bring pipe into MPS.';
+            let scheduleDisabled = !canStartInbound;
+            if (scheduleDisabled && request.status !== 'APPROVED') {
+              scheduleActionHelper = 'Storage approval must be completed before trucking can be scheduled.';
+            }
+
+            if (outboundReady) {
+              scheduleActionLabel = 'Truck from MPS (Coming Soon)';
+              scheduleActionHelper = 'Inbound loads are complete. We are finalizing outbound scheduling now.';
+              scheduleDisabled = true;
+            } else if (outboundInProgress) {
+              scheduleActionLabel = 'Truck from MPS';
+              scheduleActionHelper = 'Outbound scheduling is being coordinated by the MPS team.';
+              scheduleDisabled = true;
+            }
+
+            const handleScheduleClick = () => {
+              if (scheduleDisabled || !onScheduleDelivery) return;
+              onScheduleDelivery(request);
+            };
 
             const handleExtensionRequest = () => {
               if (!referenceId) return;
@@ -317,7 +402,7 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                   `I would like to discuss extending storage for project reference ${referenceId}.`,
                   '',
                   'Current status/details:',
-                  `- Status: ${status}`,
+                  `- Status: ${customerStatusLabel}`,
                   requestDetails?.storageEndDate ? `- Current end date: ${requestDetails.storageEndDate}` : '',
                   '',
                   'Please let me know next steps.',
@@ -340,12 +425,7 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                 <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
 
                 {/* Glow effect based on status */}
-                <div className={`absolute inset-0 opacity-10 ${
-                  status === 'APPROVED' ? 'bg-gradient-to-br from-green-500 to-transparent' :
-                  status === 'PENDING' ? 'bg-gradient-to-br from-yellow-500 to-transparent' :
-                  status === 'REJECTED' ? 'bg-gradient-to-br from-red-500 to-transparent' :
-                  'bg-gradient-to-br from-blue-500 to-transparent'
-                }`}></div>
+                <div className={`absolute inset-0 opacity-10 ${backgroundGlowClass}`}></div>
 
                 <div className="relative p-6 h-full flex flex-col overflow-y-auto">
                   {/* Status and Next Steps Header */}
@@ -354,10 +434,10 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                       <div>
                         <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-2">Current Status</p>
                         <span className={`inline-flex items-center px-4 py-1.5 text-xs font-bold border-2 rounded-full shadow-lg ${badgeStyle}`}>
-                          {status}
+                          {customerStatusLabel}
                         </span>
                       </div>
-                      {status === 'APPROVED' && onScheduleDelivery && (
+                      {onScheduleDelivery && customerStatusLabel !== 'Complete' && (
                         <>
                           <div className="hidden sm:flex items-center">
                             <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -366,22 +446,33 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                           </div>
                           <div className="flex flex-col gap-2">
                             <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Actions</p>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                               <Button
-                                onClick={() => onScheduleDelivery(request)}
-                                className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white text-sm px-5 py-2 font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                                onClick={handleScheduleClick}
+                                disabled={scheduleDisabled}
+                                className={`text-sm px-5 py-2 font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 ${scheduleDisabled ? 'bg-gray-800/70 text-gray-300 border border-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white'}`}
                               >
-                                🚛 Truck to MPS
+                                <span className="inline-flex items-center gap-2">
+                                  <TruckIcon className="w-4 h-4" />
+                                  {scheduleActionLabel}
+                                </span>
                               </Button>
                               {onUploadDocuments && (
                                 <Button
                                   onClick={() => onUploadDocuments(request)}
                                   className="bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white text-sm px-5 py-2 font-bold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                                 >
-                                  📄 Upload Docs
+                                  Upload Documents
                                 </Button>
                               )}
                             </div>
+                            {scheduleActionHelper && (<p className="text-[11px] text-gray-400">{scheduleActionHelper}</p>)}
+                            {hasOpenDeliveryRequest && activeLogisticsLabel && (
+                              <div className="flex items-center gap-2 text-xs text-blue-200 bg-blue-900/30 border border-blue-500/40 rounded-lg px-3 py-2">
+                                <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
+                                {activeLogisticsLabel}
+                              </div>
+                            )}
                           </div>
                         </>
                       )}
@@ -452,6 +543,52 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                     </div>
 
                     <div className="space-y-4">
+                      {(inboundStatusLabel ||
+                        outboundStatusLabel ||
+                        deliveredQuantity != null ||
+                        remainingQuantity != null ||
+                        outboundRemaining != null ||
+                        hasAnyDocs) && (
+                        <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 space-y-2">
+                          <p className="text-[10px] uppercase tracking-wider text-blue-200 font-semibold mb-1">Logistics Overview</p>
+                          {inboundStatusLabel && (
+                            <p className="text-xs text-blue-300">
+                              <span className="font-semibold text-gray-100">Inbound:</span> {inboundStatusLabel}
+                            </p>
+                          )}
+                          {deliveredQuantity != null && (
+                            <p className="text-xs text-gray-300">
+                              <span className="font-semibold text-gray-100">Delivered:</span>{' '}
+                              {deliveredQuantity}
+                              {inboundProgress.plannedJoints ? ` / ${inboundProgress.plannedJoints} joints` : ' joints'}
+                            </p>
+                          )}
+                          {remainingQuantity != null && (
+                            <p className="text-xs text-gray-300">
+                              <span className="font-semibold text-gray-100">Remaining:</span> {remainingQuantity} joints
+                            </p>
+                          )}
+                          {outboundStatusLabel && (
+                            <p className="text-xs text-blue-300">
+                              <span className="font-semibold text-gray-100">Outbound:</span> {outboundStatusLabel}
+                            </p>
+                          )}
+                          {outboundRemaining != null && (
+                            <p className="text-xs text-gray-300">
+                              <span className="font-semibold text-gray-100">Outbound Remaining:</span> {outboundRemaining} joints
+                            </p>
+                          )}
+                          {hasOpenDeliveryRequest && (
+                            <p className="text-[11px] text-blue-200">MPS scheduling team has been notified of the latest load.</p>
+                          )}
+                          {hasAnyDocs && (
+                            <p className="text-xs text-gray-300">
+                              <span className="font-semibold text-gray-100">Documents:</span>{' '}
+                              {inboundDocCount} inbound / {outboundDocCount} outbound
+                            </p>
+                          )}
+                        </div>
+                      )}
                       {requestDetails?.itemType && (
                         <div className="bg-gray-800/50 rounded-lg p-3">
                           <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Item Type</p>
@@ -492,3 +629,4 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
 };
 
 export default RequestSummaryPanel;
+

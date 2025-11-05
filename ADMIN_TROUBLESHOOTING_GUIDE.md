@@ -6,6 +6,13 @@ This guide documents the root causes and solutions when admins cannot see storag
 
 ---
 
+## New: Open Storage Layout (Area A)
+- Yard A now uses two slot-based rows: `A-A1-*` (west) and `A-A2-*` (east), each with 11 locations (north to south).
+- Slot racks expose `allocation_mode = 'SLOT'` and report utilisation as occupied locations instead of joints/meters.
+- Approval workflows log `[OpenStorage]` messages when rack metadata is missing. Check the browser console (admin UI) or server logs for these entries whenever Area A assignments fail.
+
+---
+
 ## Quick Fix Checklist
 
 When admin can't see requests, try these steps **in order**:
@@ -250,3 +257,32 @@ If nothing works, share these details:
 - ✅ No 403/406 errors in console
 
 **Document what fixed it** for next time! 📝
+---
+
+## Customer Delivery Scheduling Fails (403 + CORS)
+
+**Symptoms**
+- Customer wizard throws “Failed to schedule delivery” and console logs `shipments?select=*` returning 403.
+- Weather card logs `Access-Control-Allow-Origin` CORS preflight failure for `fetch-realtime-weather`.
+
+**Root Cause**
+1. Delivery workflow tables only had `SELECT` policies, so inserts from authenticated customers were blocked by RLS.
+2. Supabase Edge Functions did not handle `OPTIONS` requests, so browsers aborted the weather fetch before POST executed.
+
+**Fix**
+- Add matching `FOR INSERT` policies for `shipments`, `shipment_trucks`, `dock_appointments`, `shipment_documents`, and `documents` (see `supabase/schema.sql` + `supabase/SETUP_SHIPPING_WORKFLOW.sql`).
+- Grant `INSERT` on those tables to the `authenticated` role.
+- Update `supabase/functions/fetch-realtime-weather/index.ts` and `supabase/functions/fetch-weather-forecast/index.ts` to return CORS headers on both `OPTIONS` and error responses.
+
+**Validation**
+- Sign in as the customer, schedule a delivery, and confirm shipment/truck rows exist plus documents are linked to the created truck ID.
+- From DevTools, re-run the weather request—`OPTIONS` and `POST` should both return 200 with `Access-Control-Allow-*` headers.
+- Supabase dashboard should no longer show 403 errors for the customer user when inserting into the delivery tables.
+
+---
+
+## Build Error: "The character ">" is not valid inside a JSX element"
+
+- **Symptom:** Vite/esbuild stops with a message like components/...tsx:NNN: The character ">" is not valid inside a JSX element.
+- **Cause:** JSX parses a literal > in text (for example, a button label like dYs> Truck to MPS) as the start of a tag.
+- **Fix:** Wrap the string in a JSX expression ({'dYs> Truck to MPS'}) or escape it (dYs&gt; Truck to MPS), then rerun the build.

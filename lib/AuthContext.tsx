@@ -3,10 +3,11 @@
  * Provides auth state and methods throughout the app
  */
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { queryClient } from './QueryProvider';
+import { queryKeys } from '../hooks/useSupabaseData';
 
 interface AuthContextType {
   user: User | null;
@@ -47,6 +48,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const ensuredCompanyRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Get initial session
@@ -131,9 +133,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signInWithEmail = async (email: string, password: string) => {
-    const trimmedEmail = email.trim();
+    const normalizedEmail = email.trim().toLowerCase();
     const { error } = await supabase.auth.signInWithPassword({
-      email: trimmedEmail || email,
+      email: normalizedEmail || email,
       password,
     });
 
@@ -148,9 +150,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     profile?: { companyName?: string; firstName?: string; lastName?: string; contactNumber?: string }
   ) => {
     const metadata: Record<string, string> = {};
-    const trimmedEmail = email.trim();
-    if (trimmedEmail) {
-      metadata.contact_email = trimmedEmail.toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail) {
+      metadata.contact_email = normalizedEmail;
     }
     if (profile?.companyName) metadata.company_name = profile.companyName.trim();
     if (profile?.firstName) metadata.first_name = profile.firstName.trim();
@@ -158,7 +160,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (profile?.contactNumber) metadata.contact_number = profile.contactNumber.trim();
 
     const { error } = await supabase.auth.signUp({
-      email: trimmedEmail || email,
+      email: normalizedEmail || email,
       password,
       options: Object.keys(metadata).length ? { data: metadata } : undefined,
     });
@@ -198,6 +200,73 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       queryClient.clear();
     }
   };
+
+  const ensureCompanyForUser = async (currentUser: User): Promise<boolean> => {
+    const rawEmail = currentUser.email?.trim().toLowerCase();
+    if (!rawEmail) return false;
+    const domain = rawEmail.split('@')[1];
+    if (!domain) return false;
+
+    try {
+      const { data: existing, error } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('domain', domain)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Failed to fetch company record', error);
+        return false;
+      }
+
+      if (existing) {
+        return true;
+      }
+
+      const metadataName = (currentUser.user_metadata?.company_name as string | undefined)?.trim();
+      const derivedName = metadataName && metadataName.length > 0
+        ? metadataName
+        : domain.split('.')[0].replace(/[-_]/g, ' ');
+      const companyName = derivedName.replace(/\b\w/g, (char) => char.toUpperCase());
+
+      const { error: insertError } = await supabase
+        .from('companies')
+        .insert({ name: companyName, domain })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        if (insertError.code === '23505') {
+          return true;
+        }
+        console.error('Failed to create company record', insertError);
+        return false;
+      }
+
+      queryClient.invalidateQueries({ queryKey: queryKeys.companies });
+      return true;
+    } catch (error) {
+      console.error('Unexpected error ensuring company', error);
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    if (!user) {
+      ensuredCompanyRef.current = null;
+      return;
+    }
+
+    if (ensuredCompanyRef.current === user.id) {
+      return;
+    }
+
+    ensureCompanyForUser(user).then((ensured) => {
+      if (ensured) {
+        ensuredCompanyRef.current = user.id;
+      }
+    });
+  }, [user?.id]);
 
   const value = {
     user,

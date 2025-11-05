@@ -35,6 +35,7 @@ export interface Shipment {
   latestCustomerNotificationAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  truckingLoadId?: string | null;
   trucks?: ShipmentTruck[];
   appointments?: DockAppointment[];
   documents?: ShipmentDocument[];
@@ -60,6 +61,7 @@ export interface ShipmentTruck {
   notes?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  truckingLoadId?: string | null;
   appointment?: DockAppointment;
   documents?: ShipmentDocument[];
   manifestItems?: ShipmentItem[];
@@ -80,6 +82,7 @@ export interface DockAppointment {
   reminder1hSentAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  truckingLoadId?: string | null;
 }
 
 export interface ShipmentDocument {
@@ -100,6 +103,7 @@ export interface ShipmentDocument {
   createdAt?: string;
   processedAt?: string | null;
   updatedAt?: string;
+  truckingLoadId?: string | null;
 }
 
 export interface ShipmentItem {
@@ -117,6 +121,55 @@ export interface ShipmentItem {
   notes?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  truckingLoadId?: string | null;
+}
+
+export type TruckingLoadDirection = 'INBOUND' | 'OUTBOUND';
+export type TruckingLoadStatus = 'NEW' | 'APPROVED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
+
+export interface TruckingLoad {
+  id: string;
+  storageRequestId: string;
+  direction: TruckingLoadDirection;
+  sequenceNumber: number;
+  status: TruckingLoadStatus;
+  scheduledSlotStart?: string | null;
+  scheduledSlotEnd?: string | null;
+  pickupLocation?: Record<string, unknown> | null;
+  deliveryLocation?: Record<string, unknown> | null;
+  assetName?: string | null;
+  wellpadName?: string | null;
+  wellName?: string | null;
+  uwi?: string | null;
+  truckingCompany?: string | null;
+  contactCompany?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  driverName?: string | null;
+  driverPhone?: string | null;
+  notes?: string | null;
+  totalJointsPlanned?: number | null;
+  totalLengthFtPlanned?: number | null;
+  totalWeightLbsPlanned?: number | null;
+  totalJointsCompleted?: number | null;
+  totalLengthFtCompleted?: number | null;
+  totalWeightLbsCompleted?: number | null;
+  approvedAt?: string | null;
+  completedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  documents?: TruckingDocument[];
+}
+
+export interface TruckingDocument {
+  id: string;
+  truckingLoadId: string;
+  fileName: string;
+  storagePath: string;
+  documentType?: string | null;
+  uploadedBy?: string | null;
+  uploadedAt?: string;
 }
 
 export interface Pipe {
@@ -193,6 +246,26 @@ export interface ProvidedTruckingDetails {
     storageContactNumber?: string;
     storageLocation?: string;
     specialInstructions?: string;
+    truckingCompanyName?: string;
+    driverName?: string;
+    driverPhone?: string;
+    deliveryStatus?: 'pending_confirmation' | 'scheduled' | 'inbound' | 'completed';
+    deliverySlot?: {
+        start: string;
+        end: string;
+        isAfterHours?: boolean;
+        submittedAt?: string;
+        shipmentId?: string | null;
+    };
+    deliveredQuantity?: number;
+    remainingQuantity?: number;
+    returnDeliveryStatus?: 'pending_confirmation' | 'scheduled' | 'in_transit' | 'completed';
+    returnDeliverySlot?: {
+        start: string;
+        end: string;
+        submittedAt?: string;
+        shipmentId?: string | null;
+    };
 }
 
 export interface TruckingInfo {
@@ -221,6 +294,8 @@ export interface StorageRequest {
   approvalSummary?: string;
   rejectionReason?: string;
   internalNotes?: string | null;
+  truckingLoads?: TruckingLoad[];
+  truckingDocuments?: TruckingDocument[];
 }
 
 export interface StorageDocument {
@@ -258,13 +333,18 @@ export interface AdminSession {
 export type AppSession = Session | AdminSession;
 
 // Storage Yard Data Structure
+export type RackAllocationMode = 'LINEAR_CAPACITY' | 'SLOT';
+
 export interface Rack {
   id: string; // e.g., 'A-N-1'
-  name: string; // e.g., 'Rack 1'
-  capacity: number; // in joints
-  capacityMeters: number; // calculated capacity in meters
-  occupied: number; // in joints
-  occupiedMeters: number; // in meters
+  name: string; // e.g., 'Rack 1' or 'A1-1'
+  capacity: number; // numerical capacity (joints for linear racks, slots for open storage)
+  capacityMeters: number; // physical length represented by this rack section
+  occupied: number; // number of joints/slots currently used
+  occupiedMeters: number; // occupied physical length for utilization calculations
+  allocationMode: RackAllocationMode;
+  lengthMeters?: number | null; // physical footprint north-south
+  widthMeters?: number | null; // physical footprint east-west
 }
 
 export interface YardArea {

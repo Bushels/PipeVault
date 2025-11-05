@@ -13,6 +13,7 @@ interface StorageRequestMenuProps {
   companyName: string;
   hasActiveRequest: boolean;
   requests: StorageRequest[];
+  companyRequests?: StorageRequest[];
   currentUserEmail?: string;
   onSelectOption: (option: 'new-storage' | 'delivery-in' | 'delivery-out' | 'chat') => void;
   onArchiveRequest?: (request: StorageRequest, shouldArchive: boolean) => void | Promise<void>;
@@ -25,6 +26,7 @@ const StorageRequestMenu: React.FC<StorageRequestMenuProps> = ({
   companyName,
   hasActiveRequest,
   requests,
+  companyRequests,
   currentUserEmail,
   onSelectOption,
   onArchiveRequest,
@@ -32,6 +34,8 @@ const StorageRequestMenu: React.FC<StorageRequestMenuProps> = ({
   onScheduleDelivery,
   onUploadDocuments,
 }) => {
+  const chatRequests = companyRequests ?? requests;
+
   return (
     <>
       <div className="max-w-7xl mx-auto space-y-6">
@@ -70,7 +74,7 @@ const StorageRequestMenu: React.FC<StorageRequestMenuProps> = ({
 
       {/* Floating Roughneck Chat Button */}
       <FloatingRoughneckChat
-        requests={requests}
+        requests={chatRequests}
         onOpenChat={() => onSelectOption('chat')}
       />
     </>

@@ -250,6 +250,7 @@ export interface Database {
           latest_customer_notification_at: string | null;
           created_at: string;
           updated_at: string;
+          trucking_load_id: string | null;
         };
         Insert: {
           id?: string;
@@ -273,6 +274,7 @@ export interface Database {
           latest_customer_notification_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          trucking_load_id?: string | null;
         };
         Update: {
           id?: string;
@@ -296,6 +298,7 @@ export interface Database {
           latest_customer_notification_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          trucking_load_id?: string | null;
         };
       };
       shipment_trucks: {
@@ -318,6 +321,7 @@ export interface Database {
           notes: string | null;
           created_at: string;
           updated_at: string;
+          trucking_load_id: string | null;
         };
         Insert: {
           id?: string;
@@ -338,6 +342,7 @@ export interface Database {
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
+          trucking_load_id?: string | null;
         };
         Update: {
           id?: string;
@@ -358,6 +363,7 @@ export interface Database {
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
+          trucking_load_id?: string | null;
         };
       };
       dock_appointments: {
@@ -376,6 +382,7 @@ export interface Database {
           reminder_1h_sent_at: string | null;
           created_at: string;
           updated_at: string;
+          trucking_load_id: string | null;
         };
         Insert: {
           id?: string;
@@ -392,6 +399,7 @@ export interface Database {
           reminder_1h_sent_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          trucking_load_id?: string | null;
         };
         Update: {
           id?: string;
@@ -408,6 +416,7 @@ export interface Database {
           reminder_1h_sent_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          trucking_load_id?: string | null;
         };
       };
       shipment_documents: {
@@ -424,6 +433,7 @@ export interface Database {
           created_at: string;
           processed_at: string | null;
           updated_at: string;
+          trucking_load_id: string | null;
         };
         Insert: {
           id?: string;
@@ -438,6 +448,7 @@ export interface Database {
           created_at?: string;
           processed_at?: string | null;
           updated_at?: string;
+          trucking_load_id?: string | null;
         };
         Update: {
           id?: string;
@@ -452,6 +463,7 @@ export interface Database {
           created_at?: string;
           processed_at?: string | null;
           updated_at?: string;
+          trucking_load_id?: string | null;
         };
       };
       shipment_items: {
@@ -470,6 +482,7 @@ export interface Database {
           notes: string | null;
           created_at: string;
           updated_at: string;
+          trucking_load_id: string | null;
         };
         Insert: {
           id?: string;
@@ -486,6 +499,7 @@ export interface Database {
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
+          trucking_load_id?: string | null;
         };
         Update: {
           id?: string;
@@ -502,6 +516,137 @@ export interface Database {
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
+          trucking_load_id?: string | null;
+        };
+      };
+      trucking_loads: {
+        Row: {
+          id: string;
+          storage_request_id: string;
+          direction: 'INBOUND' | 'OUTBOUND';
+          sequence_number: number;
+          status: 'NEW' | 'APPROVED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
+          scheduled_slot_start: string | null;
+          scheduled_slot_end: string | null;
+          pickup_location: Json | null;
+          delivery_location: Json | null;
+          asset_name: string | null;
+          wellpad_name: string | null;
+          well_name: string | null;
+          uwi: string | null;
+          trucking_company: string | null;
+          contact_company: string | null;
+          contact_name: string | null;
+          contact_phone: string | null;
+          contact_email: string | null;
+          driver_name: string | null;
+          driver_phone: string | null;
+          notes: string | null;
+          total_joints_planned: number | null;
+          total_length_ft_planned: number | null;
+          total_weight_lbs_planned: number | null;
+          total_joints_completed: number | null;
+          total_length_ft_completed: number | null;
+          total_weight_lbs_completed: number | null;
+          approved_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          storage_request_id: string;
+          direction: 'INBOUND' | 'OUTBOUND';
+          sequence_number: number;
+          status?: 'NEW' | 'APPROVED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
+          scheduled_slot_start?: string | null;
+          scheduled_slot_end?: string | null;
+          pickup_location?: Json | null;
+          delivery_location?: Json | null;
+          asset_name?: string | null;
+          wellpad_name?: string | null;
+          well_name?: string | null;
+          uwi?: string | null;
+          trucking_company?: string | null;
+          contact_company?: string | null;
+          contact_name?: string | null;
+          contact_phone?: string | null;
+          contact_email?: string | null;
+          driver_name?: string | null;
+          driver_phone?: string | null;
+          notes?: string | null;
+          total_joints_planned?: number | null;
+          total_length_ft_planned?: number | null;
+          total_weight_lbs_planned?: number | null;
+          total_joints_completed?: number | null;
+          total_length_ft_completed?: number | null;
+          total_weight_lbs_completed?: number | null;
+          approved_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          storage_request_id?: string;
+          direction?: 'INBOUND' | 'OUTBOUND';
+          sequence_number?: number;
+          status?: 'NEW' | 'APPROVED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
+          scheduled_slot_start?: string | null;
+          scheduled_slot_end?: string | null;
+          pickup_location?: Json | null;
+          delivery_location?: Json | null;
+          asset_name?: string | null;
+          wellpad_name?: string | null;
+          well_name?: string | null;
+          uwi?: string | null;
+          trucking_company?: string | null;
+          contact_company?: string | null;
+          contact_name?: string | null;
+          contact_phone?: string | null;
+          contact_email?: string | null;
+          driver_name?: string | null;
+          driver_phone?: string | null;
+          notes?: string | null;
+          total_joints_planned?: number | null;
+          total_length_ft_planned?: number | null;
+          total_weight_lbs_planned?: number | null;
+          total_joints_completed?: number | null;
+          total_length_ft_completed?: number | null;
+          total_weight_lbs_completed?: number | null;
+          approved_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      trucking_documents: {
+        Row: {
+          id: string;
+          trucking_load_id: string;
+          file_name: string;
+          storage_path: string;
+          document_type: string | null;
+          uploaded_by: string | null;
+          uploaded_at: string;
+        };
+        Insert: {
+          id?: string;
+          trucking_load_id: string;
+          file_name: string;
+          storage_path: string;
+          document_type?: string | null;
+          uploaded_by?: string | null;
+          uploaded_at?: string;
+        };
+        Update: {
+          id?: string;
+          trucking_load_id?: string;
+          file_name?: string;
+          storage_path?: string;
+          document_type?: string | null;
+          uploaded_by?: string | null;
+          uploaded_at?: string;
         };
       };
       conversations: {
@@ -554,6 +699,9 @@ export interface Database {
           capacity_meters: number;
           occupied: number;
           occupied_meters: number;
+          allocation_mode: 'LINEAR_CAPACITY' | 'SLOT';
+          length_meters: number | null;
+          width_meters: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -565,6 +713,9 @@ export interface Database {
           capacity_meters?: number;
           occupied?: number;
           occupied_meters?: number;
+          allocation_mode?: 'LINEAR_CAPACITY' | 'SLOT';
+          length_meters?: number | null;
+          width_meters?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -576,6 +727,9 @@ export interface Database {
           capacity_meters?: number;
           occupied?: number;
           occupied_meters?: number;
+          allocation_mode?: 'LINEAR_CAPACITY' | 'SLOT';
+          length_meters?: number | null;
+          width_meters?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -599,6 +753,8 @@ export interface Database {
       manifest_document_status: 'UPLOADED' | 'PROCESSING' | 'PARSED' | 'FAILED' | 'APPROVED';
       shipment_item_status: 'IN_TRANSIT' | 'IN_STORAGE' | 'MISSING' | 'DAMAGED';
       notification_type: 'NEW_REQUEST' | 'DELIVERY_SCHEDULED' | 'PICKUP_SCHEDULED' | 'URGENT_REQUEST' | 'CUSTOMER_MESSAGE';
+      trucking_load_direction: 'INBOUND' | 'OUTBOUND';
+      trucking_load_status: 'NEW' | 'APPROVED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
     };
   };
 }

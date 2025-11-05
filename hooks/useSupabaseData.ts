@@ -17,6 +17,8 @@ import type {
   DockAppointment,
   ShipmentDocument,
   ShipmentItem,
+  TruckingLoad,
+  TruckingDocument,
 } from '../types';
 import type { Database } from '../lib/database.types';
 
@@ -34,12 +36,88 @@ type ShipmentItemRow = Database['public']['Tables']['shipment_items']['Row'];
 type YardRow = Database['public']['Tables']['yards']['Row'];
 type YardAreaRow = Database['public']['Tables']['yard_areas']['Row'];
 type RackRow = Database['public']['Tables']['racks']['Row'];
+type TruckingLoadRow = Database['public']['Tables']['trucking_loads']['Row'];
+type TruckingDocumentRow = Database['public']['Tables']['trucking_documents']['Row'];
+
+type CreateTruckingLoadInput = {
+  storageRequestId: string;
+  direction: TruckingLoad['direction'];
+  sequenceNumber?: number;
+  status?: TruckingLoad['status'];
+  scheduledSlotStart?: string | null;
+  scheduledSlotEnd?: string | null;
+  pickupLocation?: Record<string, unknown> | null;
+  deliveryLocation?: Record<string, unknown> | null;
+  assetName?: string | null;
+  wellpadName?: string | null;
+  wellName?: string | null;
+  uwi?: string | null;
+  truckingCompany?: string | null;
+  contactCompany?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  driverName?: string | null;
+  driverPhone?: string | null;
+  notes?: string | null;
+  totalJointsPlanned?: number | null;
+  totalLengthFtPlanned?: number | null;
+  totalWeightLbsPlanned?: number | null;
+};
+
+type TruckingLoadUpdateFields = Partial<{
+  status: TruckingLoad['status'];
+  scheduledSlotStart: string | null;
+  scheduledSlotEnd: string | null;
+  pickupLocation: Record<string, unknown> | null;
+  deliveryLocation: Record<string, unknown> | null;
+  assetName: string | null;
+  wellpadName: string | null;
+  wellName: string | null;
+  uwi: string | null;
+  truckingCompany: string | null;
+  contactCompany: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  notes: string | null;
+  totalJointsPlanned: number | null;
+  totalLengthFtPlanned: number | null;
+  totalWeightLbsPlanned: number | null;
+  totalJointsCompleted: number | null;
+  totalLengthFtCompleted: number | null;
+  totalWeightLbsCompleted: number | null;
+  approvedAt: string | null;
+  completedAt: string | null;
+}>;
+
+type UpdateTruckingLoadInput = {
+  id: string;
+  storageRequestId: string;
+  updates: TruckingLoadUpdateFields;
+};
+
+type CreateTruckingDocumentInput = {
+  truckingLoadId: string;
+  fileName: string;
+  storagePath: string;
+  documentType?: string | null;
+  uploadedBy?: string | null;
+  uploadedAt?: string;
+  storageRequestId?: string;
+};
 
 type ShipmentQueryRow = ShipmentRow & {
   shipment_trucks?: ShipmentTruckRow[];
   dock_appointments?: DockAppointmentRow[];
   shipment_documents?: ShipmentDocumentQueryRow[];
   shipment_items?: ShipmentItemRow[];
+};
+
+type StorageRequestQueryRow = StorageRequestRow & {
+  trucking_loads?: Array<TruckingLoadRow & { trucking_documents?: TruckingDocumentRow[] }>;
 };
 
 type ShipmentTruckExtras = {
@@ -54,7 +132,7 @@ const mapCompanyRow = (row: CompanyRow): Company => ({
   domain: row.domain,
 });
 
-const mapStorageRequestRow = (row: StorageRequestRow): StorageRequest => ({
+const mapStorageRequestRow = (row: StorageRequestQueryRow): StorageRequest => ({
   id: row.id,
   companyId: row.company_id,
   userId: row.user_email,
@@ -73,6 +151,7 @@ const mapStorageRequestRow = (row: StorageRequestRow): StorageRequest => ({
   assignedRackIds: row.assigned_rack_ids || undefined,
   approvalSummary: row.approval_summary || undefined,
   rejectionReason: row.rejection_reason || undefined,
+  truckingLoads: (row.trucking_loads || []).map(mapTruckingLoadRow),
 });
 
 const mapInventoryRow = (row: InventoryRow): Pipe => ({
@@ -143,6 +222,7 @@ const mapDockAppointmentRow = (row: DockAppointmentRow): DockAppointment => ({
   reminder1hSentAt: row.reminder_1h_sent_at || undefined,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  truckingLoadId: row.trucking_load_id || undefined,
 });
 
 const mapShipmentDocumentRow = (row: ShipmentDocumentQueryRow): ShipmentDocument => ({
@@ -163,6 +243,7 @@ const mapShipmentDocumentRow = (row: ShipmentDocumentQueryRow): ShipmentDocument
   createdAt: row.created_at,
   processedAt: row.processed_at || undefined,
   updatedAt: row.updated_at,
+  truckingLoadId: row.trucking_load_id || undefined,
 });
 
 const mapShipmentItemRow = (row: ShipmentItemRow): ShipmentItem => ({
@@ -180,6 +261,7 @@ const mapShipmentItemRow = (row: ShipmentItemRow): ShipmentItem => ({
   notes: row.notes || undefined,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  truckingLoadId: row.trucking_load_id || undefined,
 });
 
 const mapShipmentTruckRow = (row: ShipmentTruckRow, extras: ShipmentTruckExtras = {}): ShipmentTruck => {
@@ -206,12 +288,59 @@ const mapShipmentTruckRow = (row: ShipmentTruckRow, extras: ShipmentTruckExtras 
     notes: row.notes || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    truckingLoadId: row.trucking_load_id || undefined,
     appointment: appointmentRow ? mapDockAppointmentRow(appointmentRow) : undefined,
     documents: documents.map(mapShipmentDocumentRow),
     manifestItems: items.map(mapShipmentItemRow),
   };
 };
 
+const mapTruckingLoadRow = (
+  row: TruckingLoadRow & { trucking_documents?: TruckingDocumentRow[] }
+): TruckingLoad => ({
+  id: row.id,
+  storageRequestId: row.storage_request_id,
+  direction: row.direction,
+  sequenceNumber: row.sequence_number,
+  status: row.status,
+  scheduledSlotStart: row.scheduled_slot_start || undefined,
+  scheduledSlotEnd: row.scheduled_slot_end || undefined,
+  pickupLocation: (row.pickup_location as Record<string, unknown> | null) ?? null,
+  deliveryLocation: (row.delivery_location as Record<string, unknown> | null) ?? null,
+  assetName: row.asset_name || null,
+  wellpadName: row.wellpad_name || null,
+  wellName: row.well_name || null,
+  uwi: row.uwi || null,
+  truckingCompany: row.trucking_company || null,
+  contactCompany: row.contact_company || null,
+  contactName: row.contact_name || null,
+  contactPhone: row.contact_phone || null,
+  contactEmail: row.contact_email || null,
+  driverName: row.driver_name || null,
+  driverPhone: row.driver_phone || null,
+  notes: row.notes || null,
+  totalJointsPlanned: row.total_joints_planned ?? null,
+  totalLengthFtPlanned: row.total_length_ft_planned ?? null,
+  totalWeightLbsPlanned: row.total_weight_lbs_planned ?? null,
+  totalJointsCompleted: row.total_joints_completed ?? null,
+  totalLengthFtCompleted: row.total_length_ft_completed ?? null,
+  totalWeightLbsCompleted: row.total_weight_lbs_completed ?? null,
+  approvedAt: row.approved_at || null,
+  completedAt: row.completed_at || null,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+  documents: row.trucking_documents ? row.trucking_documents.map(mapTruckingDocumentRow) : undefined,
+});
+
+const mapTruckingDocumentRow = (row: TruckingDocumentRow): TruckingDocument => ({
+  id: row.id,
+  truckingLoadId: row.trucking_load_id,
+  fileName: row.file_name,
+  storagePath: row.storage_path,
+  documentType: row.document_type || null,
+  uploadedBy: row.uploaded_by || null,
+  uploadedAt: row.uploaded_at || undefined,
+});
 const mapShipmentRow = (row: ShipmentQueryRow): Shipment => {
   const appointments = row.dock_appointments ?? [];
   const documents = row.shipment_documents ?? [];
@@ -240,6 +369,7 @@ const mapShipmentRow = (row: ShipmentQueryRow): Shipment => {
     latestCustomerNotificationAt: row.latest_customer_notification_at || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    truckingLoadId: row.trucking_load_id || undefined,
     trucks: trucks.map(truck => mapShipmentTruckRow(truck, { appointments, documents, items })),
     appointments: appointments.map(mapDockAppointmentRow),
     documents: documents.map(mapShipmentDocumentRow),
@@ -257,14 +387,17 @@ const mapYardRow = (row: YardQueryRow): Yard => ({
   areas: (row.areas || []).map((area) => ({
     id: area.id,
     name: area.name,
-    racks: (area.racks || []).map((rack) => ({
-      id: rack.id,
-      name: rack.name,
-      capacity: rack.capacity ?? 0,
-      capacityMeters: rack.capacity_meters ?? 0,
-      occupied: rack.occupied ?? 0,
-      occupiedMeters: rack.occupied_meters ?? 0,
-    })),
+      racks: (area.racks || []).map((rack) => ({
+        id: rack.id,
+        name: rack.name,
+        capacity: rack.capacity ?? 0,
+        capacityMeters: rack.capacity_meters ?? 0,
+        occupied: rack.occupied ?? 0,
+        occupiedMeters: rack.occupied_meters ?? 0,
+        allocationMode: (rack.allocation_mode as 'LINEAR_CAPACITY' | 'SLOT') ?? 'LINEAR_CAPACITY',
+        lengthMeters: rack.length_meters ?? null,
+        widthMeters: rack.width_meters ?? null,
+      })),
   })),
 });
 
@@ -281,6 +414,10 @@ export const queryKeys = {
   yards: ['yards'] as const,
   racks: ['racks'] as const,
   truckLoads: ['truckLoads'] as const,
+  truckingLoads: ['trucking-loads'] as const,
+  truckingLoadsByRequest: (requestId: string) => ['trucking-loads', requestId] as const,
+  truckingDocuments: ['trucking-documents'] as const,
+  truckingDocumentsByLoad: (loadId: string) => ['trucking-documents', loadId] as const,
   documents: ['documents'] as const,
   documentsByCompany: (companyId: string) => ['documents', companyId] as const,
   shipments: ['shipments'] as const,
@@ -374,17 +511,23 @@ export function useRequests(companyId?: string) {
     queryFn: async () => {
       let query = supabase
         .from('storage_requests')
-        .select('*')
+        .select(`
+          *,
+          trucking_loads(
+            *,
+            trucking_documents(*)
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (companyId) {
         query = query.eq('company_id', companyId);
       }
 
-      const { data, error} = await query;
+      const { data, error } = await query;
 
       if (error) throw error;
-      const rows = (data ?? []) as StorageRequestRow[];
+      const rows = (data ?? []) as StorageRequestQueryRow[];
       return rows.map(mapStorageRequestRow);
     },
     staleTime: 0,
@@ -1509,3 +1652,192 @@ export function useUpdateTruckLoad() {
     },
   });
 }
+
+
+// ============================================================================
+// TRUCKING LOADS (PIPE WORKFLOW)
+// ============================================================================
+
+export function useTruckingLoadsByRequest(requestId?: string) {
+  return useQuery<TruckingLoad[]>({
+    queryKey: requestId ? queryKeys.truckingLoadsByRequest(requestId) : queryKeys.truckingLoads,
+    enabled: Boolean(requestId),
+    queryFn: async () => {
+      if (!requestId) return [];
+
+      const { data, error } = await supabase
+        .from('trucking_loads')
+        .select('*, trucking_documents(*)')
+        .eq('storage_request_id', requestId)
+        .order('direction', { ascending: true })
+        .order('sequence_number', { ascending: true });
+
+      if (error) throw error;
+      const rows = (data ?? []) as Array<TruckingLoadRow & { trucking_documents?: TruckingDocumentRow[] }>;
+      return rows.map(mapTruckingLoadRow);
+    },
+  });
+}
+
+export function useCreateTruckingLoad() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CreateTruckingLoadInput) => {
+      const {
+        storageRequestId,
+        direction,
+        sequenceNumber = 1,
+        status = 'NEW',
+        ...rest
+      } = input;
+
+      const payload: Record<string, unknown> = {
+        storage_request_id: storageRequestId,
+        direction,
+        sequence_number: sequenceNumber,
+        status,
+        scheduled_slot_start: rest.scheduledSlotStart ?? null,
+        scheduled_slot_end: rest.scheduledSlotEnd ?? null,
+        pickup_location: rest.pickupLocation ?? null,
+        delivery_location: rest.deliveryLocation ?? null,
+        asset_name: rest.assetName ?? null,
+        wellpad_name: rest.wellpadName ?? null,
+        well_name: rest.wellName ?? null,
+        uwi: rest.uwi ?? null,
+        trucking_company: rest.truckingCompany ?? null,
+        contact_company: rest.contactCompany ?? null,
+        contact_name: rest.contactName ?? null,
+        contact_phone: rest.contactPhone ?? null,
+        contact_email: rest.contactEmail ?? null,
+        driver_name: rest.driverName ?? null,
+        driver_phone: rest.driverPhone ?? null,
+        notes: rest.notes ?? null,
+        total_joints_planned: rest.totalJointsPlanned ?? null,
+        total_length_ft_planned: rest.totalLengthFtPlanned ?? null,
+        total_weight_lbs_planned: rest.totalWeightLbsPlanned ?? null,
+      };
+
+      const { data, error } = await supabase
+        .from('trucking_loads')
+        .insert(payload)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      return mapTruckingLoadRow(data as TruckingLoadRow);
+    },
+    onSuccess: (load) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.truckingLoadsByRequest(load.storageRequestId) });
+    },
+  });
+}
+
+export function useUpdateTruckingLoad() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, storageRequestId, updates }: UpdateTruckingLoadInput) => {
+      const payload: Record<string, unknown> = {};
+
+      if (updates.status !== undefined) payload.status = updates.status;
+      if (updates.scheduledSlotStart !== undefined) payload.scheduled_slot_start = updates.scheduledSlotStart ?? null;
+      if (updates.scheduledSlotEnd !== undefined) payload.scheduled_slot_end = updates.scheduledSlotEnd ?? null;
+      if (updates.pickupLocation !== undefined) payload.pickup_location = updates.pickupLocation ?? null;
+      if (updates.deliveryLocation !== undefined) payload.delivery_location = updates.deliveryLocation ?? null;
+      if (updates.assetName !== undefined) payload.asset_name = updates.assetName ?? null;
+      if (updates.wellpadName !== undefined) payload.wellpad_name = updates.wellpadName ?? null;
+      if (updates.wellName !== undefined) payload.well_name = updates.wellName ?? null;
+      if (updates.uwi !== undefined) payload.uwi = updates.uwi ?? null;
+      if (updates.truckingCompany !== undefined) payload.trucking_company = updates.truckingCompany ?? null;
+      if (updates.contactCompany !== undefined) payload.contact_company = updates.contactCompany ?? null;
+      if (updates.contactName !== undefined) payload.contact_name = updates.contactName ?? null;
+      if (updates.contactPhone !== undefined) payload.contact_phone = updates.contactPhone ?? null;
+      if (updates.contactEmail !== undefined) payload.contact_email = updates.contactEmail ?? null;
+      if (updates.driverName !== undefined) payload.driver_name = updates.driverName ?? null;
+      if (updates.driverPhone !== undefined) payload.driver_phone = updates.driverPhone ?? null;
+      if (updates.notes !== undefined) payload.notes = updates.notes ?? null;
+      if (updates.totalJointsPlanned !== undefined) payload.total_joints_planned = updates.totalJointsPlanned ?? null;
+      if (updates.totalLengthFtPlanned !== undefined) payload.total_length_ft_planned = updates.totalLengthFtPlanned ?? null;
+      if (updates.totalWeightLbsPlanned !== undefined) payload.total_weight_lbs_planned = updates.totalWeightLbsPlanned ?? null;
+      if (updates.totalJointsCompleted !== undefined) payload.total_joints_completed = updates.totalJointsCompleted ?? null;
+      if (updates.totalLengthFtCompleted !== undefined) payload.total_length_ft_completed = updates.totalLengthFtCompleted ?? null;
+      if (updates.totalWeightLbsCompleted !== undefined) payload.total_weight_lbs_completed = updates.totalWeightLbsCompleted ?? null;
+      if (updates.approvedAt !== undefined) payload.approved_at = updates.approvedAt ?? null;
+      if (updates.completedAt !== undefined) payload.completed_at = updates.completedAt ?? null;
+
+      const { data, error } = await supabase
+        .from('trucking_loads')
+        .update(payload)
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      return mapTruckingLoadRow(data as TruckingLoadRow);
+    },
+    onSuccess: (load, variables) => {
+      const requestId = variables?.storageRequestId ?? load.storageRequestId;
+      queryClient.invalidateQueries({ queryKey: queryKeys.truckingLoadsByRequest(requestId) });
+    },
+  });
+}
+
+export function useTruckingDocuments(truckingLoadId?: string) {
+  return useQuery<TruckingDocument[]>({
+    queryKey: truckingLoadId ? queryKeys.truckingDocumentsByLoad(truckingLoadId) : queryKeys.truckingDocuments,
+    enabled: Boolean(truckingLoadId),
+    queryFn: async () => {
+      if (!truckingLoadId) return [];
+
+      const { data, error } = await supabase
+        .from('trucking_documents')
+        .select('*')
+        .eq('trucking_load_id', truckingLoadId)
+        .order('uploaded_at', { ascending: false });
+
+      if (error) throw error;
+      const rows = (data ?? []) as TruckingDocumentRow[];
+      return rows.map(mapTruckingDocumentRow);
+    },
+  });
+}
+
+export function useCreateTruckingDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CreateTruckingDocumentInput) => {
+      const payload: Record<string, unknown> = {
+        trucking_load_id: input.truckingLoadId,
+        file_name: input.fileName,
+        storage_path: input.storagePath,
+        document_type: input.documentType ?? null,
+        uploaded_by: input.uploadedBy ?? null,
+      };
+
+      if (input.uploadedAt) {
+        payload.uploaded_at = input.uploadedAt;
+      }
+
+      const { data, error } = await supabase
+        .from('trucking_documents')
+        .insert(payload)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      return mapTruckingDocumentRow(data as TruckingDocumentRow);
+    },
+    onSuccess: (document, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.truckingDocumentsByLoad(document.truckingLoadId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.requests });
+      if (variables?.storageRequestId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.truckingLoadsByRequest(variables.storageRequestId) });
+      }
+    },
+  });
+}
+
+
+

@@ -6,6 +6,10 @@ export interface UploadedDocument {
   fileName: string;
   fileSize: number;
   fileType: string;
+  file?: File;
+  storagePath?: string;
+  documentRecordId?: string;
+  isMock?: boolean;
   uploadProgress: number;
   status: 'uploading' | 'processing' | 'completed' | 'error';
   errorMessage?: string;
@@ -16,6 +20,7 @@ interface DocumentUploadStepProps {
   uploadedDocuments: UploadedDocument[];
   onRemoveDocument?: (documentId: string) => void;
   isProcessing?: boolean;
+  onUseSampleDocument?: () => void;
 }
 
 const formatFileSize = (bytes: number): string => {
@@ -31,6 +36,7 @@ const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
   uploadedDocuments,
   onRemoveDocument,
   isProcessing = false,
+  onUseSampleDocument,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -120,6 +126,19 @@ const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
             <p className="text-xs text-gray-300">
               Upload your pipe manifest or tally sheets. Our AI will automatically extract joints count, lengths, weights, and other details.
             </p>
+            {onUseSampleDocument && (
+              <button
+                type="button"
+                onClick={onUseSampleDocument}
+                disabled={isProcessing}
+                className="mt-3 inline-flex items-center gap-2 rounded-md bg-gray-800 border border-gray-700 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Use sample manifest data (no file)
+              </button>
+            )}
           </div>
         </div>
       </div>

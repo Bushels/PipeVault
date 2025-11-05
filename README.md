@@ -57,6 +57,13 @@ PipeVault is MPS Group's portal for running the 20-year anniversary "Free Pipe S
 2. **Admin Dashboard Tabs** - Overview, Approvals, Requests, Companies, Inventory, Storage, Roughneck Ops. The Approvals tab now surfaces full pipe specifications (grade, connection, length, trucking preferences) alongside an internal notes field, and the All Requests table mirrors that detail with inline-editable notes, a total length column, and approver/timestamp metadata.
 3. **Truck Loads & Pickups** - record inbound and outbound loads to keep utilisation accurate.
 
+## Open Storage Layout & Logging
+- **Area A footprint**: 170 m (north/south) by 60 m (east/west) cleared pad dedicated to open storage. Pipe is stacked lengthwise north-to-south.
+- **Active rows**: two rows are currently stood up: Row 1 on the west side (`A-A1-*`) and Row 2 on the east side (`A-A2-*`). Each row contains **11 locations**, numbered north-to-south (e.g., `A1-1` at the north end, `A1-11` at the south end).
+- **Slot dimensions**: every location represents a 14.5 m x 5 m pad that fits a single stack. Racks in this area use the `SLOT` allocation mode; occupancy is tracked as a binary slot (0 = empty, 1 = occupied) instead of joint counts.
+- **Capacity reporting**: Area A utilisation is calculated from empty slots remaining. Example: if a customer occupies `A1-1` and `A1-2`, there are 20 of 22 locations free which reports as 9.1% utilisation. Other yards (`B-*`, `C-*`) continue to track capacity by total joints/meters.
+- **Error logging**: approval and mock workflows emit `[OpenStorage]` console logs when rack metadata is missing or updates fail. Review browser dev tools or server logs for these tags when diagnosing layout issues or future changes to Area A.
+
 ## Technology Stack
 - **Frontend**: React 19 + Vite + TypeScript
 - **State/Data**: TanStack Query (Supabase fetch/mutations)

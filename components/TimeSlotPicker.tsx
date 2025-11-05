@@ -6,7 +6,6 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import Button from './ui/Button';
 
 export interface TimeSlot {
   start: Date;
@@ -17,7 +16,7 @@ export interface TimeSlot {
 
 interface TimeSlotPickerProps {
   selectedSlot: TimeSlot | null;
-  onSelectSlot: (slot: TimeSlot) => void;
+  onSelectSlot: (slot: TimeSlot | null) => void;
   blockedSlots?: string[]; // Array of ISO datetime strings for blocked slots
 }
 
@@ -231,7 +230,7 @@ const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({
               return (
                 <button
                   key={index}
-                  onClick={() => onSelectSlot(slot)}
+                  onClick={() => onSelectSlot(isSelected ? null : slot)}
                   className={`
                     relative px-4 py-4 rounded-lg border-2 transition-all text-left
                     ${isSelected
@@ -272,34 +271,9 @@ const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({
           </div>
         </div>
       )}
-
-      {/* Selected Slot Summary */}
-      {selectedSlot && (
-        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-          <h4 className="text-sm font-bold text-white mb-2">Selected Time Slot</h4>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-300">
-                <strong>{formatDate(selectedSlot.start)}</strong> - {formatTimeSlot(selectedSlot)}
-              </p>
-              {selectedSlot.is_after_hours && (
-                <p className="text-yellow-300 text-sm mt-1">
-                  ⚠️ Off-hours surcharge: ${selectedSlot.surcharge_amount}
-                </p>
-              )}
-            </div>
-            <Button
-              variant="secondary"
-              onClick={() => onSelectSlot(null as any)}
-              className="px-3 py-1 text-xs"
-            >
-              Clear
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
 export default TimeSlotPicker;
+

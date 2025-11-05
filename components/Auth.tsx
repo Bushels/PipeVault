@@ -48,8 +48,10 @@ const Auth: React.FC = () => {
     setLoading(true);
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
       if (customerMode === 'login') {
-        await signInWithEmail(email, password);
+        await signInWithEmail(normalizedEmail, password);
         return;
       }
 
@@ -68,7 +70,7 @@ const Auth: React.FC = () => {
         return;
       }
 
-      await signUpWithEmail(email, password, {
+      await signUpWithEmail(normalizedEmail, password, {
         companyName: companyName.trim(),
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -76,7 +78,7 @@ const Auth: React.FC = () => {
       });
 
       try {
-        await signInWithEmail(email, password);
+        await signInWithEmail(normalizedEmail, password);
       } catch (signInError: any) {
         const message = signInError?.message || '';
         if (message.toLowerCase().includes('email not confirmed')) {
@@ -99,7 +101,8 @@ const Auth: React.FC = () => {
     setLoading(true);
 
     try {
-      await signInWithEmail(adminEmail, adminPassword);
+      const normalizedEmail = adminEmail.trim().toLowerCase();
+      await signInWithEmail(normalizedEmail, adminPassword);
     } catch (err: any) {
       const message = err?.message || '';
       if (message.toLowerCase().includes('invalid login credentials')) {
@@ -128,8 +131,9 @@ const Auth: React.FC = () => {
     setLoading(true);
 
     try {
-      await signUpWithEmail(adminEmail, adminPassword);
-      await signInWithEmail(adminEmail, adminPassword);
+      const normalizedEmail = adminEmail.trim().toLowerCase();
+      await signUpWithEmail(normalizedEmail, adminPassword);
+      await signInWithEmail(normalizedEmail, adminPassword);
     } catch (err: any) {
       const message = err?.message || '';
       if (message.toLowerCase().includes('already registered')) {

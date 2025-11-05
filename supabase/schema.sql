@@ -404,9 +404,29 @@ CREATE TABLE IF NOT EXISTS racks (
   capacity_meters NUMERIC(10, 2) NOT NULL DEFAULT 2400,
   occupied INTEGER NOT NULL DEFAULT 0,
   occupied_meters NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  allocation_mode TEXT NOT NULL DEFAULT 'LINEAR_CAPACITY' CHECK (allocation_mode IN ('LINEAR_CAPACITY', 'SLOT')),
+  length_meters NUMERIC(10, 2),
+  width_meters NUMERIC(10, 2),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE racks
+  ADD COLUMN IF NOT EXISTS allocation_mode TEXT;
+ALTER TABLE racks
+  ALTER COLUMN allocation_mode SET DEFAULT 'LINEAR_CAPACITY';
+UPDATE racks SET allocation_mode = 'LINEAR_CAPACITY' WHERE allocation_mode IS NULL;
+ALTER TABLE racks
+  ALTER COLUMN allocation_mode SET NOT NULL;
+DO $$ BEGIN
+  ALTER TABLE racks ADD CONSTRAINT racks_allocation_mode_check CHECK (allocation_mode IN ('LINEAR_CAPACITY', 'SLOT'));
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+ALTER TABLE racks
+  ADD COLUMN IF NOT EXISTS length_meters NUMERIC(10, 2);
+ALTER TABLE racks
+  ADD COLUMN IF NOT EXISTS width_meters NUMERIC(10, 2);
 
 -- Indexes
 CREATE INDEX idx_racks_area ON racks(area_id);
@@ -560,6 +580,13 @@ CREATE POLICY "Users can view own company shipments"
     SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
   ));
 
+CREATE POLICY "Users can create shipments for own company"
+  ON shipments FOR INSERT
+  TO authenticated
+  WITH CHECK (company_id IN (
+    SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+  ));
+
 CREATE POLICY "Users can view own company shipment trucks"
   ON shipment_trucks FOR SELECT
   TO authenticated
@@ -568,6 +595,15 @@ CREATE POLICY "Users can view own company shipment trucks"
     WHERE s.company_id IN (
       SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
     )
+  ));
+
+CREATE POLICY "Users can create shipment trucks for own company"
+  ON shipment_trucks FOR INSERT
+  TO authenticated
+  WITH CHECK (shipment_id IN (
+    SELECT s.id FROM shipments s
+    JOIN companies c ON c.id = s.company_id
+    WHERE c.domain = split_part(auth.jwt()->>'email', '@', 2)
   ));
 
 CREATE POLICY "Users can view own company appointments"
@@ -580,6 +616,15 @@ CREATE POLICY "Users can view own company appointments"
     )
   ));
 
+CREATE POLICY "Users can create dock appointments for own shipments"
+  ON dock_appointments FOR INSERT
+  TO authenticated
+  WITH CHECK (shipment_id IN (
+    SELECT s.id FROM shipments s
+    JOIN companies c ON c.id = s.company_id
+    WHERE c.domain = split_part(auth.jwt()->>'email', '@', 2)
+  ));
+
 CREATE POLICY "Users can view own shipment documents"
   ON shipment_documents FOR SELECT
   TO authenticated
@@ -588,6 +633,15 @@ CREATE POLICY "Users can view own shipment documents"
     WHERE s.company_id IN (
       SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
     )
+  ));
+
+CREATE POLICY "Users can attach documents to own shipments"
+  ON shipment_documents FOR INSERT
+  TO authenticated
+  WITH CHECK (shipment_id IN (
+    SELECT s.id FROM shipments s
+    JOIN companies c ON c.id = s.company_id
+    WHERE c.domain = split_part(auth.jwt()->>'email', '@', 2)
   ));
 
 CREATE POLICY "Users can view own shipment items"
@@ -605,6 +659,58 @@ CREATE POLICY "Users can view own conversations"
   TO authenticated
   USING (user_email = auth.jwt()->>'email');
 
+CREATE POLICY "Users can view own uploaded documents"
+  ON documents FOR SELECT
+  TO authenticated
+  USING (company_id IN (
+    SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+  ));
+
+CREATE POLICY "Users can upload documents for own requests"
+  ON documents FOR INSERT
+  TO authenticated
+  WITH CHECK (company_id IN (
+    SELECT id FROM companies WHERE domain = split_part(auth.jwt()->>'email', '@', 2)
+  ));
+
+CREATE POLICY "Users can view own trucking loads"
+  ON trucking_loads FOR SELECT
+  TO authenticated
+  USING (storage_request_id IN (
+    SELECT sr.id FROM storage_requests sr
+    JOIN companies c ON c.id = sr.company_id
+    WHERE c.domain = split_part(auth.jwt()->>'email', '@', 2)
+  ));
+
+CREATE POLICY "Users can create trucking loads"
+  ON trucking_loads FOR INSERT
+  TO authenticated
+  WITH CHECK (storage_request_id IN (
+    SELECT sr.id FROM storage_requests sr
+    JOIN companies c ON c.id = sr.company_id
+    WHERE c.domain = split_part(auth.jwt()->>'email', '@', 2)
+  ));
+
+CREATE POLICY "Users can view own trucking documents"
+  ON trucking_documents FOR SELECT
+  TO authenticated
+  USING (trucking_load_id IN (
+    SELECT tl.id FROM trucking_loads tl
+    JOIN storage_requests sr ON sr.id = tl.storage_request_id
+    JOIN companies c ON c.id = sr.company_id
+    WHERE c.domain = split_part(auth.jwt()->>'email', '@', 2)
+  ));
+
+CREATE POLICY "Users can attach trucking documents"
+  ON trucking_documents FOR INSERT
+  TO authenticated
+  WITH CHECK (trucking_load_id IN (
+    SELECT tl.id FROM trucking_loads tl
+    JOIN storage_requests sr ON sr.id = tl.storage_request_id
+    JOIN companies c ON c.id = sr.company_id
+    WHERE c.domain = split_part(auth.jwt()->>'email', '@', 2)
+  ));
+
 -- Admins can see everything (you'll set this up with a custom claim)
 -- For now, we'll use service role key for admin operations
 
@@ -619,41 +725,90 @@ INSERT INTO yards (id, name) VALUES
   ('C', 'Yard C (Cold Storage)')
 ON CONFLICT (id) DO NOTHING;
 
--- Insert areas for each yard
-INSERT INTO yard_areas (id, yard_id, name) VALUES
-  ('A-N', 'A', 'North'),
-  ('A-E', 'A', 'East'),
-  ('A-S', 'A', 'South'),
-  ('A-W', 'A', 'West'),
-  ('A-M', 'A', 'Middle'),
-  ('B-N', 'B', 'North'),
-  ('B-E', 'B', 'East'),
-  ('B-S', 'B', 'South'),
-  ('B-W', 'B', 'West'),
-  ('B-M', 'B', 'Middle'),
-  ('C-N', 'C', 'North'),
-  ('C-E', 'C', 'East'),
-  ('C-S', 'C', 'South'),
-  ('C-W', 'C', 'West'),
-  ('C-M', 'C', 'Middle')
-ON CONFLICT (id) DO NOTHING;
+-- Insert or update yard areas with new open storage layout
+WITH area_config AS (
+  SELECT *
+  FROM (
+    VALUES
+      ('A-A1', 'A', 'Row 1 (West)', 11, 'SLOT', 1, 14.5, 14.5, 5.0),
+      ('A-A2', 'A', 'Row 2 (East)', 11, 'SLOT', 1, 14.5, 14.5, 5.0),
+      ('B-N', 'B', 'North', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+      ('B-E', 'B', 'East', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+      ('B-S', 'B', 'South', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+      ('B-W', 'B', 'West', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+      ('B-M', 'B', 'Middle', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+      ('C-N', 'C', 'North', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+      ('C-E', 'C', 'East', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+      ('C-S', 'C', 'South', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+      ('C-W', 'C', 'West', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+      ('C-M', 'C', 'Middle', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC)
+  ) AS cfg(area_id, yard_id, area_name, rack_count, allocation_mode, rack_capacity, capacity_meters, length_meters, width_meters)
+)
+INSERT INTO yard_areas (id, yard_id, name)
+SELECT area_id, yard_id, area_name
+FROM area_config
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
--- Insert racks (9 per area)
+-- Remove deprecated Yard A areas if they remain
+DELETE FROM yard_areas
+WHERE yard_id = 'A' AND id NOT IN ('A-A1', 'A-A2');
+
+-- Sync racks with configuration
 DO $$
 DECLARE
   area_record RECORD;
   i INTEGER;
+  rack_name TEXT;
 BEGIN
-  FOR area_record IN SELECT id, yard_id FROM yard_areas LOOP
-    FOR i IN 1..9 LOOP
-      INSERT INTO racks (id, area_id, name)
+  FOR area_record IN
+    SELECT *
+    FROM (
+      VALUES
+        ('A-A1', 'A', 'Row 1 (West)', 11, 'SLOT', 1, 14.5, 14.5, 5.0),
+        ('A-A2', 'A', 'Row 2 (East)', 11, 'SLOT', 1, 14.5, 14.5, 5.0),
+        ('B-N', 'B', 'North', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+        ('B-E', 'B', 'East', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+        ('B-S', 'B', 'South', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+        ('B-W', 'B', 'West', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+        ('B-M', 'B', 'Middle', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+        ('C-N', 'C', 'North', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+        ('C-E', 'C', 'East', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+        ('C-S', 'C', 'South', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+        ('C-W', 'C', 'West', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC),
+        ('C-M', 'C', 'Middle', 9, 'LINEAR_CAPACITY', 200, 2400, NULL::NUMERIC, NULL::NUMERIC)
+    ) AS cfg(area_id, yard_id, area_name, rack_count, allocation_mode, rack_capacity, capacity_meters, length_meters, width_meters)
+    JOIN yard_areas ya ON ya.id = cfg.area_id
+  LOOP
+    FOR i IN 1..area_record.rack_count LOOP
+      rack_name := CASE
+        WHEN area_record.allocation_mode = 'SLOT'
+          THEN replace(area_record.area_id, area_record.yard_id || '-', '') || '-' || i
+        ELSE 'Rack ' || i
+      END;
+
+      INSERT INTO racks (id, area_id, name, capacity, capacity_meters, allocation_mode, length_meters, width_meters)
       VALUES (
-        area_record.id || '-' || i,
-        area_record.id,
-        'Rack ' || i
+        area_record.area_id || '-' || i,
+        area_record.area_id,
+        rack_name,
+        area_record.rack_capacity,
+        area_record.capacity_meters,
+        area_record.allocation_mode,
+        area_record.length_meters,
+        area_record.width_meters
       )
-      ON CONFLICT (id) DO NOTHING;
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        capacity = EXCLUDED.capacity,
+        capacity_meters = EXCLUDED.capacity_meters,
+        allocation_mode = EXCLUDED.allocation_mode,
+        length_meters = EXCLUDED.length_meters,
+        width_meters = EXCLUDED.width_meters;
     END LOOP;
+
+    DELETE FROM racks
+    WHERE area_id = area_record.area_id
+      AND split_part(id, '-', 3)::INTEGER > area_record.rack_count;
   END LOOP;
 END $$;
 
@@ -735,6 +890,16 @@ GRANT SELECT ON dock_appointments TO authenticated;
 GRANT SELECT ON shipment_documents TO authenticated;
 GRANT SELECT ON shipment_items TO authenticated;
 GRANT SELECT ON conversations TO authenticated;
+GRANT SELECT ON documents TO authenticated;
+GRANT SELECT ON trucking_loads TO authenticated;
+GRANT SELECT ON trucking_documents TO authenticated;
+GRANT INSERT ON shipments TO authenticated;
+GRANT INSERT ON shipment_trucks TO authenticated;
+GRANT INSERT ON dock_appointments TO authenticated;
+GRANT INSERT ON shipment_documents TO authenticated;
+GRANT INSERT ON documents TO authenticated;
+GRANT INSERT ON trucking_loads TO authenticated;
+GRANT INSERT ON trucking_documents TO authenticated;
 
 -- Grant access to anon users (for public endpoints)
 GRANT SELECT ON companies TO anon;

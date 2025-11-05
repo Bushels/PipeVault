@@ -10,10 +10,18 @@ import TruckingDriverStep, { TruckingDriverFormData } from './TruckingDriverStep
 import TimeSlotPicker, { TimeSlot } from './TimeSlotPicker';
 import DocumentUploadStep, { UploadedDocument } from './DocumentUploadStep';
 import LoadSummaryReview from './LoadSummaryReview';
-import type { Session, StorageRequest } from '../types';
+import type {
+  Session,
+  StorageRequest,
+  ProvidedTruckingDetails,
+  TruckingInfo,
+  TruckingLoad,
+  TruckingLoadStatus,
+  TruckingDocument,
+} from '../types';
 import { processManifest, calculateLoadSummary, LoadSummary } from '../services/manifestProcessingService';
 import { supabase } from '../lib/supabase';
-import { sendTruckingQuoteRequest } from '../services/slackService';
+import { sendTruckingQuoteRequest, sendInboundDeliveryNotification } from '../services/slackService';
 
 type WizardStep = 'storage' | 'method' | 'trucking' | 'quote-pending' | 'timeslot' | 'documents' | 'review' | 'confirmation';
 
@@ -21,6 +29,7 @@ interface InboundShipmentWizardProps {
   request: StorageRequest;
   session: Session;
   onBack: () => void;
+  onDeliveryScheduled?: (updatedRequest: StorageRequest) => void;
 }
 
 interface DeliveryFormData extends StorageYardFormData, TruckingDriverFormData {
@@ -92,7 +101,7 @@ const StepIndicator: React.FC<{ current: WizardStep; truckingMethod: TruckingMet
   );
 };
 
-const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, session, onBack }) => {
+const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, session, onBack, onDeliveryScheduled }) => {
   const [step, setStep] = useState<WizardStep>('storage');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -108,6 +117,76 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
   const [isProcessingManifest, setIsProcessingManifest] = useState(false);
   const [deliveryId, setDeliveryId] = useState<string | null>(null);
   const [quoteId, setQuoteId] = useState<string | null>(null);
+
+  type DeliveryStatusUpdate = 'pending_confirmation' | 'scheduled';
+
+  const buildUpdatedRequest = (
+    status: DeliveryStatusUpdate,
+    slotStartIso: string,
+    slotEndIso: string,
+    shipmentId?: string | null,
+    truckingLoad?: TruckingLoad | null
+  ): StorageRequest => {
+    const nextDetails: ProvidedTruckingDetails = {
+      ...(request.truckingInfo?.details ?? {}),
+    };
+
+    const existingLoads = request.truckingLoads ?? [];
+    const mergedLoads = truckingLoad
+      ? [...existingLoads.filter(load => load.id !== truckingLoad.id), truckingLoad].sort(
+          (a, b) => a.sequenceNumber - b.sequenceNumber
+        )
+      : existingLoads;
+
+    if (storageData?.storageCompanyName) {
+      nextDetails.storageCompany = storageData.storageCompanyName;
+    }
+    if (storageData?.storageContactName) {
+      nextDetails.storageContactName = storageData.storageContactName;
+    }
+    if (storageData?.storageContactEmail) {
+      nextDetails.storageContactEmail = storageData.storageContactEmail;
+    }
+    if (storageData?.storageContactPhone) {
+      nextDetails.storageContactNumber = storageData.storageContactPhone;
+    }
+    if (storageData?.storageYardAddress) {
+      nextDetails.storageLocation = storageData.storageYardAddress;
+    }
+
+    if (truckingData?.truckingCompanyName) {
+      nextDetails.truckingCompanyName = truckingData.truckingCompanyName;
+    }
+    if (truckingData?.driverName) {
+      nextDetails.driverName = truckingData.driverName;
+    }
+    if (truckingData?.driverPhone) {
+      nextDetails.driverPhone = truckingData.driverPhone;
+    }
+
+    nextDetails.deliveryStatus = status;
+    nextDetails.deliverySlot = {
+      start: slotStartIso,
+      end: slotEndIso,
+      isAfterHours: selectedTimeSlot?.is_after_hours ?? undefined,
+      submittedAt: new Date().toISOString(),
+      shipmentId: shipmentId ?? null,
+    };
+
+    const derivedTruckingType: TruckingInfo['truckingType'] =
+      request.truckingInfo?.truckingType === 'quote'
+        ? 'provided'
+        : request.truckingInfo?.truckingType ?? (selectedTruckingMethod === 'MPS_QUOTE' ? 'quote' : 'provided');
+
+    return {
+      ...request,
+      truckingInfo: {
+        truckingType: derivedTruckingType,
+        details: nextDetails,
+      },
+      truckingLoads: mergedLoads,
+    };
+  };
 
   // Forms
   const storageForm = useForm<StorageYardFormData>();
@@ -197,8 +276,11 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
     setErrorMessage(null);
   };
 
-  const handleTimeSlotSelect = (slot: TimeSlot) => {
+  const handleTimeSlotSelect = (slot: TimeSlot | null) => {
     setSelectedTimeSlot(slot);
+    if (slot) {
+      setErrorMessage(null);
+    }
   };
 
   const handleTimeSlotContinue = () => {
@@ -216,6 +298,7 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
       fileName: file.name,
       fileSize: file.size,
       fileType: file.type,
+      file,
       uploadProgress: 0,
       status: 'uploading' as const,
     }));
@@ -266,6 +349,38 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
     }
   };
 
+  const handleUseSampleDocument = () => {
+    const mockDoc: UploadedDocument = {
+      id: `mock-${Date.now()}`,
+      fileName: 'sample-manifest.pdf',
+      fileSize: 512000,
+      fileType: 'application/pdf',
+      uploadProgress: 100,
+      status: 'completed',
+      storagePath: `mock/${request.id}/sample-manifest.pdf`,
+      isMock: true,
+    };
+
+    setUploadedDocuments((prev) => {
+      const withoutPriorMock = prev.filter(doc => !doc.isMock);
+      return [...withoutPriorMock, mockDoc];
+    });
+
+    const joints = 40;
+    const lengthFt = 40 * 40; // 40 joints at 40 ft
+    const weightLbs = 40 * 1000; // approx 1000 lbs per joint
+
+    setLoadSummary({
+      total_joints: joints,
+      total_length_ft: lengthFt,
+      total_length_m: Number((lengthFt * 0.3048).toFixed(1)),
+      total_weight_lbs: weightLbs,
+      total_weight_kg: Number((weightLbs * 0.45359237).toFixed(1)),
+    });
+    setIsProcessingManifest(false);
+    setErrorMessage(null);
+  };
+
   const handleRemoveDocument = (documentId: string) => {
     setUploadedDocuments(prev => prev.filter(d => d.id !== documentId));
   };
@@ -280,8 +395,144 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
   };
 
   const handleSkipDocuments = () => {
+    const inboundLoads = (request.truckingLoads ?? []).filter(load => load.direction === 'INBOUND');
+    const missingDocs = inboundLoads.some(load => !load.documents || load.documents.length === 0);
+    if (missingDocs) {
+      const proceed = window.confirm(
+        'Manifest documents keep each load organized. Continue without uploading paperwork?'
+      );
+      if (!proceed) {
+        return;
+      }
+    }
     setStep('review');
     setErrorMessage(null);
+  };
+
+  const sanitizeFileName = (name: string) =>
+    name.replace(/\s+/g, '_').replace(/[^\w.-]/g, '').toLowerCase();
+
+  const uploadDocumentsForShipment = async (
+    shipmentId: string,
+    truckId: string | null,
+    truckingLoadId: string | null = null
+  ): Promise<TruckingDocument[]> => {
+    const createdTruckingDocs: TruckingDocument[] = [];
+    const completedDocs = uploadedDocuments.filter(doc => doc.status === 'completed');
+    if (!completedDocs.length) return createdTruckingDocs;
+
+    for (const doc of completedDocs) {
+      const safeName = sanitizeFileName(doc.fileName);
+      const uniqueName = `${Date.now()}-${Math.random().toString(16).slice(2)}-${safeName}`;
+      const defaultPath = `${request.companyId}/${request.referenceId}/shipments/${shipmentId}/${truckId ?? 'shipment'}/${uniqueName}`;
+
+      let uploadedPath = doc.storagePath ?? defaultPath;
+      let storageUploaded = false;
+
+      try {
+        if (!doc.isMock) {
+          const file = doc.file;
+          if (!file) {
+            // Skip documents missing file reference when not mock
+            continue;
+          }
+
+          const { data: storageData, error: storageError } = await supabase.storage
+            .from('documents')
+            .upload(uploadedPath, file, {
+              cacheControl: '3600',
+              upsert: false,
+            });
+
+          if (storageError || !storageData?.path) {
+            throw new Error(storageError?.message || `Unable to upload ${doc.fileName}`);
+          }
+
+          uploadedPath = storageData.path;
+          storageUploaded = true;
+        }
+
+        const { data: documentRow, error: documentError } = await supabase
+          .from('documents')
+          .insert({
+            company_id: request.companyId,
+            request_id: request.id,
+            file_name: doc.fileName,
+            file_type: doc.fileType,
+            file_size: doc.fileSize ?? (doc.file ? doc.file.size : 0),
+            storage_path: uploadedPath,
+            extracted_data: null,
+            is_processed: false,
+          })
+          .select()
+          .single();
+
+        if (documentError || !documentRow) {
+          throw documentError || new Error('Unable to register uploaded document.');
+        }
+
+        const { error: shipmentDocError } = await supabase
+          .from('shipment_documents')
+          .insert({
+            shipment_id: shipmentId,
+            truck_id: truckId,
+            document_id: documentRow.id,
+            document_type: 'manifest',
+            status: 'UPLOADED',
+            uploaded_by: session.userId,
+            trucking_load_id: truckingLoadId,
+          });
+
+        if (shipmentDocError) {
+          throw shipmentDocError;
+        }
+
+        if (truckingLoadId) {
+          const { data: truckingDocRow, error: truckingDocError } = await supabase
+            .from('trucking_documents')
+            .insert({
+              trucking_load_id: truckingLoadId,
+              file_name: doc.fileName,
+              storage_path: uploadedPath,
+              document_type: 'manifest',
+              uploaded_by: session.userId,
+            })
+            .select()
+            .single();
+
+          if (truckingDocError) {
+            throw truckingDocError;
+          }
+
+          if (truckingDocRow) {
+            createdTruckingDocs.push({
+              id: truckingDocRow.id,
+              truckingLoadId: truckingDocRow.trucking_load_id,
+              fileName: truckingDocRow.file_name,
+              storagePath: truckingDocRow.storage_path,
+              documentType: truckingDocRow.document_type || null,
+              uploadedBy: truckingDocRow.uploaded_by || null,
+              uploadedAt: truckingDocRow.uploaded_at || undefined,
+            });
+          }
+        }
+
+        setUploadedDocuments(prev =>
+          prev.map(d =>
+            d.id === doc.id
+              ? { ...d, storagePath: uploadedPath, documentRecordId: documentRow.id }
+              : d
+          )
+        );
+      } catch (docError) {
+        if (!doc.isMock && storageUploaded) {
+          await supabase.storage.from('documents').remove([uploadedPath]);
+        }
+        throw docError;
+      }
+    }
+
+    return createdTruckingDocs;
   };
 
   const handleReviewConfirm = async () => {
@@ -290,72 +541,326 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
       return;
     }
 
+    const slotStartIso = selectedTimeSlot.start.toISOString();
+    const slotEndIso = selectedTimeSlot.end.toISOString();
+    const truckingMethod = selectedTruckingMethod ?? 'CUSTOMER_PROVIDED';
+    const documentsStatus = uploadedDocuments.length ? 'UPLOADED' : 'PENDING';
+    const deliveryStatusForRequest: DeliveryStatusUpdate = selectedTimeSlot.is_after_hours ? 'pending_confirmation' : 'scheduled';
+
+    const logisticsNotes = [
+      `Storage yard: ${storageData.storageCompanyName}`,
+      `Address: ${storageData.storageYardAddress}`,
+      `Primary contact: ${storageData.storageContactName} (${storageData.storageContactPhone})`,
+      `Email: ${storageData.storageContactEmail}`
+    ].join('\n');
+
+    const schemaMissing = (error: any) => {
+      const message = typeof error?.message === 'string' ? error.message : typeof error?.details === 'string' ? error.details : '';
+      return (
+        error?.code === '42P01' ||
+        message.includes('public.shipments') ||
+        message.includes('public.shipment_trucks') ||
+        message.includes('public.dock_appointments') ||
+        message.includes('public.trucking_loads') ||
+        message.includes('public.trucking_documents')
+      );
+    };
+
+    const notifyFallback = async () => {
+      try {
+        await sendInboundDeliveryNotification({
+          referenceId: request.referenceId,
+          companyName: session.company.name,
+          contactEmail: session.userId,
+          slotStart: slotStartIso,
+          slotEnd: slotEndIso,
+          isAfterHours: selectedTimeSlot.is_after_hours,
+          surchargeAmount: selectedTimeSlot.surcharge_amount,
+          storage: {
+            companyName: storageData.storageCompanyName,
+            address: storageData.storageYardAddress,
+            contactName: storageData.storageContactName,
+            contactPhone: storageData.storageContactPhone,
+            contactEmail: storageData.storageContactEmail,
+          },
+          trucking: {
+            companyName: truckingData.truckingCompanyName,
+            driverName: truckingData.driverName,
+            driverPhone: truckingData.driverPhone,
+          },
+          loadSummary,
+        });
+      } catch (notifyError) {
+        console.error('Failed to send fallback delivery notification:', notifyError);
+      }
+
+      const fallbackMessage = selectedTimeSlot.is_after_hours
+        ? 'Delivery request sent to MPS logistics. After-hours slots require manual confirmation.'
+        : 'Delivery request sent to MPS logistics. Our team will follow up to confirm your slot.';
+
+      if (onDeliveryScheduled) {
+        onDeliveryScheduled(buildUpdatedRequest(deliveryStatusForRequest, slotStartIso, slotEndIso, null));
+      }
+
+      setDeliveryId(null);
+      setStep('confirmation');
+      setStatusMessage(fallbackMessage);
+      setErrorMessage(null);
+    };
+
     setIsSaving(true);
     setErrorMessage(null);
 
+    let newTruckingLoad: TruckingLoad | null = null;
+
     try {
-      // Create shipment record
       const { data: shipment, error: shipmentError } = await supabase
         .from('shipments')
         .insert({
           request_id: request.id,
           company_id: request.companyId,
           created_by: session.userId,
-          storage_company_name: storageData.storageCompanyName,
-          storage_yard_address: storageData.storageYardAddress,
-          storage_contact_name: storageData.storageContactName,
-          storage_contact_email: storageData.storageContactEmail,
-          storage_contact_phone: storageData.storageContactPhone,
-          trucking_company_name: truckingData.truckingCompanyName,
-          driver_name: truckingData.driverName,
-          driver_phone: truckingData.driverPhone,
-          scheduled_slot_start: selectedTimeSlot.start.toISOString(),
-          scheduled_slot_end: selectedTimeSlot.end.toISOString(),
-          is_after_hours: selectedTimeSlot.is_after_hours,
+          trucking_method: truckingMethod,
+          trucking_company: truckingData.truckingCompanyName,
+          trucking_contact_name: truckingData.driverName || storageData.storageContactName,
+          trucking_contact_phone: truckingData.driverPhone || storageData.storageContactPhone,
+          trucking_contact_email: storageData.storageContactEmail,
+          number_of_trucks: 1,
+          estimated_joint_count: loadSummary?.total_joints ?? null,
+          estimated_total_length_ft: loadSummary?.total_length_ft ?? null,
+          special_instructions: logisticsNotes,
+          surcharge_applicable: selectedTimeSlot.is_after_hours,
           surcharge_amount: selectedTimeSlot.surcharge_amount,
-          total_joints: loadSummary?.total_joints || null,
-          total_length_ft: loadSummary?.total_length_ft || null,
-          total_length_m: loadSummary?.total_length_m || null,
-          total_weight_lbs: loadSummary?.total_weight_lbs || null,
-          total_weight_kg: loadSummary?.total_weight_kg || null,
-          status: 'SCHEDULED',
+          documents_status: documentsStatus,
+          calendar_sync_status: 'PENDING',
+          status: selectedTimeSlot.is_after_hours ? 'SCHEDULING' : 'SCHEDULED',
         })
         .select()
         .single();
 
       if (shipmentError || !shipment) {
-        throw new Error(shipmentError?.message || 'Failed to create delivery');
+        if (schemaMissing(shipmentError)) {
+          await notifyFallback();
+          return;
+        }
+        throw shipmentError || new Error('Failed to create delivery');
       }
 
       setDeliveryId(shipment.id);
 
-      // Create dock appointment
-      const { error: appointmentError } = await supabase
+      const { data: truck, error: truckError } = await supabase
+        .from('shipment_trucks')
+        .insert({
+          shipment_id: shipment.id,
+          sequence_number: 1,
+          status: selectedTimeSlot.is_after_hours ? 'PENDING' : 'SCHEDULED',
+          trucking_company: truckingData.truckingCompanyName,
+          contact_name: truckingData.driverName || storageData.storageContactName,
+          contact_phone: truckingData.driverPhone || storageData.storageContactPhone,
+          contact_email: storageData.storageContactEmail,
+          scheduled_slot_start: slotStartIso,
+          scheduled_slot_end: slotEndIso,
+          notes: logisticsNotes,
+        })
+        .select()
+        .single();
+
+      if (truckError) {
+        if (schemaMissing(truckError)) {
+          await notifyFallback();
+          return;
+        }
+        console.error('Failed to create shipment truck record:', truckError);
+      }
+
+      const { data: appointment, error: appointmentError } = await supabase
         .from('dock_appointments')
         .insert({
           shipment_id: shipment.id,
-          slot_start: selectedTimeSlot.start.toISOString(),
-          slot_end: selectedTimeSlot.end.toISOString(),
+          truck_id: truck?.id ?? null,
+          slot_start: slotStartIso,
+          slot_end: slotEndIso,
           after_hours: selectedTimeSlot.is_after_hours,
           surcharge_applied: selectedTimeSlot.is_after_hours,
           status: selectedTimeSlot.is_after_hours ? 'PENDING' : 'CONFIRMED',
           calendar_sync_status: 'PENDING',
-        });
+        })
+        .select()
+        .single();
 
       if (appointmentError) {
+        if (schemaMissing(appointmentError)) {
+          await notifyFallback();
+          return;
+        }
         console.error('Failed to create dock appointment:', appointmentError);
       }
 
-      // TODO: Upload documents to Supabase Storage
-      // TODO: Generate iCal file
-      // TODO: Send Slack notification
-      // TODO: Send confirmation email
+      const existingInboundLoads = (request.truckingLoads ?? []).filter(load => load.direction === 'INBOUND');
+      const nextSequenceNumber =
+        existingInboundLoads.reduce((max, load) => Math.max(max, load.sequenceNumber), 0) + 1;
+      const loadStatus: TruckingLoadStatus = selectedTimeSlot.is_after_hours ? 'NEW' : 'APPROVED';
+
+      const { data: truckingLoad, error: truckingLoadError } = await supabase
+        .from('trucking_loads')
+        .insert({
+          storage_request_id: request.id,
+          direction: 'INBOUND',
+          sequence_number: nextSequenceNumber,
+          status: loadStatus,
+          scheduled_slot_start: slotStartIso,
+          scheduled_slot_end: slotEndIso,
+          pickup_location: null,
+          delivery_location: storageData.storageYardAddress
+            ? {
+                company: storageData.storageCompanyName,
+                address: storageData.storageYardAddress,
+              }
+            : null,
+          trucking_company: truckingData.truckingCompanyName,
+          contact_company: storageData.storageCompanyName,
+          contact_name: storageData.storageContactName,
+          contact_phone: storageData.storageContactPhone,
+          contact_email: storageData.storageContactEmail,
+          driver_name: truckingData.driverName,
+          driver_phone: truckingData.driverPhone,
+          notes: logisticsNotes,
+          total_joints_planned: loadSummary?.total_joints ?? null,
+          total_length_ft_planned: loadSummary?.total_length_ft ?? null,
+          total_weight_lbs_planned: loadSummary?.total_weight_lbs ?? null,
+        })
+        .select()
+        .single();
+
+      if (truckingLoadError || !truckingLoad) {
+        if (schemaMissing(truckingLoadError)) {
+          await notifyFallback();
+          return;
+        }
+        console.error('Failed to create trucking load record:', truckingLoadError || new Error('Unknown error'));
+        if (appointment?.id) {
+          await supabase.from('dock_appointments').delete().eq('id', appointment.id);
+        }
+        if (truck?.id) {
+          await supabase.from('shipment_trucks').delete().eq('id', truck.id);
+        }
+        await supabase.from('shipments').delete().eq('id', shipment.id);
+        throw new Error('Unable to create trucking load. Please try again.');
+      }
+
+      const truckingLoadId = truckingLoad.id;
+
+      try {
+        await supabase.from('shipments').update({ trucking_load_id: truckingLoadId }).eq('id', shipment.id);
+        if (truck?.id) {
+          await supabase.from('shipment_trucks').update({ trucking_load_id: truckingLoadId }).eq('id', truck.id);
+        }
+        if (appointment?.id) {
+          await supabase.from('dock_appointments').update({ trucking_load_id: truckingLoadId }).eq('id', appointment.id);
+        }
+      } catch (linkError) {
+        console.error('Failed to link trucking load to shipment records:', linkError);
+      }
+
+      newTruckingLoad = {
+        id: truckingLoad.id,
+        storageRequestId: truckingLoad.storage_request_id,
+        direction: truckingLoad.direction,
+        sequenceNumber: truckingLoad.sequence_number,
+        status: truckingLoad.status,
+        scheduledSlotStart: truckingLoad.scheduled_slot_start ?? undefined,
+        scheduledSlotEnd: truckingLoad.scheduled_slot_end ?? undefined,
+        pickupLocation: (truckingLoad.pickup_location as Record<string, unknown> | null) ?? null,
+        deliveryLocation: (truckingLoad.delivery_location as Record<string, unknown> | null) ?? null,
+        assetName: truckingLoad.asset_name ?? null,
+        wellpadName: truckingLoad.wellpad_name ?? null,
+        wellName: truckingLoad.well_name ?? null,
+        uwi: truckingLoad.uwi ?? null,
+        truckingCompany: truckingLoad.trucking_company ?? null,
+        contactCompany: truckingLoad.contact_company ?? null,
+        contactName: truckingLoad.contact_name ?? null,
+        contactPhone: truckingLoad.contact_phone ?? null,
+        contactEmail: truckingLoad.contact_email ?? null,
+        driverName: truckingLoad.driver_name ?? null,
+        driverPhone: truckingLoad.driver_phone ?? null,
+        notes: truckingLoad.notes ?? null,
+        totalJointsPlanned: truckingLoad.total_joints_planned ?? null,
+        totalLengthFtPlanned: truckingLoad.total_length_ft_planned ?? null,
+        totalWeightLbsPlanned: truckingLoad.total_weight_lbs_planned ?? null,
+        totalJointsCompleted: truckingLoad.total_joints_completed ?? null,
+        totalLengthFtCompleted: truckingLoad.total_length_ft_completed ?? null,
+        totalWeightLbsCompleted: truckingLoad.total_weight_lbs_completed ?? null,
+        approvedAt: truckingLoad.approved_at ?? null,
+        completedAt: truckingLoad.completed_at ?? null,
+        createdAt: truckingLoad.created_at,
+        updatedAt: truckingLoad.updated_at,
+        documents: [],
+      };
+
+      const truckingDocuments = await uploadDocumentsForShipment(
+        shipment.id,
+        truck?.id ?? null,
+        truckingLoadId
+      );
+
+      if (newTruckingLoad) {
+        const existingDocs = newTruckingLoad.documents ?? [];
+        newTruckingLoad = {
+          ...newTruckingLoad,
+          documents: [...existingDocs, ...truckingDocuments],
+        };
+      }
+
+      try {
+        await sendInboundDeliveryNotification({
+          referenceId: request.referenceId,
+          companyName: session.company.name,
+          contactEmail: session.userId,
+          slotStart: slotStartIso,
+          slotEnd: slotEndIso,
+          isAfterHours: selectedTimeSlot.is_after_hours,
+          surchargeAmount: selectedTimeSlot.surcharge_amount,
+          storage: {
+            companyName: storageData.storageCompanyName,
+            address: storageData.storageYardAddress,
+            contactName: storageData.storageContactName,
+            contactPhone: storageData.storageContactPhone,
+            contactEmail: storageData.storageContactEmail,
+          },
+          trucking: {
+            companyName: truckingData.truckingCompanyName,
+            driverName: truckingData.driverName,
+            driverPhone: truckingData.driverPhone,
+          },
+          loadSummary,
+        });
+      } catch (notifyError) {
+        console.error('Failed to send delivery notification:', notifyError);
+      }
+
+      const baseMessage = selectedTimeSlot.is_after_hours
+        ? 'Delivery submitted. MPS will confirm the after-hours slot shortly.'
+        : 'Delivery successfully scheduled!';
+      const docReminder =
+        truckingDocuments.length === 0
+          ? ' Upload your manifest documents before booking another load.'
+          : '';
 
       setStep('confirmation');
-      setStatusMessage('Delivery successfully scheduled!');
+      setStatusMessage(`${baseMessage}${docReminder}`);
+
+      if (onDeliveryScheduled) {
+        onDeliveryScheduled(
+          buildUpdatedRequest(deliveryStatusForRequest, slotStartIso, slotEndIso, shipment.id, newTruckingLoad)
+        );
+      }
     } catch (error: any) {
-      console.error('Failed to save delivery:', error);
-      setErrorMessage(error.message || 'Failed to schedule delivery. Please try again.');
+      if (schemaMissing(error)) {
+        await notifyFallback();
+      } else {
+        console.error('Failed to save delivery:', error);
+        setErrorMessage(error?.message || 'Failed to schedule delivery. Please try again.');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -546,6 +1051,7 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
         {step === 'timeslot' && (
           <div className="space-y-6">
             <TimeSlotPicker
+              selectedSlot={selectedTimeSlot}
               onSelectSlot={handleTimeSlotSelect}
               blockedSlots={[]}
             />
@@ -557,33 +1063,21 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
               >
                 Back
               </Button>
-              <Button
-                onClick={handleTimeSlotContinue}
-                disabled={!selectedTimeSlot}
-                className="bg-red-600 hover:bg-red-500 px-8 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                Continue to Documents
-              </Button>
-            </div>
-
-            {/* Selected Slot Summary */}
-            {selectedTimeSlot && (
-              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 mt-4">
-                <h4 className="text-sm font-semibold text-white mb-2">Selected Time Slot</h4>
-                <p className="text-sm text-gray-300">
-                  {selectedTimeSlot.start.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                  {' • '}
-                  {selectedTimeSlot.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                  {' - '}
-                  {selectedTimeSlot.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                </p>
-                {selectedTimeSlot.is_after_hours && (
-                  <p className="text-xs text-yellow-300 mt-2">
-                    ⚠️ After-hours delivery • Additional ${selectedTimeSlot.surcharge_amount} surcharge
-                  </p>
+              <div className="flex flex-col items-end gap-2">
+                {selectedTimeSlot?.is_after_hours && (
+                  <span className="text-xs text-yellow-300">
+                    After-hours deliveries include a ${selectedTimeSlot.surcharge_amount} surcharge and require confirmation.
+                  </span>
                 )}
+                <Button
+                  onClick={handleTimeSlotContinue}
+                  disabled={!selectedTimeSlot}
+                  className="bg-red-600 hover:bg-red-500 px-8 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  Continue to Documents
+                </Button>
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -594,6 +1088,7 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
               uploadedDocuments={uploadedDocuments}
               onRemoveDocument={handleRemoveDocument}
               isProcessing={isProcessingManifest}
+              onUseSampleDocument={handleUseSampleDocument}
             />
 
             {/* Skip Documents Info */}
@@ -803,3 +1298,9 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
 };
 
 export default InboundShipmentWizard;
+
+
+
+
+
+

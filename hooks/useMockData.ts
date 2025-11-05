@@ -61,11 +61,18 @@ export const useMockData = () => {
             
             if (yard && area) {
                 if (assignedRackIds.length > 1) {
-                    assignedLocation = `${yard.name}, ${area.name}, ${assignedRackIds.length} Racks`;
+                    assignedLocation = `${yard.name}, ${area.name}, ${assignedRackIds.length} Locations`;
                 } else {
                     const rack = area.racks.find(r => r.id === firstRackId);
-                    assignedLocation = `${yard.name}, ${area.name}, ${rack?.name}`;
+                    assignedLocation = `${yard.name}, ${area.name}, ${rack?.name ?? firstRackId}`;
                 }
+            } else {
+                console.error('[OpenStorage:Mock] Unable to resolve location label', {
+                    requestId,
+                    firstRackId,
+                    yardId,
+                    areaId,
+                });
             }
             
             updatedRequest = {
@@ -92,11 +99,28 @@ export const useMockData = () => {
         for (const rackId of assignedRackIds) {
             const [yardId, areaId, rackNum] = rackId.split('-');
             const yard = newYards.find((y: Yard) => y.id === yardId);
-            const area = yard?.areas.find((a: any) => a.id === `${yardId}-${areaId}`);
-            const rack = area?.racks.find((r: any) => r.id === rackId);
+            if (!yard) {
+                console.error('[OpenStorage:Mock] Yard not found during allocation', { requestId, rackId, yardId });
+                continue;
+            }
 
-            if (rack) {
-                const spaceInRack = Math.min(jointsToAllocate, rack.capacity - rack.occupied);
+            const area = yard.areas.find((a: any) => a.id === `${yardId}-${areaId}`);
+            if (!area) {
+                console.error('[OpenStorage:Mock] Area not found during allocation', { requestId, rackId, yardId, areaId });
+                continue;
+            }
+
+            const rack = area.racks.find((r: any) => r.id === rackId);
+            if (!rack) {
+                console.error('[OpenStorage:Mock] Rack not found during allocation', { requestId, rackId });
+                continue;
+            }
+
+            if (rack.allocationMode === 'SLOT') {
+                rack.occupied = rack.capacity;
+                rack.occupiedMeters = rack.capacityMeters;
+            } else {
+                const spaceInRack = Math.min(jointsToAllocate, Math.max(0, rack.capacity - rack.occupied));
                 const metersForRack = spaceInRack * avgJointLength;
 
                 rack.occupied += spaceInRack;

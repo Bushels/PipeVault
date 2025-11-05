@@ -17,6 +17,8 @@ import type {
   ShipmentItem,
   ShipmentDocument,
   DockAppointment,
+  TruckingDocument,
+  TruckingLoadStatus,
 } from '../../types';
 import AdminHeader from './AdminHeader';
 import AdminAIAssistant from './AdminAIAssistant';
@@ -33,6 +35,11 @@ import {
   useUpdateDockAppointment,
   useUpdateInventoryItem,
 } from '../../hooks/useSupabaseData';
+import {
+  getRequestLogisticsSnapshot,
+  getStatusBadgeTone,
+  type StatusBadgeTone,
+} from '../../utils/truckingStatus';
 
 interface AdminDashboardProps {
   session: AdminSession;
@@ -51,6 +58,26 @@ interface AdminDashboardProps {
 }
 
 type TabType = 'overview' | 'approvals' | 'requests' | 'companies' | 'inventory' | 'storage' | 'shipments' | 'ai';
+
+const adminStatusBadgeThemes: Record<StatusBadgeTone, string> = {
+  pending: 'bg-yellow-500/20 text-yellow-300',
+  info: 'bg-blue-500/20 text-blue-300',
+  success: 'bg-green-500/20 text-green-300',
+  danger: 'bg-red-500/20 text-red-300',
+  neutral: 'bg-gray-500/20 text-gray-300',
+};
+
+type DocViewerFilters = {
+  direction: 'ALL' | 'INBOUND' | 'OUTBOUND';
+  status: 'ALL' | TruckingLoadStatus;
+  docType: string;
+};
+
+const createDefaultDocViewerFilters = (): DocViewerFilters => ({
+  direction: 'ALL',
+  status: 'ALL',
+  docType: '',
+});
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({
   session,
@@ -75,12 +102,70 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [processingTruckId, setProcessingTruckId] = useState<string | null>(null);
   const [shipmentsMessage, setShipmentsMessage] = useState<string | null>(null);
   const [shipmentsError, setShipmentsError] = useState<string | null>(null);
+  const [docViewerRequest, setDocViewerRequest] = useState<StorageRequest | null>(null);
+  const [docViewerError, setDocViewerError] = useState<string | null>(null);
+  const [docViewerFilters, setDocViewerFilters] = useState<DocViewerFilters>(() => createDefaultDocViewerFilters());
 
   const updateShipmentMutation = useUpdateShipment();
   const updateShipmentTruckMutation = useUpdateShipmentTruck();
   const updateShipmentItemMutation = useUpdateShipmentItem();
   const updateDockAppointmentMutation = useUpdateDockAppointment();
   const updateInventoryItemMutation = useUpdateInventoryItem();
+
+  const getRequestStatusMeta = (request: StorageRequest) => {
+    const snapshot = getRequestLogisticsSnapshot(request);
+    const badgeTone = getStatusBadgeTone(snapshot.customerStatusLabel) as keyof typeof adminStatusBadgeThemes;
+    return {
+      ...snapshot,
+      badgeTone,
+      badgeClass: adminStatusBadgeThemes[badgeTone],
+    };
+  };
+
+  const summarizeTruckingDocuments = (request: StorageRequest) => {
+    const loads = request.truckingLoads ?? [];
+    const summary = loads.reduce(
+      (acc, load) => {
+        const count = load.documents?.length ?? 0;
+        if (load.direction === 'INBOUND') {
+          acc.inbound += count;
+        } else {
+          acc.outbound += count;
+        }
+        acc.total += count;
+        if (count > 0) {
+          acc.loadsWithDocs += 1;
+        } else {
+          acc.loadsWithoutDocs += 1;
+        }
+        return acc;
+      },
+      { inbound: 0, outbound: 0, total: 0, loadsWithDocs: 0, loadsWithoutDocs: 0 },
+    );
+    return { ...summary, loadCount: loads.length };
+  };
+
+  const openDocViewer = (request: StorageRequest) => {
+    setDocViewerFilters(createDefaultDocViewerFilters());
+    setDocViewerRequest(request);
+    setDocViewerError(null);
+  };
+
+  const closeDocViewer = () => {
+    setDocViewerRequest(null);
+    setDocViewerError(null);
+    setDocViewerFilters(createDefaultDocViewerFilters());
+  };
+
+  const handlePreviewTruckingDocument = async (document: TruckingDocument) => {
+    setDocViewerError(null);
+    const { data, error } = await supabase.storage.from('documents').createSignedUrl(document.storagePath, 300);
+    if (error || !data?.signedUrl) {
+      setDocViewerError('Unable to open the selected document. Please try again.');
+      return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener');
+  };
 
   const companyMap = useMemo(() => new Map(companies.map(company => [company.id, company])), [companies]);
   const requestMap = useMemo(() => new Map(requests.map(request => [request.id, request])), [requests]);
@@ -204,6 +289,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       default:
         return 'border-gray-600 text-gray-300 bg-gray-700/40';
     }
+  };
+
+  const formatKilograms = (value: number) => {
+    if (!Number.isFinite(value) || value <= 0) return '0 kg';
+    if (value < 100) return `${value.toFixed(1)} kg`;
+    return `${Math.round(value).toLocaleString('en-US')} kg`;
   };
 
   const formatSlotWindow = (appointment?: DockAppointment) => {
@@ -448,6 +539,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       sum + yard.areas.reduce((asum, area) =>
         asum + area.racks.reduce((rsum, rack) => rsum + (rack.occupiedMeters || 0), 0), 0), 0);
     const utilization = totalCapacity > 0 ? (totalOccupied / totalCapacity * 100) : 0;
+    const totalStoredKg = inventory.reduce((sum, pipe) => {
+      if (pipe.status !== 'IN_STORAGE') return sum;
+      if (typeof pipe.weight !== 'number' || typeof pipe.length !== 'number' || typeof pipe.quantity !== 'number') {
+        return sum;
+      }
+      const totalWeightLbs = pipe.weight * pipe.length * pipe.quantity;
+      return sum + totalWeightLbs * 0.45359237;
+    }, 0);
 
     const now = new Date();
     const msPerDay = 1000 * 60 * 60 * 24;
@@ -503,9 +602,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       0,
     );
 
+    const truckingDocumentSummary = requests.reduce(
+      (acc, request) => {
+        const summary = summarizeTruckingDocuments(request);
+        acc.total += summary.total;
+        acc.inbound += summary.inbound;
+        acc.outbound += summary.outbound;
+        acc.loadsWithDocs += summary.loadsWithDocs;
+        acc.loadsWithoutDocs += summary.loadsWithoutDocs;
+        return acc;
+      },
+      { total: 0, inbound: 0, outbound: 0, loadsWithDocs: 0, loadsWithoutDocs: 0 },
+    );
+
     return {
       requests: { total: requests.length, pending, approved, completed, rejected },
-      storage: { totalCapacity, totalOccupied, available: totalCapacity - totalOccupied, utilization },
+      storage: {
+        totalCapacity,
+        totalOccupied,
+        available: totalCapacity - totalOccupied,
+        utilization,
+        totalStoredKg,
+      },
       companies: companies.length,
       inventory: { total: inventory.length, inStorage: inventory.filter(p => p.status === 'IN_STORAGE').length },
       operational: {
@@ -520,6 +638,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         nextTruckEta: nextTruckEntry?.appointment?.slotStart ?? null,
         afterHoursRequests,
       },
+      documents: truckingDocumentSummary,
     };
   }, [requests, yards, companies, inventory, truckLoads, shipments, pendingTruckEntries]);
 
@@ -563,7 +682,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       <h2 className="text-2xl font-bold text-white">Dashboard Overview</h2>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <Card className="p-6">
           <h3 className="text-sm text-gray-400 mb-2">Pending Approvals</h3>
           <div className="flex items-end justify-between">
@@ -597,12 +716,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </Card>
 
         <Card className="p-6">
-          <h3 className="text-sm text-gray-400 mb-2">Available Space</h3>
+          <h3 className="text-sm text-gray-400 mb-2">Pipe Weight On Site</h3>
           <p className="text-4xl font-bold text-green-500">
-            {analytics.storage.available.toFixed(0)}m
+            {formatKilograms(analytics.storage.totalStoredKg)}
           </p>
           <p className="text-xs text-gray-500 mt-2">
-            {analytics.storage.totalCapacity.toFixed(0)}m total capacity
+            Currently stored across all yards
+          </p>
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="text-sm text-gray-400 mb-2">Trucking Documents Uploaded</h3>
+          <div className="flex items-end justify-between gap-4">
+            <p className="text-4xl font-bold text-purple-400">{analytics.documents.total}</p>
+            <div className="text-right text-xs text-gray-500">
+              <div>{analytics.documents.inbound} inbound</div>
+              <div>{analytics.documents.outbound} outbound</div>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            {analytics.documents.loadsWithDocs} loads with paperwork, {analytics.documents.loadsWithoutDocs} outstanding
           </p>
         </Card>
       </div>
@@ -705,27 +838,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </tr>
             </thead>
             <tbody>
-              {requests.slice(0, 5).map(req => (
-                <tr key={req.id} className="border-b border-gray-800">
-                  <td className="py-3 text-gray-300">{req.referenceId}</td>
-                  <td className="py-3 text-gray-300">
-                    {companies.find(c => c.id === req.companyId)?.name || 'Unknown'}
-                  </td>
-                  <td className="py-3">
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      req.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400' :
-                      req.status === 'APPROVED' ? 'bg-green-500/20 text-green-400' :
-                      req.status === 'COMPLETED' ? 'bg-blue-500/20 text-blue-400' :
-                      'bg-red-500/20 text-red-400'
-                    }`}>
-                      {req.status}
-                    </span>
-                  </td>
-                  <td className="py-3 text-gray-500 text-xs">
-                    {req.requestDetails?.storageStartDate || 'N/A'}
-                  </td>
-                </tr>
-              ))}
+              {requests.slice(0, 5).map(req => {
+                const statusMeta = getRequestStatusMeta(req);
+                const docSummary = summarizeTruckingDocuments(req);
+                return (
+                  <tr key={req.id} className="border-b border-gray-800">
+                    <td className="py-3 text-gray-300">{req.referenceId}</td>
+                    <td className="py-3 text-gray-300">
+                      {companies.find(c => c.id === req.companyId)?.name || 'Unknown'}
+                    </td>
+                    <td className="py-3">
+                      <div className="flex flex-col gap-1">
+                        <span className={`px-2 py-1 rounded text-xs ${statusMeta.badgeClass}`}>
+                          {statusMeta.customerStatusLabel}
+                        </span>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wide">
+                          Storage: {req.status}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 text-gray-500 text-xs">
+                      {req.requestDetails?.storageStartDate || 'N/A'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -834,6 +971,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <th className="text-left py-3 px-4 text-gray-400">Pipe Details</th>
                 <th className="text-left py-3 px-4 text-gray-400">Total Length (m)</th>
                 <th className="text-left py-3 px-4 text-gray-400">Status</th>
+                <th className="text-left py-3 px-4 text-gray-400">Documents</th>
                 <th className="text-left py-3 px-4 text-gray-400">Location</th>
                 <th className="text-left py-3 px-4 text-gray-400">Approved</th>
                 <th className="text-left py-3 px-4 text-gray-400">Approved By</th>
@@ -846,10 +984,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   req.requestDetails && typeof req.requestDetails.avgJointLength === 'number' && typeof req.requestDetails.totalJoints === 'number'
                     ? req.requestDetails.avgJointLength * req.requestDetails.totalJoints
                     : null;
+                const docSummary = summarizeTruckingDocuments(req);
                 const originalNote = req.internalNotes ?? '';
                 const noteValue = getDraftNote(req);
                 const isDirty = noteValue !== originalNote;
                 const isSaving = notesSavingId === req.id;
+                const statusMeta = getRequestStatusMeta(req);
 
                 return (
                 <tr key={req.id} className="border-b border-gray-800 hover:bg-gray-800/50">
@@ -863,14 +1003,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {totalMeters !== null ? totalMeters.toFixed(1) : '-'}
                   </td>
                   <td className="py-3 px-4">
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      req.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400' :
-                      req.status === 'APPROVED' ? 'bg-green-500/20 text-green-400' :
-                      req.status === 'COMPLETED' ? 'bg-blue-500/20 text-blue-400' :
-                      'bg-red-500/20 text-red-400'
-                    }`}>
-                      {req.status}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span className={`px-2 py-1 rounded text-xs ${statusMeta.badgeClass}`}>
+                        {statusMeta.customerStatusLabel}
+                      </span>
+                      <span className="text-[10px] text-gray-500 uppercase tracking-wide">
+                        Storage: {req.status}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="flex flex-col gap-1 text-sm text-gray-300">
+                      <span>
+                        {docSummary.total > 0
+                          ? `${docSummary.total} file${docSummary.total === 1 ? '' : 's'}`
+                          : 'No uploads yet'}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {docSummary.inbound} inbound / {docSummary.outbound} outbound
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {docSummary.loadsWithoutDocs} of {docSummary.loadCount} loads missing uploads
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openDocViewer(req)}
+                        className={`self-start text-xs px-2 py-1 rounded border ${
+                          docSummary.loadCount === 0
+                            ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
+                            : 'bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700'
+                        }`}
+                        disabled={docSummary.loadCount === 0}
+                      >
+                        Review
+                      </button>
+                    </div>
                   </td>
                   <td className="py-3 px-4 text-gray-400 text-xs">{req.assignedLocation || '-'}</td>
                   <td className="py-3 px-4 text-gray-300">
@@ -989,11 +1156,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-white">Storage Overview</h2>
       {yards.map(yard => {
-        const yardCapacity = yard.areas.reduce((sum, a) =>
-          sum + a.racks.reduce((s, r) => s + r.capacityMeters, 0), 0);
-        const yardOccupied = yard.areas.reduce((sum, a) =>
-          sum + a.racks.reduce((s, r) => s + (r.occupiedMeters || 0), 0), 0);
-        const yardUtil = yardCapacity > 0 ? (yardOccupied / yardCapacity * 100) : 0;
+        const yardSlotCapacity = yard.areas.reduce((sum, area) =>
+          sum + area.racks.reduce((rSum, rack) =>
+            rack.allocationMode === 'SLOT' ? rSum + rack.capacity : rSum, 0), 0);
+        const yardSlotOccupied = yard.areas.reduce((sum, area) =>
+          sum + area.racks.reduce((rSum, rack) =>
+            rack.allocationMode === 'SLOT' ? rSum + rack.occupied : rSum, 0), 0);
+        const yardLinearCapacity = yard.areas.reduce((sum, area) =>
+          sum + area.racks.reduce((rSum, rack) =>
+            rack.allocationMode !== 'SLOT' ? rSum + rack.capacityMeters : rSum, 0), 0);
+        const yardLinearOccupied = yard.areas.reduce((sum, area) =>
+          sum + area.racks.reduce((rSum, rack) =>
+            rack.allocationMode !== 'SLOT' ? rSum + (rack.occupiedMeters || 0) : rSum, 0), 0);
+
+        const yardHasSlots = yardSlotCapacity > 0;
+        const yardHasLinear = yardLinearCapacity > 0;
+
+        const yardUtil = yardHasSlots && !yardHasLinear
+          ? (yardSlotCapacity > 0 ? (yardSlotOccupied / yardSlotCapacity) * 100 : 0)
+          : (yardLinearCapacity > 0 ? (yardLinearOccupied / yardLinearCapacity) * 100 : 0);
+
+        const yardStatusLabel = yardHasSlots && yardHasLinear
+          ? `${yardSlotOccupied}/${yardSlotCapacity} locations | ${yardLinearOccupied.toFixed(0)}/${yardLinearCapacity.toFixed(0)} meters`
+          : yardHasSlots
+            ? `${yardSlotOccupied}/${yardSlotCapacity} locations used`
+            : `${yardLinearOccupied.toFixed(0)}/${yardLinearCapacity.toFixed(0)} meters used`;
 
         return (
           <Card key={yard.id} className="p-6">
@@ -1001,9 +1188,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="mb-4">
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-gray-400">Utilization: {yardUtil.toFixed(1)}%</span>
-                <span className="text-gray-400">
-                  {yardOccupied.toFixed(0)} / {yardCapacity.toFixed(0)} meters
-                </span>
+                <span className="text-gray-400">{yardStatusLabel}</span>
               </div>
               <div className="w-full bg-gray-700 rounded-full h-3">
                 <div className="bg-red-500 h-3 rounded-full" style={{ width: `${yardUtil}%` }}></div>
@@ -1012,16 +1197,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <div className="space-y-4">
               {yard.areas.map(area => {
-                const areaCapacity = area.racks.reduce((s, r) => s + r.capacityMeters, 0);
-                const areaOccupied = area.racks.reduce((s, r) => s + (r.occupiedMeters || 0), 0);
-                const areaUtil = areaCapacity > 0 ? (areaOccupied / areaCapacity * 100) : 0;
+                const areaSlotCapacity = area.racks.reduce((s, r) =>
+                  r.allocationMode === 'SLOT' ? s + r.capacity : s, 0);
+                const areaSlotOccupied = area.racks.reduce((s, r) =>
+                  r.allocationMode === 'SLOT' ? s + r.occupied : s, 0);
+                const areaLinearCapacity = area.racks.reduce((s, r) =>
+                  r.allocationMode !== 'SLOT' ? s + r.capacityMeters : s, 0);
+                const areaLinearOccupied = area.racks.reduce((s, r) =>
+                  r.allocationMode !== 'SLOT' ? s + (r.occupiedMeters || 0) : s, 0);
+                const areaHasSlots = areaSlotCapacity > 0;
+                const areaHasLinear = areaLinearCapacity > 0;
+
+                const areaUtil = areaHasSlots && !areaHasLinear
+                  ? (areaSlotCapacity > 0 ? (areaSlotOccupied / areaSlotCapacity) * 100 : 0)
+                  : (areaLinearCapacity > 0 ? (areaLinearOccupied / areaLinearCapacity) * 100 : 0);
+
+                const areaStatusLabel = areaHasSlots && areaHasLinear
+                  ? `${areaSlotOccupied}/${areaSlotCapacity} locations | ${areaLinearOccupied.toFixed(0)}/${areaLinearCapacity.toFixed(0)} meters`
+                  : areaHasSlots
+                    ? `${areaSlotOccupied}/${areaSlotCapacity} locations`
+                    : `${areaLinearOccupied.toFixed(0)}/${areaLinearCapacity.toFixed(0)} meters`;
 
                 return (
                   <div key={area.id} className="pl-4">
                     <h4 className="text-sm font-semibold text-gray-300 mb-2">{area.name} Area</h4>
                     <div className="flex justify-between text-xs mb-2">
                       <span className="text-gray-500">{areaUtil.toFixed(1)}% full</span>
-                      <span className="text-gray-500">{area.racks.length} racks</span>
+                      <span className="text-gray-500">{areaStatusLabel}</span>
                     </div>
                     <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
                       {area.racks.map(rack => {
@@ -1035,7 +1237,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             }}
                           >
                             <p className="text-xs font-semibold text-white">{rack.name}</p>
-                            <p className="text-xs text-gray-400">{rack.occupied}/{rack.capacity}</p>
+                            <p className="text-xs text-gray-400">
+                              {rack.allocationMode === 'SLOT'
+                                ? `${rack.occupied}/${rack.capacity} locations`
+                                : `${Math.round(rack.occupiedMeters)}m / ${Math.round(rack.capacityMeters)}m`}
+                            </p>
                           </div>
                         );
                       })}
@@ -1194,7 +1400,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </p>
                       </div>
                       <span
-                        className={`px-3 py-1 rounded-full border text-xs font-semibold ${getTruckStatusClasses(
+                        className={`inline-flex min-w-[90px] items-center justify-center px-3 py-1 rounded-full border text-xs font-semibold text-center ${getTruckStatusClasses(
                           entry.truck.status,
                         )}`}
                       >
@@ -1481,6 +1687,195 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     );
   };
 
+  const renderDocumentsViewer = () => {
+    if (!docViewerRequest) return null;
+    const loads = docViewerRequest.truckingLoads ?? [];
+    const docTypeTerm = docViewerFilters.docType.trim().toLowerCase();
+    const filteredLoads = loads.filter(load => {
+      const directionMatch =
+        docViewerFilters.direction === 'ALL' || load.direction === docViewerFilters.direction;
+      const statusMatch = docViewerFilters.status === 'ALL' || load.status === docViewerFilters.status;
+      if (!directionMatch || !statusMatch) {
+        return false;
+      }
+      if (!docTypeTerm) {
+        return true;
+      }
+      const documents = load.documents ?? [];
+      return documents.some(doc => {
+        const docType = (doc.documentType ?? '').toLowerCase();
+        const fileName = doc.fileName.toLowerCase();
+        return docType.includes(docTypeTerm) || fileName.includes(docTypeTerm);
+      });
+    });
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8">
+        <div className="bg-gray-900 w-full max-w-5xl rounded-2xl border border-gray-700 shadow-2xl">
+          <div className="flex items-start justify-between p-5 border-b border-gray-800">
+            <div>
+              <p className="text-sm text-gray-400 uppercase tracking-wider">Trucking Documents</p>
+              <h3 className="text-2xl font-bold text-white">
+                Request {docViewerRequest.referenceId}
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">
+                {loads.length} trucking {loads.length === 1 ? 'load' : 'loads'} tracked
+              </p>
+            </div>
+            <button
+              onClick={closeDocViewer}
+              className="text-gray-400 hover:text-white text-sm font-semibold"
+            >
+              Close
+            </button>
+          </div>
+          <div className="max-h-[70vh] overflow-y-auto p-5 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-end gap-3">
+              <div className="flex-1">
+                <label className="block text-xs uppercase tracking-wide text-gray-500 mb-1">
+                  Direction
+                </label>
+                <select
+                  value={docViewerFilters.direction}
+                  onChange={event =>
+                    setDocViewerFilters(filters => ({
+                      ...filters,
+                      direction: event.target.value as DocViewerFilters['direction'],
+                    }))
+                  }
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="ALL">All Directions</option>
+                  <option value="INBOUND">Inbound (to MPS)</option>
+                  <option value="OUTBOUND">Outbound (from MPS)</option>
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs uppercase tracking-wide text-gray-500 mb-1">
+                  Load Status
+                </label>
+                <select
+                  value={docViewerFilters.status}
+                  onChange={event =>
+                    setDocViewerFilters(filters => ({
+                      ...filters,
+                      status: event.target.value as DocViewerFilters['status'],
+                    }))
+                  }
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="NEW">New</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="IN_TRANSIT">In Transit</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs uppercase tracking-wide text-gray-500 mb-1">
+                  Document Type / Name
+                </label>
+                <input
+                  type="text"
+                  value={docViewerFilters.docType}
+                  onChange={event =>
+                    setDocViewerFilters(filters => ({
+                      ...filters,
+                      docType: event.target.value,
+                    }))
+                  }
+                  placeholder="Search manifest, POD, photos..."
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div className="md:self-end">
+                <Button
+                  variant="secondary"
+                  onClick={() => setDocViewerFilters(createDefaultDocViewerFilters())}
+                  className="w-full"
+                >
+                  Reset
+                </Button>
+              </div>
+            </div>
+
+            {loads.length === 0 ? (
+              <Card className="p-6 text-center text-gray-400 bg-gray-900/40 border border-gray-800">
+                No trucking loads recorded for this request yet.
+              </Card>
+            ) : filteredLoads.length === 0 ? (
+              <Card className="p-6 text-center text-gray-400 bg-gray-900/40 border border-gray-800">
+                No documents match the current filters.
+              </Card>
+            ) : (
+              filteredLoads.map(load => {
+                const directionLabel = load.direction === 'INBOUND' ? 'Truck to MPS' : 'Truck from MPS';
+                const documents = (load.documents ?? []).filter(doc => {
+                  if (!docTypeTerm) return true;
+                  const docType = (doc.documentType ?? '').toLowerCase();
+                  const fileName = doc.fileName.toLowerCase();
+                  return docType.includes(docTypeTerm) || fileName.includes(docTypeTerm);
+                });
+                const docCount = documents.length;
+                return (
+                  <div
+                    key={load.id}
+                    className="bg-gray-900/60 border border-gray-800 rounded-xl p-4 space-y-3"
+                  >
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                      <div>
+                        <p className="text-white font-semibold">
+                          {directionLabel} - Load {load.sequenceNumber}
+                        </p>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide">
+                          Status: {load.status.replace(/_/g, ' ')}
+                        </p>
+                      </div>
+                      <span className="text-sm text-gray-400">
+                        {docCount} document{docCount === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    {docCount === 0 ? (
+                      <p className="text-xs text-gray-500">No documents uploaded yet.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {documents.map(document => (
+                          <li
+                            key={document.id}
+                            className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
+                          >
+                            <div>
+                              <p className="text-sm text-white font-semibold">{document.fileName}</p>
+                              <p className="text-xs text-gray-400">
+                                {(document.documentType || 'Uncategorized')} -{' '}
+                                {document.uploadedAt ? formatDate(document.uploadedAt, true) : 'Uploaded'}
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button variant="secondary" onClick={() => handlePreviewTruckingDocument(document)}>
+                                View
+                              </Button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+          {docViewerError && (
+            <div className="p-4 text-sm text-red-300 bg-red-900/20 border-t border-red-800">
+              {docViewerError}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderAI = () => (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-white">AI Assistant</h2>
@@ -1489,60 +1884,63 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   );
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <AdminHeader session={session} onLogout={onLogout} />
+    <>
+      <div className="min-h-screen bg-gray-900">
+        <AdminHeader session={session} onLogout={onLogout} />
 
-      <div className="container mx-auto p-6 space-y-6">
-        {/* Global Search */}
-        <Card className="p-4">
-          <input
-            type="text"
-            value={globalSearch}
-            onChange={e => setGlobalSearch(e.target.value)}
-            placeholder="Search: requests, companies, inventory..."
-            className="w-full bg-gray-800 text-white placeholder-gray-500 border border-gray-700 rounded-md py-3 px-4 focus:outline-none focus:ring-2 focus:ring-red-500"
-          />
-          {searchResults && (
-            <div className="mt-4 space-y-2 text-sm">
-              <p className="text-gray-400">
-                Found: {searchResults.requests.length} requests, {searchResults.companies.length} companies,{' '}
-                {searchResults.inventory.length} inventory items
-              </p>
-            </div>
-          )}
-        </Card>
+        <div className="container mx-auto p-6 space-y-6">
+          {/* Global Search */}
+          <Card className="p-4">
+            <input
+              type="text"
+              value={globalSearch}
+              onChange={e => setGlobalSearch(e.target.value)}
+              placeholder="Search: requests, companies, inventory..."
+              className="w-full bg-gray-800 text-white placeholder-gray-500 border border-gray-700 rounded-md py-3 px-4 focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+            {searchResults && (
+              <div className="mt-4 space-y-2 text-sm">
+                <p className="text-gray-400">
+                  Found: {searchResults.requests.length} requests, {searchResults.companies.length} companies,{' '}
+                  {searchResults.inventory.length} inventory items
+                </p>
+              </div>
+            )}
+          </Card>
 
-        {/* Tab Navigation */}
-        <div className="flex flex-wrap gap-2">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'bg-red-600 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              {tab.label}
-              {tab.badge !== undefined && (
-                <span className="ml-2 px-2 py-0.5 bg-gray-900 rounded-full text-xs">{tab.badge}</span>
-              )}
-            </button>
-          ))}
+          {/* Tab Navigation */}
+          <div className="flex flex-wrap gap-2">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                {tab.label}
+                {tab.badge !== undefined && (
+                  <span className="ml-2 px-2 py-0.5 bg-gray-900 rounded-full text-xs">{tab.badge}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'overview' && renderOverview()}
+          {activeTab === 'approvals' && renderApprovals()}
+          {activeTab === 'requests' && renderRequests()}
+          {activeTab === 'companies' && renderCompanies()}
+          {activeTab === 'inventory' && renderInventory()}
+          {activeTab === 'storage' && renderStorage()}
+          {activeTab === 'shipments' && renderShipments()}
+          {activeTab === 'ai' && renderAI()}
         </div>
-
-        {/* Tab Content */}
-        {activeTab === 'overview' && renderOverview()}
-        {activeTab === 'approvals' && renderApprovals()}
-        {activeTab === 'requests' && renderRequests()}
-        {activeTab === 'companies' && renderCompanies()}
-        {activeTab === 'inventory' && renderInventory()}
-        {activeTab === 'storage' && renderStorage()}
-        {activeTab === 'shipments' && renderShipments()}
-        {activeTab === 'ai' && renderAI()}
       </div>
-    </div>
+      {renderDocumentsViewer()}
+    </>
   );
 };
 

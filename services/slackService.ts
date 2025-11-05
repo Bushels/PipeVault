@@ -273,6 +273,155 @@ export const sendTruckingQuoteApproved = async (
 };
 
 /**
+ * Sends a notification when a customer schedules an inbound delivery
+ */
+export const sendInboundDeliveryNotification = async (payload: {
+  referenceId: string;
+  companyName: string;
+  contactEmail: string;
+  slotStart: string;
+  slotEnd: string;
+  isAfterHours: boolean;
+  surchargeAmount: number;
+  storage: {
+    companyName: string;
+    address: string;
+    contactName: string;
+    contactPhone: string;
+    contactEmail: string;
+  };
+  trucking: {
+    companyName: string;
+    driverName?: string | null;
+    driverPhone?: string | null;
+  };
+  loadSummary?: {
+    total_joints?: number | null;
+    total_length_ft?: number | null;
+    total_weight_lbs?: number | null;
+  } | null;
+}) => {
+  const slotStart = new Date(payload.slotStart);
+  const slotEnd = new Date(payload.slotEnd);
+  const slotStartEpoch = Math.floor(slotStart.getTime() / 1000);
+  const slotEndEpoch = Math.floor(slotEnd.getTime() / 1000);
+
+  const message = {
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: 'Inbound Delivery Scheduled',
+          emoji: true
+        }
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Project Reference:*
+${payload.referenceId}` },
+          { type: 'mrkdwn', text: `*Company:*
+${payload.companyName}` },
+          { type: 'mrkdwn', text: `*Requested By:*
+${payload.contactEmail}` },
+          { type: 'mrkdwn', text: `*Trucking Company:*
+${payload.trucking.companyName || 'Customer Provided'}` }
+        ]
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Scheduled Slot:*
+<!date^${slotStartEpoch}^{date_short_pretty} at {time}|${slotStart.toLocaleString()}>`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Ends:*
+<!date^${slotEndEpoch}^{date_short_pretty} at {time}|${slotEnd.toLocaleString()}>`
+          }
+        ]
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Storage Yard:*
+${payload.storage.companyName}` },
+          { type: 'mrkdwn', text: `*Address:*
+${payload.storage.address}` },
+          { type: 'mrkdwn', text: `*Contact:*
+${payload.storage.contactName}` },
+          { type: 'mrkdwn', text: `*Phone:*
+${payload.storage.contactPhone}` }
+        ]
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Driver:*\n${payload.trucking.driverName || 'TBD'}` },
+          { type: 'mrkdwn', text: `*Driver Phone:*\n${payload.trucking.driverPhone || 'TBD'}` },
+          {
+            type: 'mrkdwn',
+            text:
+              payload.loadSummary?.total_joints !== undefined && payload.loadSummary?.total_joints !== null
+                ? `*Joints:*\n${payload.loadSummary.total_joints}`
+                : '*Joints:*\nPending',
+          },
+          {
+            type: 'mrkdwn',
+            text:
+              payload.loadSummary?.total_length_ft !== undefined && payload.loadSummary?.total_length_ft !== null
+                ? `*Length (ft):*\n${payload.loadSummary.total_length_ft}`
+                : '*Length (ft):*\nPending',
+          }
+        ]
+      },
+      payload.isAfterHours
+        ? {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `After-hours delivery. Apply surcharge of $${payload.surchargeAmount}.`
+              }
+            ]
+          }
+        : {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: 'Standard receiving hours slot.'
+              }
+            ]
+          },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `Scheduled: <!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|just now>`
+          }
+        ]
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: 'Trucking request logged automatically—no Portal follow-up required.'
+          }
+        ]
+      }
+    ]
+  };
+
+  await sendSlackMessage(message);
+};
+
+/**
  * Helper function to send messages to Slack via webhook
  */
 async function sendSlackMessage(payload: any): Promise<void> {
@@ -312,3 +461,4 @@ async function sendSlackMessage(payload: any): Promise<void> {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 }
+

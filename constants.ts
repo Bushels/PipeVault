@@ -38,7 +38,7 @@ export const MOCK_INVENTORY: Pipe[] = [
     storageAreaId: 'B-S-1',
     deliveryTruckLoadId: 'truck-002',
   },
-   {
+  {
     id: 'pipe-003',
     companyId: 'summit-drilling',
     referenceId: 'SD-WELL-4B',
@@ -50,7 +50,7 @@ export const MOCK_INVENTORY: Pipe[] = [
     quantity: 150,
     status: 'IN_STORAGE',
     dropOffTimestamp: '2024-08-05T10:00:00Z',
-    storageAreaId: 'A-N-3',
+    storageAreaId: 'A-A1-3',
     deliveryTruckLoadId: 'truck-003',
   },
 ];
@@ -99,75 +99,199 @@ export const MOCK_REQUESTS: StorageRequest[] = [
         storageStartDate: '2024-08-01',
         storageEndDate: '2025-02-01',
     },
-    assignedLocation: 'Yard A, North, Rack 3',
-    assignedRackIds: ['A-N-3'],
-    approvalSummary: 'Summit Drilling Co. requests storage for 150 joints of Tubing for 6 months. Recommend approval for single rack allocation.'
+    assignedLocation: 'Yard A (Open Storage), Row 1 (West), A1-3',
+    assignedRackIds: ['A-A1-3'],
+    approvalSummary: 'Summit Drilling Co. requests open storage in Row 1 slot A1-3. Recommend approval for this single location.'
   }
 ];
 
 // --- YARD DATA GENERATION ---
 
-// Get pre-occupied joint counts and meters from existing approved/completed mock requests
-const occupiedMetrics = MOCK_REQUESTS.reduce((acc, req) => {
-    if ((req.status === 'APPROVED' || req.status === 'COMPLETED') && req.assignedRackIds && req.requestDetails) {
-        let jointsToAllocate = req.requestDetails.totalJoints;
-        let metersToAllocate = req.requestDetails.totalJoints * req.requestDetails.avgJointLength;
-        for (const rackId of req.assignedRackIds) {
-             acc[rackId] = {
-                joints: (acc[rackId]?.joints || 0) + jointsToAllocate,
-                meters: (acc[rackId]?.meters || 0) + metersToAllocate,
-            };
-            // For this mock, we assume one rack holds the full amount for simplicity
-        }
-    }
-    return acc;
-}, {} as { [key: string]: { joints: number; meters: number } });
-
-
-const generateRacks = (yardId: string, areaId: string, areaName: string, count: number): { racks: any[], area: any } => {
-    const racks = [];
-    const AVG_JOINT_LENGTH_FOR_CAPACITY = 12; // Assume 12m for capacity calculation
-    for (let i = 1; i <= count; i++) {
-        const rackId = `${yardId}-${areaId}-${i}`;
-        const rackMetrics = occupiedMetrics[rackId] || { joints: 0, meters: 0 };
-        const rackCapacity = 200; // Capacity in joints
-        racks.push({
-            id: rackId,
-            name: `Rack ${i}`,
-            capacity: rackCapacity, 
-            capacityMeters: rackCapacity * AVG_JOINT_LENGTH_FOR_CAPACITY,
-            occupied: rackMetrics.joints, 
-            occupiedMeters: rackMetrics.meters,
-        });
-    }
-    const area = {
-        id: `${yardId}-${areaId}`,
-        name: areaName,
-        racks,
-    };
-    return { racks, area };
+type AreaConfig = {
+  id: string;
+  name: string;
+  rackCount: number;
+  allocationMode?: 'LINEAR_CAPACITY' | 'SLOT';
+  rackCapacity?: number;
+  capacityMeters?: number;
+  lengthMeters?: number;
+  widthMeters?: number;
+  labelFormatter?: (index: number) => string;
 };
 
-const createYard = (id: string, name: string): Yard => {
-    const areasData = [
-        { id: 'N', name: 'North', count: 9 },
-        { id: 'E', name: 'East', count: 9 },
-        { id: 'S', name: 'South', count: 9 },
-        { id: 'W', name: 'West', count: 9 },
-        { id: 'M', name: 'Middle', count: 9 },
-    ];
-
-    const areas = areasData.map(a => generateRacks(id, a.id, a.name, a.count).area);
-    
-    return { id, name, areas };
+type YardConfig = {
+  id: string;
+  name: string;
+  areas: AreaConfig[];
 };
 
+const AVG_JOINT_LENGTH_FOR_CAPACITY = 12; // meters, assumption for linear rack capacity
+const DEFAULT_LINEAR_RACK_CAPACITY = 200; // joints
 
-export const YARD_DATA: Yard[] = [
-    createYard('A', 'Yard A (Open Storage)'),
-    createYard('B', 'Yard B (Fenced Storage)'),
-    createYard('C', 'Yard C (Cold Storage)'),
+const formatRowLabel = (rowLabel: string) => (index: number) => `${rowLabel}-${index}`;
+
+const YARD_LAYOUTS: YardConfig[] = [
+  {
+    id: 'A',
+    name: 'Yard A (Open Storage)',
+    areas: [
+      {
+        id: 'A1',
+        name: 'Row 1 (West)',
+        rackCount: 11,
+        allocationMode: 'SLOT',
+        rackCapacity: 1,
+        capacityMeters: 14.5,
+        lengthMeters: 14.5,
+        widthMeters: 5,
+        labelFormatter: formatRowLabel('A1'),
+      },
+      {
+        id: 'A2',
+        name: 'Row 2 (East)',
+        rackCount: 11,
+        allocationMode: 'SLOT',
+        rackCapacity: 1,
+        capacityMeters: 14.5,
+        lengthMeters: 14.5,
+        widthMeters: 5,
+        labelFormatter: formatRowLabel('A2'),
+      },
+    ],
+  },
+  {
+    id: 'B',
+    name: 'Yard B (Fenced Storage)',
+    areas: [
+      { id: 'N', name: 'North', rackCount: 9 },
+      { id: 'E', name: 'East', rackCount: 9 },
+      { id: 'S', name: 'South', rackCount: 9 },
+      { id: 'W', name: 'West', rackCount: 9 },
+      { id: 'M', name: 'Middle', rackCount: 9 },
+    ],
+  },
+  {
+    id: 'C',
+    name: 'Yard C (Cold Storage)',
+    areas: [
+      { id: 'N', name: 'North', rackCount: 9 },
+      { id: 'E', name: 'East', rackCount: 9 },
+      { id: 'S', name: 'South', rackCount: 9 },
+      { id: 'W', name: 'West', rackCount: 9 },
+      { id: 'M', name: 'Middle', rackCount: 9 },
+    ],
+  },
 ];
+
+const buildYardData = (): Yard[] => {
+  const yardMap = new Map<string, Yard>();
+  const rackIndex = new Map<
+    string,
+    {
+      yardId: string;
+      areaId: string;
+      allocationMode: 'LINEAR_CAPACITY' | 'SLOT';
+      capacity: number;
+      capacityMeters: number;
+    }
+  >();
+
+  YARD_LAYOUTS.forEach((yardConfig) => {
+    const areas = yardConfig.areas.map((areaConfig) => {
+      const allocationMode = areaConfig.allocationMode ?? 'LINEAR_CAPACITY';
+      const rackCapacity =
+        areaConfig.rackCapacity ??
+        (allocationMode === 'SLOT' ? 1 : DEFAULT_LINEAR_RACK_CAPACITY);
+      const capacityMeters =
+        areaConfig.capacityMeters ??
+        (allocationMode === 'SLOT'
+          ? rackCapacity
+          : rackCapacity * AVG_JOINT_LENGTH_FOR_CAPACITY);
+      const labelFormatter =
+        areaConfig.labelFormatter ??
+        ((index: number) => `Rack ${index}`);
+
+      const racks = Array.from({ length: areaConfig.rackCount }, (_, idx) => {
+        const slot = idx + 1;
+        const rackId = `${yardConfig.id}-${areaConfig.id}-${slot}`;
+        const rack = {
+          id: rackId,
+          name: labelFormatter(slot),
+          capacity: rackCapacity,
+          capacityMeters,
+          occupied: 0,
+          occupiedMeters: 0,
+          allocationMode,
+          lengthMeters: areaConfig.lengthMeters ?? null,
+          widthMeters: areaConfig.widthMeters ?? null,
+        };
+
+        rackIndex.set(rackId, {
+          yardId: yardConfig.id,
+          areaId: `${yardConfig.id}-${areaConfig.id}`,
+          allocationMode,
+          capacity: rackCapacity,
+          capacityMeters,
+        });
+
+        return rack;
+      });
+
+      return {
+        id: `${yardConfig.id}-${areaConfig.id}`,
+        name: areaConfig.name,
+        racks,
+      };
+    });
+
+    yardMap.set(
+      yardConfig.id,
+      {
+        id: yardConfig.id,
+        name: yardConfig.name,
+        areas,
+      },
+    );
+  });
+
+  // Apply existing mock request occupancy
+  for (const request of MOCK_REQUESTS) {
+    if (
+      (request.status === 'APPROVED' || request.status === 'COMPLETED') &&
+      request.assignedRackIds &&
+      request.assignedRackIds.length > 0
+    ) {
+      for (const rackId of request.assignedRackIds) {
+        const rackDetails = rackIndex.get(rackId);
+        if (!rackDetails) continue;
+
+        const yard = yardMap.get(rackDetails.yardId);
+        if (!yard) continue;
+
+        const area = yard.areas.find((a) => a.id === rackDetails.areaId);
+        if (!area) continue;
+
+        const rack = area.racks.find((r) => r.id === rackId);
+        if (!rack) continue;
+
+        if (rack.allocationMode === 'SLOT') {
+          rack.occupied = rack.capacity;
+          rack.occupiedMeters = rack.capacityMeters;
+        } else if (request.requestDetails) {
+          const joints = request.requestDetails.totalJoints;
+          const meters =
+            request.requestDetails.totalJoints * request.requestDetails.avgJointLength;
+          rack.occupied += joints;
+          rack.occupiedMeters = (rack.occupiedMeters || 0) + meters;
+        }
+      }
+    }
+  }
+
+  return Array.from(yardMap.values());
+};
+
+export const YARD_DATA: Yard[] = buildYardData();
 
 export const MOCK_TRUCK_LOADS: TruckLoad[] = [
   {
@@ -207,9 +331,9 @@ export const MOCK_TRUCK_LOADS: TruckLoad[] = [
     arrivalTime: '2024-08-05T09:30:00Z',
     departureTime: '2024-08-05T10:45:00Z',
     jointsCount: 150,
-    storageAreaId: 'A-N-3',
+    storageAreaId: 'A-A1-3',
     relatedRequestId: 'req-002',
     relatedPipeIds: ['pipe-003'],
-    notes: 'Tubing delivered for Summit Drilling. Rack A-N-3 assigned.',
+    notes: 'Tubing delivered for Summit Drilling. Slot A1-3 in Yard A assigned.',
   },
 ];

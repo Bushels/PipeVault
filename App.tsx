@@ -69,81 +69,118 @@ function App() {
     requestId: string,
     assignedRackIds: string[],
     requiredJoints: number,
-    notes?: string
+    notes?: string,
   ) => {
     const request = requests.find(r => r.id === requestId);
-    if (!request || !request.requestDetails) return;
+    if (!request || !request.requestDetails) {
+      console.error('[OpenStorage] Approval aborted - request missing details', { requestId });
+      return;
+    }
 
-    const avgJointLength = request.requestDetails.avgJointLength;
-    const approvedAt = new Date().toISOString();
-    const approvedBy = user?.email ?? 'admin@pipevault';
-    const sourceNotes = typeof notes === 'string' ? notes : request.internalNotes ?? '';
-    const trimmedNotes = sourceNotes.trim();
-    const internalNotes = trimmedNotes.length > 0 ? trimmedNotes : null;
+    try {
+      const avgJointLength = request.requestDetails.avgJointLength;
+      const approvedAt = new Date().toISOString();
+      const approvedBy = user?.email ?? 'admin@pipevault';
+      const sourceNotes = typeof notes === 'string' ? notes : request.internalNotes ?? '';
+      const trimmedNotes = sourceNotes.trim();
+      const internalNotes = trimmedNotes.length > 0 ? trimmedNotes : null;
 
-    // Determine the human-readable location string
-    const firstRackId = assignedRackIds[0];
-    const [yardId, areaId] = firstRackId.split('-');
-    const yard = yards.find(y => y.id === yardId);
-    const area = yard?.areas.find(a => a.id === `${yardId}-${areaId}`);
+      // Determine the human-readable location string
+      const firstRackId = assignedRackIds[0];
+      const [firstYardId, firstAreaId] = firstRackId.split('-');
+      const firstYard = yards.find(y => y.id === firstYardId);
+      const firstArea = firstYard?.areas.find(a => a.id === `${firstYardId}-${firstAreaId}`);
 
-    let assignedLocation = '';
-    if (yard && area) {
-      if (assignedRackIds.length > 1) {
-        assignedLocation = `${yard.name}, ${area.name}, ${assignedRackIds.length} Racks`;
+      let assignedLocation = '';
+      if (firstYard && firstArea) {
+        if (assignedRackIds.length > 1) {
+          assignedLocation = `${firstYard.name}, ${firstArea.name}, ${assignedRackIds.length} Locations`;
+        } else {
+          const firstRack = firstArea.racks.find(r => r.id === firstRackId);
+          assignedLocation = `${firstYard.name}, ${firstArea.name}, ${firstRack?.name ?? firstRackId}`;
+        }
       } else {
-        const rack = area.racks.find(r => r.id === firstRackId);
-        assignedLocation = `${yard.name}, ${area.name}, ${rack?.name}`;
-      }
-    }
-
-    // Update request status
-    await updateRequestMutation.mutateAsync({
-      ...request,
-      status: 'APPROVED',
-      assignedRackIds,
-      assignedLocation,
-      approvedAt,
-      approvedBy,
-      internalNotes,
-      rejectionReason: null,
-      rejectedAt: null,
-    });
-
-    // Update yard occupancy
-    let jointsToAllocate = requiredJoints;
-    for (const rackId of assignedRackIds) {
-      const [yardId, areaId] = rackId.split('-');
-      const yard = yards.find(y => y.id === yardId);
-      const area = yard?.areas.find(a => a.id === `${yardId}-${areaId}`);
-      const rack = area?.racks.find(r => r.id === rackId);
-
-      if (rack) {
-        const spaceInRack = Math.min(jointsToAllocate, rack.capacity - rack.occupied);
-        const metersForRack = spaceInRack * avgJointLength;
-
-        await updateRackMutation.mutateAsync({
-          id: rackId,
-          updates: {
-            occupied: rack.occupied + spaceInRack,
-            occupiedMeters: (rack.occupiedMeters || 0) + metersForRack,
-          },
+        console.error('[OpenStorage] Unable to resolve location label', {
+          requestId,
+          firstRackId,
+          firstYardId,
+          firstAreaId,
         });
-
-        jointsToAllocate -= spaceInRack;
       }
-    }
 
-    // Send notification
-    if (assignedLocation) {
-      emailService.sendApprovalEmail(request.userId, request.referenceId, assignedLocation);
-    }
+      // Update request status
+      await updateRequestMutation.mutateAsync({
+        ...request,
+        status: 'APPROVED',
+        assignedRackIds,
+        assignedLocation,
+        approvedAt,
+        approvedBy,
+        internalNotes,
+        rejectionReason: null,
+        rejectedAt: null,
+      });
 
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.requests }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.companies }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.requestsByCompany(request.companyId) }),
-    ]);
+      // Update yard occupancy
+      let jointsToAllocate = requiredJoints;
+      for (const rackId of assignedRackIds) {
+        const [yardId, areaId] = rackId.split('-');
+        const yard = yards.find(y => y.id === yardId);
+        if (!yard) {
+          console.error('[OpenStorage] Yard not found during allocation', { requestId, rackId, yardId });
+          continue;
+        }
+
+        const area = yard.areas.find(a => a.id === `${yardId}-${areaId}`);
+        if (!area) {
+          console.error('[OpenStorage] Area not found during allocation', { requestId, rackId, yardId, areaId });
+          continue;
+        }
+
+        const rack = area.racks.find(r => r.id === rackId);
+        if (!rack) {
+          console.error('[OpenStorage] Rack not found during allocation', { requestId, rackId });
+          continue;
+        }
+
+        if (rack.allocationMode === 'SLOT') {
+          await updateRackMutation.mutateAsync({
+            id: rackId,
+            updates: {
+              occupied: rack.capacity,
+              occupiedMeters: rack.capacityMeters,
+            },
+          });
+        } else {
+          const spaceInRack = Math.min(jointsToAllocate, Math.max(0, rack.capacity - rack.occupied));
+          const metersForRack = spaceInRack * avgJointLength;
+
+          await updateRackMutation.mutateAsync({
+            id: rackId,
+            updates: {
+              occupied: rack.occupied + spaceInRack,
+              occupiedMeters: (rack.occupiedMeters || 0) + metersForRack,
+            },
+          });
+
+          jointsToAllocate -= spaceInRack;
+        }
+      }
+
+      // Send notification
+      if (assignedLocation) {
+        emailService.sendApprovalEmail(request.userId, request.referenceId, assignedLocation);
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.requests }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.companies }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.requestsByCompany(request.companyId) }),
+      ]);
+    } catch (error) {
+      console.error('[OpenStorage] Approval workflow failed', { requestId, assignedRackIds }, error);
+      throw error;
+    }
   };
 
   const rejectRequest = async (requestId: string, reason: string) => {
@@ -246,10 +283,15 @@ function App() {
         userId: userEmail,
       };
 
-      const userRequests = requests.filter((r) =>
-        r.companyId === session.company.id ||
-        r.userId.toLowerCase() === userEmail
-      );
+      const companyRequests =
+        session.company.id && session.company.id !== 'temp'
+          ? requests.filter((r) => r.companyId === session.company.id)
+          : requests.filter((r) => r.userId.toLowerCase() === userEmail);
+
+      const userRequests = companyRequests.length
+        ? companyRequests.filter((r) => r.userId.trim().toLowerCase() === userEmail)
+        : requests.filter((r) => r.userId.trim().toLowerCase() === userEmail);
+
       const allCompanyInventory = inventory.filter((i) => i.companyId === session.company.id);
       const companyDocuments = documents.filter((doc) => doc.companyId === session.company.id);
 
@@ -258,6 +300,7 @@ function App() {
           session={session}
           onLogout={handleLogout}
           requests={userRequests}
+          companyRequests={companyRequests}
           projectInventory={[]}
           allCompanyInventory={allCompanyInventory}
           documents={companyDocuments}

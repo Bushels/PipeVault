@@ -4,6 +4,7 @@ import StorageRequestWizard from './StorageRequestWizard';
 import StorageRequestMenu from './StorageRequestMenu';
 import FormHelperChatbot from './FormHelperChatbot';
 import InboundShipmentWizard from './InboundShipmentWizard';
+import RequestDocumentsPanel from './RequestDocumentsPanel';
 import type { Session, StorageRequest, Pipe } from '../types';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -14,6 +15,7 @@ interface DashboardProps {
   session: Session;
   onLogout: () => void;
   requests: StorageRequest[];
+  companyRequests: StorageRequest[];
   projectInventory: Pipe[];
   allCompanyInventory: Pipe[];
   documents: any[];
@@ -23,14 +25,14 @@ interface DashboardProps {
 
 type SelectedOption = 'menu' | 'new-storage' | 'delivery-in' | 'delivery-out' | 'chat' | 'upload-docs';
 
-const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, projectInventory, updateRequest, addRequest }) => {
+const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, companyRequests, projectInventory, updateRequest, addRequest }) => {
   const { user } = useAuth();
   const [selectedOption, setSelectedOption] = useState<Omit<SelectedOption, 'chat'> | 'menu'>('menu');
   const [archivingRequestId, setArchivingRequestId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<StorageRequest | null>(null);
 
   // Check if user has any approved requests
-  const hasActiveRequest = requests.some(r => r.companyId === session.company.id && r.status === 'APPROVED');
+  const hasActiveRequest = requests.some(r => r.status === 'APPROVED');
   const currentUserEmail = session.userId;
 
   const handleSelectOption = (option: SelectedOption) => {
@@ -43,6 +45,23 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, proj
   };
 
   const handleScheduleDelivery = (request: StorageRequest) => {
+    const inboundLoads = (request.truckingLoads ?? []).filter(load => load.direction === 'INBOUND');
+    const blockingLoad = inboundLoads
+      .slice()
+      .sort((a, b) => b.sequenceNumber - a.sequenceNumber)
+      .find(load => !load.documents || load.documents.length === 0);
+
+    if (blockingLoad) {
+      const uploadNow = window.confirm(
+        `Load ${blockingLoad.sequenceNumber} is missing manifest paperwork. Upload the documents before booking another load?\n\nPress OK to upload now. Press Cancel to continue without uploading (not recommended).`
+      );
+      if (uploadNow) {
+        setSelectedRequest(request);
+        setSelectedOption('upload-docs');
+        return;
+      }
+    }
+
     setSelectedRequest(request);
     setSelectedOption('delivery-in');
   };
@@ -50,6 +69,18 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, proj
   const handleUploadDocuments = (request: StorageRequest) => {
     setSelectedRequest(request);
     setSelectedOption('upload-docs');
+  };
+
+  const handleDeliveryScheduled = async (updatedRequest: StorageRequest) => {
+    try {
+      setSelectedRequest(updatedRequest);
+      const result = await Promise.resolve(updateRequest(updatedRequest));
+      if (result) {
+        setSelectedRequest(result);
+      }
+    } catch (error) {
+      console.error('Failed to update request after scheduling delivery', error);
+    }
   };
 
   const handleArchiveRequest = async (request: StorageRequest, shouldArchive: boolean) => {
@@ -98,6 +129,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, proj
               request={selectedRequest}
               session={session}
               onBack={() => setSelectedOption('menu')}
+              onDeliveryScheduled={handleDeliveryScheduled}
             />
           )}
           {selectedOption === 'delivery-out' && (
@@ -108,17 +140,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, proj
             </Card>
           )}
           {selectedOption === 'upload-docs' && selectedRequest && (
-            <Card className="p-6">
-              <h2 className="text-2xl font-bold mb-4">Upload Documents for {selectedRequest.referenceId}</h2>
-              <p className="text-gray-400 mb-6">Upload manifest, tally sheets, or other relevant documentation.</p>
-              <div className="bg-gray-800/50 border-2 border-dashed border-gray-600 rounded-lg p-8 text-center">
-                <svg className="w-12 h-12 text-gray-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <p className="text-gray-400 text-sm mb-4">Document upload functionality coming soon</p>
-                <p className="text-xs text-gray-500">For now, please email documents to pipevault@mpsgroup.ca</p>
-              </div>
-            </Card>
+            <RequestDocumentsPanel
+              request={selectedRequest}
+              session={session}
+              onBack={() => setSelectedOption('menu')}
+            />
           )}
         </div>
       );
@@ -129,6 +155,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, proj
         companyName={session.company.name}
         hasActiveRequest={hasActiveRequest}
         requests={requests}
+        companyRequests={companyRequests}
         currentUserEmail={currentUserEmail}
         onSelectOption={handleSelectOption}
         onArchiveRequest={handleArchiveRequest}
@@ -173,6 +200,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, proj
 };
 
 export default Dashboard;
+
 
 
 
