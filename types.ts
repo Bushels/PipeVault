@@ -220,7 +220,7 @@ export interface NewRequestDetails {
   casingSpec: CasingSpec | null;
   grade: 'H40' | 'J55' | 'L80' | 'N80' | 'C90' | 'T95' | 'P110' | 'Other';
   gradeOther?: string;
-  connection: 'NUE' | 'EUE' | 'BTC' | 'Premium' | 'Semi-Premium' | 'Other';
+  connection: 'Blank' | 'NUE' | 'EUE' | 'BTC' | 'Premium' | 'Semi-Premium' | 'Other';
   connectionOther?: string;
   threadType?: string;
   avgJointLength: number;
