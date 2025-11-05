@@ -673,27 +673,40 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
         console.error('Failed to create shipment truck record:', truckError);
       }
 
-      const { data: appointment, error: appointmentError } = await supabase
+      // Check if appointment already exists for this shipment
+      const { data: existingAppointment } = await supabase
         .from('dock_appointments')
-        .insert({
-          shipment_id: shipment.id,
-          truck_id: truck?.id ?? null,
-          slot_start: slotStartIso,
-          slot_end: slotEndIso,
-          after_hours: selectedTimeSlot.is_after_hours,
-          surcharge_applied: selectedTimeSlot.is_after_hours,
-          status: selectedTimeSlot.is_after_hours ? 'PENDING' : 'CONFIRMED',
-          calendar_sync_status: 'PENDING',
-        })
         .select()
-        .single();
+        .eq('shipment_id', shipment.id)
+        .maybeSingle();
 
-      if (appointmentError) {
-        if (schemaMissing(appointmentError)) {
-          await notifyFallback();
-          return;
+      let appointment = existingAppointment;
+
+      if (!existingAppointment) {
+        const { data: newAppointment, error: appointmentError } = await supabase
+          .from('dock_appointments')
+          .insert({
+            shipment_id: shipment.id,
+            truck_id: truck?.id ?? null,
+            slot_start: slotStartIso,
+            slot_end: slotEndIso,
+            after_hours: selectedTimeSlot.is_after_hours,
+            surcharge_applied: selectedTimeSlot.is_after_hours,
+            status: selectedTimeSlot.is_after_hours ? 'PENDING' : 'CONFIRMED',
+            calendar_sync_status: 'PENDING',
+          })
+          .select()
+          .single();
+
+        if (appointmentError) {
+          if (schemaMissing(appointmentError)) {
+            await notifyFallback();
+            return;
+          }
+          console.error('Failed to create dock appointment:', appointmentError);
         }
-        console.error('Failed to create dock appointment:', appointmentError);
+
+        appointment = newAppointment;
       }
 
       const existingInboundLoads = (request.truckingLoads ?? []).filter(load => load.direction === 'INBOUND');
@@ -701,36 +714,61 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
         existingInboundLoads.reduce((max, load) => Math.max(max, load.sequenceNumber), 0) + 1;
       const loadStatus: TruckingLoadStatus = selectedTimeSlot.is_after_hours ? 'NEW' : 'APPROVED';
 
-      const { data: truckingLoad, error: truckingLoadError } = await supabase
+      // Check if trucking load already exists for this request/direction/sequence
+      const { data: existingLoad } = await supabase
         .from('trucking_loads')
-        .insert({
-          storage_request_id: request.id,
-          direction: 'INBOUND',
-          sequence_number: nextSequenceNumber,
-          status: loadStatus,
-          scheduled_slot_start: slotStartIso,
-          scheduled_slot_end: slotEndIso,
-          pickup_location: null,
-          delivery_location: storageData.storageYardAddress
-            ? {
-                company: storageData.storageCompanyName,
-                address: storageData.storageYardAddress,
-              }
-            : null,
-          trucking_company: truckingData.truckingCompanyName,
-          contact_company: storageData.storageCompanyName,
-          contact_name: storageData.storageContactName,
-          contact_phone: storageData.storageContactPhone,
-          contact_email: storageData.storageContactEmail,
-          driver_name: truckingData.driverName,
-          driver_phone: truckingData.driverPhone,
-          notes: logisticsNotes,
-          total_joints_planned: loadSummary?.total_joints ?? null,
-          total_length_ft_planned: loadSummary?.total_length_ft ?? null,
-          total_weight_lbs_planned: loadSummary?.total_weight_lbs ?? null,
-        })
         .select()
-        .single();
+        .eq('storage_request_id', request.id)
+        .eq('direction', 'INBOUND')
+        .eq('sequence_number', nextSequenceNumber)
+        .maybeSingle();
+
+      let truckingLoad = existingLoad;
+      let truckingLoadError = null;
+
+      if (!existingLoad) {
+        const { data: newLoad, error: loadError } = await supabase
+          .from('trucking_loads')
+          .insert({
+            storage_request_id: request.id,
+            direction: 'INBOUND',
+            sequence_number: nextSequenceNumber,
+            status: loadStatus,
+            scheduled_slot_start: slotStartIso,
+            scheduled_slot_end: slotEndIso,
+            pickup_location: null,
+            delivery_location: storageData.storageYardAddress
+              ? {
+                  company: storageData.storageCompanyName,
+                  address: storageData.storageYardAddress,
+                }
+              : null,
+            trucking_company: truckingData.truckingCompanyName,
+            contact_company: storageData.storageCompanyName,
+            contact_name: storageData.storageContactName,
+            contact_phone: storageData.storageContactPhone,
+            contact_email: storageData.storageContactEmail,
+            driver_name: truckingData.driverName,
+            driver_phone: truckingData.driverPhone,
+            notes: logisticsNotes,
+            total_joints_planned: loadSummary?.total_joints ?? null,
+            total_length_ft_planned: loadSummary?.total_length_ft ?? null,
+            total_weight_lbs_planned: loadSummary?.total_weight_lbs ?? null,
+          })
+          .select()
+          .single();
+
+        if (loadError) {
+          if (schemaMissing(loadError)) {
+            await notifyFallback();
+            return;
+          }
+          console.error('Failed to create trucking load record:', loadError);
+        }
+
+        truckingLoad = newLoad;
+        truckingLoadError = loadError;
+      }
 
       if (truckingLoadError || !truckingLoad) {
         if (schemaMissing(truckingLoadError)) {

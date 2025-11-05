@@ -31,24 +31,49 @@ const LoadSummaryReview: React.FC<LoadSummaryReviewProps> = ({
   // AI is processing documents
   if (isProcessing) {
     return (
-      <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl border border-gray-700/50 p-8">
-        <div className="flex flex-col items-center justify-center text-center">
-          <div className="relative w-20 h-20 mb-6">
+      <div className="bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 rounded-2xl border-2 border-purple-500/30 shadow-2xl p-12 min-h-[400px] flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center text-center max-w-2xl">
+          {/* Animated Icon */}
+          <div className="relative w-32 h-32 mb-8">
             <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-red-600 rounded-full opacity-20 animate-ping" />
-            <div className="relative w-20 h-20 bg-gradient-to-r from-purple-600 to-red-600 rounded-full flex items-center justify-center">
-              <svg className="w-10 h-10 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="absolute inset-4 bg-gradient-to-r from-purple-600 to-red-600 rounded-full opacity-10 animate-ping animation-delay-300" />
+            <div className="relative w-32 h-32 bg-gradient-to-r from-purple-600 to-red-600 rounded-full flex items-center justify-center shadow-2xl shadow-purple-500/50">
+              <svg className="w-16 h-16 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
               </svg>
             </div>
           </div>
-          <h3 className="text-xl font-bold text-white mb-2">AI Processing Your Manifest</h3>
-          <p className="text-sm text-gray-400 mb-4 max-w-md">
-            Our AI is extracting pipe details, calculating totals, and verifying data accuracy. This usually takes 5-10 seconds.
+
+          {/* Main Heading */}
+          <h3 className="text-3xl font-bold text-white mb-4">
+            🤖 AI Reading Your Manifest
+          </h3>
+
+          {/* Description */}
+          <p className="text-lg text-gray-300 mb-6 max-w-lg leading-relaxed">
+            Our AI is analyzing your document, extracting pipe details, calculating totals, and verifying data accuracy.
           </p>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-600 border-t-purple-500" />
-            <span>Extracting joints, lengths, and weights...</span>
+
+          {/* Progress Indicators */}
+          <div className="space-y-3 mb-8">
+            <div className="flex items-center justify-center gap-3 text-sm text-gray-400">
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-600 border-t-purple-500" />
+              <span>Scanning document pages...</span>
+            </div>
+            <div className="flex items-center justify-center gap-3 text-sm text-gray-400">
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-600 border-t-purple-500 animation-delay-200" />
+              <span>Extracting joints, lengths, and weights...</span>
+            </div>
+            <div className="flex items-center justify-center gap-3 text-sm text-gray-400">
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-600 border-t-purple-500 animation-delay-400" />
+              <span>Calculating totals and verifying accuracy...</span>
+            </div>
           </div>
+
+          {/* Time Estimate */}
+          <p className="text-sm text-gray-500 bg-gray-800/50 px-4 py-2 rounded-full">
+            ⏱️ Typical processing time: 5-15 seconds
+          </p>
         </div>
       </div>
     );
@@ -123,11 +148,11 @@ const LoadSummaryReview: React.FC<LoadSummaryReviewProps> = ({
               <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Total Length</p>
             </div>
             <p className="text-3xl font-bold text-white">
-              {loadSummary.total_length_ft.toLocaleString()}
-              <span className="text-lg text-gray-400 ml-1">ft</span>
+              {loadSummary.total_length_m.toLocaleString()}
+              <span className="text-lg text-gray-400 ml-1">m</span>
             </p>
             <p className="text-sm text-gray-400 mt-1">
-              ({loadSummary.total_length_m.toLocaleString()} m)
+              ({loadSummary.total_length_ft.toLocaleString()} ft)
             </p>
           </div>
 
@@ -140,11 +165,11 @@ const LoadSummaryReview: React.FC<LoadSummaryReviewProps> = ({
               <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Total Weight</p>
             </div>
             <p className="text-3xl font-bold text-white">
-              {loadSummary.total_weight_lbs.toLocaleString()}
-              <span className="text-lg text-gray-400 ml-1">lbs</span>
+              {loadSummary.total_weight_kg.toLocaleString()}
+              <span className="text-lg text-gray-400 ml-1">kg</span>
             </p>
             <p className="text-sm text-gray-400 mt-1">
-              ({loadSummary.total_weight_kg.toLocaleString()} kg)
+              ({loadSummary.total_weight_lbs.toLocaleString()} lbs)
             </p>
           </div>
         </div>
