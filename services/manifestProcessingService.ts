@@ -187,7 +187,7 @@ export const extractManifestData = async (
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash-exp',
     generationConfig: {
       temperature: 0.1, // Low temperature for factual extraction
       topK: 1,
@@ -262,7 +262,7 @@ export const validateManifestData = async (
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash-exp',
     generationConfig: {
       temperature: 0.1,
       topK: 1,
