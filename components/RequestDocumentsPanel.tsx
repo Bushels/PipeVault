@@ -6,6 +6,7 @@ import {
   useTruckingLoadsByRequest,
   useTruckingDocuments,
   useCreateTruckingDocument,
+  useDeleteTruckingDocument,
 } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { formatDate } from '../utils/dateUtils';
@@ -47,8 +48,8 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
   const [isProcessingManifest, setIsProcessingManifest] = useState(false);
   const [loadSummary, setLoadSummary] = useState<LoadSummary | null>(null);
   const [documentToDelete, setDocumentToDelete] = useState<TruckingDocument | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const createDocument = useCreateTruckingDocument();
+  const deleteDocument = useDeleteTruckingDocument();
 
   useEffect(() => {
     if (!loads.length) {
@@ -68,7 +69,6 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
   const {
     data: documents = [],
     isLoading: documentsLoading,
-    refetch: refetchDocuments,
   } = useTruckingDocuments(selectedLoadId ?? undefined);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -186,7 +186,6 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
       }
 
       resetFormState();
-      await refetchDocuments();
     } catch (error: any) {
       setErrorMessage(error.message || 'Unable to upload the document.');
     } finally {
@@ -211,38 +210,18 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
     if (!documentToDelete) return;
 
     try {
-      setIsDeleting(true);
       setErrorMessage(null);
 
-      // Delete from storage first
-      if (documentToDelete.storagePath) {
-        const { error: storageError } = await supabase.storage
-          .from('documents')
-          .remove([documentToDelete.storagePath]);
-
-        if (storageError) {
-          console.error('Failed to delete file from storage:', storageError);
-          // Continue with database deletion even if storage fails
-        }
-      }
-
-      // Delete from database
-      const { error: dbError } = await supabase
-        .from('trucking_documents')
-        .delete()
-        .eq('id', documentToDelete.id);
-
-      if (dbError) {
-        throw new Error(dbError.message || 'Failed to delete document from database');
-      }
+      await deleteDocument.mutateAsync({
+        id: documentToDelete.id,
+        truckingLoadId: documentToDelete.truckingLoadId,
+        storagePath: documentToDelete.storagePath || undefined,
+      });
 
       setStatusMessage('Document deleted successfully.');
       setDocumentToDelete(null);
-      await refetchDocuments();
     } catch (error: any) {
       setErrorMessage(error.message || 'Unable to delete document.');
-    } finally {
-      setIsDeleting(false);
     }
   };
 
@@ -424,16 +403,16 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
               <Button
                 variant="secondary"
                 onClick={() => setDocumentToDelete(null)}
-                disabled={isDeleting}
+                disabled={deleteDocument.isPending}
               >
                 Cancel
               </Button>
               <Button
                 variant="danger"
                 onClick={confirmDeleteDocument}
-                disabled={isDeleting}
+                disabled={deleteDocument.isPending}
               >
-                {isDeleting ? 'Deleting...' : 'Delete Document'}
+                {deleteDocument.isPending ? 'Deleting...' : 'Delete Document'}
               </Button>
             </div>
           </div>

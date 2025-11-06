@@ -102,6 +102,11 @@ All notable changes to the PipeVault project are documented in this file.
 #### Delete Document Functionality
 - **User Request**: Enable customers to delete documents after upload in case of wrong file upload
 - **Implementation**: Added delete functionality to post-submission document uploads
+- **Bug Fixed**: Documents showed "deleted successfully" but remained visible in UI
+  - **Root Cause**: Manual deletion with `refetch()` doesn't invalidate React Query cache
+  - **Solution**: Created `useDeleteTruckingDocument` mutation hook
+  - **Cache Strategy**: Properly invalidates `truckingDocumentsByLoad` and `requests` queries after deletion
+  - **Pattern Consistency**: Follows same pattern as `useCreateTruckingDocument` and other mutations
 - **Confirmation Dialog**: Prevents accidental deletion with modal confirmation
   - Shows document filename
   - Warning message: "This action cannot be undone"
@@ -109,12 +114,15 @@ All notable changes to the PipeVault project are documented in this file.
 - **Delete Process**:
   - Deletes file from Supabase storage (`documents` bucket)
   - Deletes record from database (`trucking_documents` table)
-  - Success message and automatic document list refresh
+  - Automatically invalidates React Query cache for instant UI update
+  - Success message displays after successful deletion
 - **Error Handling**: Graceful degradation if storage deletion fails (continues with DB deletion)
 - **Available in Both Upload Locations**:
   - InboundShipmentWizard: Remove button during initial upload ✅
   - RequestDocumentsPanel: Delete button for uploaded documents ✅
-- **Files**: `components/RequestDocumentsPanel.tsx` (lines 49-50, 210-247, 401-441)
+- **Files**:
+  - `hooks/useSupabaseData.ts` (lines 1842-1874) - New `useDeleteTruckingDocument` mutation hook
+  - `components/RequestDocumentsPanel.tsx` (lines 9, 52, 69-72, 189, 211-228, 408, 415, 417) - Updated to use mutation hook
 
 ### 📚 Documentation
 

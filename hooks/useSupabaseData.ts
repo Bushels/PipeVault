@@ -1839,5 +1839,39 @@ export function useCreateTruckingDocument() {
   });
 }
 
+export function useDeleteTruckingDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, truckingLoadId, storagePath }: { id: string; truckingLoadId: string; storagePath?: string }) => {
+      // Delete from storage first if path provided
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove([storagePath]);
+
+        if (storageError) {
+          console.error('Failed to delete file from storage:', storageError);
+          // Continue with database deletion even if storage fails
+        }
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('trucking_documents')
+        .delete()
+        .eq('id', id);
+
+      if (dbError) throw dbError;
+
+      return { id, truckingLoadId };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.truckingDocumentsByLoad(result.truckingLoadId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.requests });
+    },
+  });
+}
+
 
 
