@@ -46,6 +46,8 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
   const [uploading, setUploading] = useState(false);
   const [isProcessingManifest, setIsProcessingManifest] = useState(false);
   const [loadSummary, setLoadSummary] = useState<LoadSummary | null>(null);
+  const [documentToDelete, setDocumentToDelete] = useState<TruckingDocument | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const createDocument = useCreateTruckingDocument();
 
   useEffect(() => {
@@ -205,6 +207,45 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
     window.open(data.signedUrl, '_blank', 'noopener');
   };
 
+  const confirmDeleteDocument = async () => {
+    if (!documentToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      setErrorMessage(null);
+
+      // Delete from storage first
+      if (documentToDelete.storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove([documentToDelete.storagePath]);
+
+        if (storageError) {
+          console.error('Failed to delete file from storage:', storageError);
+          // Continue with database deletion even if storage fails
+        }
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('trucking_documents')
+        .delete()
+        .eq('id', documentToDelete.id);
+
+      if (dbError) {
+        throw new Error(dbError.message || 'Failed to delete document from database');
+      }
+
+      setStatusMessage('Document deleted successfully.');
+      setDocumentToDelete(null);
+      await refetchDocuments();
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Unable to delete document.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const renderNoLoadsState = () => (
     <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-4 text-yellow-100 text-sm">
       <p className="font-semibold mb-1">Uploads unlock after your first load.</p>
@@ -357,6 +398,9 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
                     <Button variant="secondary" onClick={() => handlePreview(doc)}>
                       View
                     </Button>
+                    <Button variant="danger" onClick={() => setDocumentToDelete(doc)}>
+                      Delete
+                    </Button>
                   </div>
                 </li>
               ))}
@@ -364,6 +408,37 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {documentToDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 border border-gray-600 rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-bold text-white mb-3">Delete Document</h3>
+            <p className="text-sm text-gray-300 mb-4">
+              Are you sure you want to delete <strong className="text-white">{documentToDelete.fileName}</strong>?
+            </p>
+            <p className="text-xs text-red-300 mb-6">
+              This action cannot be undone. The document will be permanently removed from storage.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => setDocumentToDelete(null)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={confirmDeleteDocument}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Document'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 };
