@@ -99,6 +99,23 @@ All notable changes to the PipeVault project are documented in this file.
   - Fallback message: "Admin will review manually" if extraction fails
 - **Files**: `components/RequestDocumentsPanel.tsx` (lines 12-13, 47-48, 97-183, 303-326)
 
+#### Delete Document Functionality
+- **User Request**: Enable customers to delete documents after upload in case of wrong file upload
+- **Implementation**: Added delete functionality to post-submission document uploads
+- **Confirmation Dialog**: Prevents accidental deletion with modal confirmation
+  - Shows document filename
+  - Warning message: "This action cannot be undone"
+  - Cancel/Delete buttons with loading states
+- **Delete Process**:
+  - Deletes file from Supabase storage (`documents` bucket)
+  - Deletes record from database (`trucking_documents` table)
+  - Success message and automatic document list refresh
+- **Error Handling**: Graceful degradation if storage deletion fails (continues with DB deletion)
+- **Available in Both Upload Locations**:
+  - InboundShipmentWizard: Remove button during initial upload ✅
+  - RequestDocumentsPanel: Delete button for uploaded documents ✅
+- **Files**: `components/RequestDocumentsPanel.tsx` (lines 49-50, 210-247, 401-441)
+
 ### 📚 Documentation
 
 #### New Documentation Files
