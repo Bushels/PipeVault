@@ -39,7 +39,8 @@
       "Bash(npm info:*)",
       "Bash(nul)",
       "Bash(del nul 2)",
-      "Bash(git remote get-url:*)"
+      "Bash(git remote get-url:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

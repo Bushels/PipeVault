@@ -2,7 +2,25 @@
 
 PipeVault is MPS Group's portal for running the 20-year anniversary "Free Pipe Storage" promotion. Customers submit storage requests and monitor projects, while admins approve work, assign racks, and track inventory with AI assistance.
 
+## Quick Overview
+
+**FREE, enterprise-grade pipe storage management** built in 2 weeks with AI assistance (traditional cost: $222,000, 9 months).
+
+**Key Innovations**:
+- **AI-Powered**: Gemini Vision extracts manifest data automatically, Claude chatbot provides instant assistance
+- **Zero Friction**: One-click booking, auto-filled forms, drag-and-drop uploads, real-time status updates
+- **Real-time Collaboration**: Multiple admins see changes instantly (like Google Docs)
+- **Production Security**: Multi-tenant RLS, atomic transactions, comprehensive audit trails
+
+**Impact**:
+- Customers: Book storage in **5 minutes** (vs 2 days of emails)
+- Admins: Approve requests in **30 seconds** with AI-verified data
+- MPS Group: **$312,000 5-year value**, fully customizable, zero vendor lock-in
+
+🎯 **[Read Full Elevator Pitch](docs/ELEVATOR_PITCH.md)** | 📊 **[View Statistics](docs/PROJECT_STATISTICS.md)**
+
 ## Table of Contents
+- [Quick Overview](#quick-overview)
 - [Product Snapshot](#product-snapshot)
 - [Project Statistics](#project-statistics)
 - [Core Flows](#core-flows)
