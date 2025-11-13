@@ -512,14 +512,14 @@ export function useRequests(companyId?: string) {
   return useQuery({
     queryKey: companyId ? queryKeys.requestsByCompany(companyId) : queryKeys.requests,
     queryFn: async () => {
-      // Note: Using !trucking_documents_load_fkey to disambiguate duplicate foreign keys
+      // Note: Using !trucking_documents_trucking_load_id_fkey to reference the correct foreign key
       let query = supabase
         .from('storage_requests')
         .select(`
           *,
           trucking_loads(
             *,
-            trucking_documents!trucking_documents_load_fkey(*)
+            trucking_documents!trucking_documents_trucking_load_id_fkey(*)
           )
         `)
         .order('created_at', { ascending: false });

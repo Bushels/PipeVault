@@ -156,14 +156,14 @@ export function useCompanyDetails(companyId?: string) {
       if (companyError) throw companyError;
 
       // Fetch all requests with trucking loads
-      // Note: Using !trucking_documents_load_fkey to disambiguate duplicate foreign keys
+      // Note: Using !trucking_documents_trucking_load_id_fkey to reference the correct foreign key
       const { data: requestsRaw, error: requestsError } = await supabase
         .from('storage_requests')
         .select(`
           *,
           trucking_loads(
             *,
-            trucking_documents!trucking_documents_load_fkey(*)
+            trucking_documents!trucking_documents_trucking_load_id_fkey(*)
           )
         `)
         .eq('company_id', companyId)

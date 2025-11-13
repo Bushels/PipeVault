@@ -102,7 +102,7 @@ export function usePendingLoads() {
             company_id,
             company:companies!inner(id, name, domain)
           ),
-          documents:trucking_documents!trucking_documents_load_fkey(id, file_name)
+          documents:trucking_documents!trucking_documents_trucking_load_id_fkey(id, file_name)
         `)
         .eq('direction', 'INBOUND')
         .eq('status', 'NEW')
@@ -158,7 +158,7 @@ export function useLoadDetails(loadId?: string) {
             *,
             company:companies!inner(*)
           ),
-          documents:trucking_documents!trucking_documents_load_fkey(*)
+          documents:trucking_documents!trucking_documents_trucking_load_id_fkey(*)
         `)
         .eq('id', loadId)
         .single();
