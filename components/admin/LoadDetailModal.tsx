@@ -572,7 +572,7 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
                   </button>
                 )}
 
-                {/* IN_TRANSIT: En Route - Show Mark Completed */}
+                {/* IN_TRANSIT: En Route - Show Receive Load */}
                 {loadData.status === 'IN_TRANSIT' && (
                   <button
                     onClick={() => setShowCompletionModal(true)}
@@ -582,14 +582,14 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
                     {isMarkingCompleted ? (
                       <>
                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Marking Completed...
+                        Receiving Load...
                       </>
                     ) : (
                       <>
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Mark Completed
+                        Receive Load #{loadData.sequence_number}
                       </>
                     )}
                   </button>
