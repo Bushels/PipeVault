@@ -328,19 +328,19 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
                 <div>
                   <p className="text-xs text-cyan-400 uppercase">Total Length</p>
                   <p className="text-2xl font-bold text-white">
-                    {loadData.total_length_ft_planned?.toFixed(1) || '0.0'} ft
+                    {((loadData.total_length_ft_planned || 0) * 0.3048).toFixed(1)} m
                   </p>
                   <p className="text-sm text-gray-400">
-                    ({((loadData.total_length_ft_planned || 0) * 0.3048).toFixed(1)} m)
+                    ({loadData.total_length_ft_planned?.toFixed(1) || '0.0'} ft)
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-cyan-400 uppercase">Total Weight</p>
                   <p className="text-2xl font-bold text-white">
-                    {(loadData.total_weight_lbs_planned || 0).toLocaleString()} lbs
+                    {((loadData.total_weight_lbs_planned || 0) * 0.453592).toLocaleString(undefined, { maximumFractionDigits: 0 })} kg
                   </p>
                   <p className="text-sm text-gray-400">
-                    ({((loadData.total_weight_lbs_planned || 0) * 0.453592).toFixed(0)} kg)
+                    ({(loadData.total_weight_lbs_planned || 0).toLocaleString()} lbs)
                   </p>
                 </div>
               </div>
@@ -367,7 +367,7 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
                       }
 
                       const publicUrl = supabase.storage
-                        .from('trucking-documents')
+                        .from('documents')
                         .getPublicUrl(doc.storagePath).data.publicUrl;
 
                       return (

@@ -766,13 +766,17 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
             status: loadStatus,
             scheduled_slot_start: slotStartIso,
             scheduled_slot_end: slotEndIso,
-            pickup_location: null,
-            delivery_location: storageData.storageYardAddress
+            // INBOUND: pickup_location = customer's yard (FROM), delivery_location = MPS facility (TO)
+            pickup_location: storageData.storageYardAddress
               ? {
                   company: storageData.storageCompanyName,
                   address: storageData.storageYardAddress,
                 }
               : null,
+            delivery_location: {
+              facility: 'MPS Pipe Storage',
+              address: 'Bobs Address 123', // TODO: Replace with actual MPS facility address from env/config
+            },
             trucking_company: truckingData.truckingCompanyName,
             contact_company: storageData.storageCompanyName,
             contact_name: storageData.storageContactName,

@@ -38,7 +38,8 @@
       "Bash(if not exist \"components\\admin\\tiles\" mkdir \"components\\admin\\tiles\")",
       "Bash(npm info:*)",
       "Bash(nul)",
-      "Bash(del nul 2)"
+      "Bash(del nul 2)",
+      "Bash(git remote get-url:*)"
     ],
     "deny": [],
     "ask": []
