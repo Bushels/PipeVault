@@ -601,6 +601,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       sum + yard.areas.reduce((asum, area) =>
         asum + area.racks.reduce((rsum, rack) => rsum + (rack.occupiedMeters || 0), 0), 0), 0);
     const utilization = totalCapacity > 0 ? (totalOccupied / totalCapacity * 100) : 0;
+    const racksWithPipe = yards.reduce((count, yard) =>
+      count + yard.areas.reduce((areaCount, area) =>
+        areaCount + area.racks.filter(rack => (rack.occupiedMeters || 0) > 0).length,
+      0),
+    0);
     const totalStoredKg = inventory.reduce((sum, pipe) => {
       if (pipe.status !== 'IN_STORAGE') return sum;
       if (typeof pipe.weight !== 'number' || typeof pipe.length !== 'number' || typeof pipe.quantity !== 'number') {
@@ -667,6 +672,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         available: totalCapacity - totalOccupied,
         utilization,
         totalStoredKg,
+        racksWithPipe,
       },
       companies: companies.length,
       inventory: { total: inventory.length, inStorage: inventory.filter(p => p.status === 'IN_STORAGE').length },
@@ -719,7 +725,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     { id: 'requests', label: 'All Requests', badge: requests.length },
     { id: 'companies', label: 'Companies', badge: companies.length },
     { id: 'inventory', label: 'Inventory', badge: inventory.length },
-    { id: 'storage', label: 'Storage', badge: yards.length },
+    { id: 'storage', label: 'Racks', badge: analytics.storage.racksWithPipe },
     { id: 'shipments', label: 'Shipments', badge: analytics.logistics?.trucksPending },
     { id: 'ai', label: 'AI Assistant' },
   ];
