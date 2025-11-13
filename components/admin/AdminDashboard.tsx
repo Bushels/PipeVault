@@ -50,6 +50,7 @@ import ApprovedLoadsTile from './tiles/ApprovedLoadsTile';
 import InTransitTile from './tiles/InTransitTile';
 import OutboundLoadsTile from './tiles/OutboundLoadsTile';
 import { usePendingLoadsCount, useApprovedLoadsCount, useInTransitLoadsCount } from '../../hooks/useTruckingLoadQueries';
+import { useRealtimeUpdates } from '../../hooks/useRealtimeUpdates';
 
 interface AdminDashboardProps {
   session: AdminSession;
@@ -130,6 +131,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const { data: pendingLoadsCount = 0 } = usePendingLoadsCount();
   const { data: approvedLoadsCount = 0 } = useApprovedLoadsCount();
   const { data: inTransitLoadsCount = 0 } = useInTransitLoadsCount();
+
+  // Enable realtime updates for multi-admin collaboration
+  useRealtimeUpdates({ enabled: true, debug: false });
 
   const getRequestStatusMeta = (request: StorageRequest) => {
     const snapshot = getRequestLogisticsSnapshot(request);
