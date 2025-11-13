@@ -5,6 +5,10 @@ import {
   getRequestLogisticsSnapshot,
   getStatusBadgeTone,
 } from '../../utils/truckingStatus';
+import {
+  inchesToMillimeters,
+  lbsPerFtToKgPerM,
+} from '../../utils/unitConversions';
 import type {
   NewRequestDetails,
   ProvidedTruckingDetails,
@@ -49,14 +53,14 @@ const buildPipeFacts = (details?: NewRequestDetails | null): Fact[] => {
   if (connection) facts.push({ label: 'Connection', value: connection });
   if (details.threadType) facts.push({ label: 'Thread Type', value: details.threadType });
   if (typeof details.avgJointLength === 'number') {
-    facts.push({ label: 'Avg Joint Length', value: `${details.avgJointLength} ft` });
+    facts.push({ label: 'Avg Joint Length', value: `${details.avgJointLength.toFixed(1)} m` });
   }
   if (typeof details.totalJoints === 'number') {
     facts.push({ label: 'Total Joints', value: details.totalJoints.toLocaleString() });
   }
   if (typeof details.avgJointLength === 'number' && typeof details.totalJoints === 'number') {
     const totalLength = details.avgJointLength * details.totalJoints;
-    facts.push({ label: 'Total Length', value: `${totalLength.toFixed(1)} ft` });
+    facts.push({ label: 'Total Length', value: `${totalLength.toFixed(1)} m` });
   }
   if (details.storageStartDate || details.storageEndDate) {
     facts.push({
@@ -76,18 +80,21 @@ const buildPipeFacts = (details?: NewRequestDetails | null): Fact[] => {
 
   if (details.casingSpec) {
     if (typeof details.casingSpec.size_in === 'number') {
-      facts.push({ label: 'Outer Diameter (in)', value: details.casingSpec.size_in.toString() });
+      const outerDiameterMm = inchesToMillimeters(details.casingSpec.size_in);
+      facts.push({ label: 'Outer Diameter (mm)', value: outerDiameterMm.toFixed(1) });
     }
     if (typeof details.casingSpec.weight_lbs_ft === 'number') {
+      const weightKgPerM = lbsPerFtToKgPerM(details.casingSpec.weight_lbs_ft);
       facts.push({
-        label: 'Weight (lbs/ft)',
-        value: details.casingSpec.weight_lbs_ft.toFixed(1),
+        label: 'Weight (kg/m)',
+        value: weightKgPerM.toFixed(2),
       });
     }
     if (typeof details.casingSpec.drift_in === 'number') {
+      const driftMm = inchesToMillimeters(details.casingSpec.drift_in);
       facts.push({
-        label: 'Drift ID (in)',
-        value: details.casingSpec.drift_in.toFixed(3),
+        label: 'Drift ID (mm)',
+        value: driftMm.toFixed(1),
       });
     }
   }
