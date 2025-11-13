@@ -10,7 +10,7 @@ import {
 } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { formatDate } from '../utils/dateUtils';
-import { extractManifestData, type LoadSummary } from '../services/manifestProcessingService';
+import { extractManifestData, calculateLoadSummary, type LoadSummary, type ManifestItem } from '../services/manifestProcessingService';
 import LoadSummaryReview from './LoadSummaryReview';
 
 interface RequestDocumentsPanelProps {
@@ -132,8 +132,9 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
         throw new Error(storageError?.message || 'Unable to upload the file right now.');
       }
 
+      let createdDocument: TruckingDocument;
       try {
-        await createDocument.mutateAsync({
+        createdDocument = await createDocument.mutateAsync({
           truckingLoadId: selectedLoadId,
           fileName: `${label}.${extension}`,
           storagePath: storageData.path,
@@ -160,12 +161,21 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
           setIsProcessingManifest(true);
           setStatusMessage('Document uploaded successfully. AI is now extracting pipe data from your manifest...');
 
-          const summary = await extractManifestData(file);
-          setLoadSummary(summary);
-          setStatusMessage('Document uploaded and manifest data extracted successfully!');
+          // Extract manifest items using Gemini Vision
+          const extractedItems: ManifestItem[] = await extractManifestData(file);
 
-          // Optionally update the trucking load with extracted totals
-          if (summary && selectedLoadId) {
+          // Calculate load summary from extracted items
+          const summary: LoadSummary = calculateLoadSummary(extractedItems);
+          setLoadSummary(summary);
+
+          // Save extracted items to database (trucking_documents.parsed_payload)
+          await supabase
+            .from('trucking_documents')
+            .update({ parsed_payload: extractedItems as any })
+            .eq('id', createdDocument.id);
+
+          // Update the trucking load with extracted totals
+          if (selectedLoadId) {
             await supabase
               .from('trucking_loads')
               .update({
@@ -175,6 +185,8 @@ const RequestDocumentsPanel: React.FC<RequestDocumentsPanelProps> = ({ request, 
               })
               .eq('id', selectedLoadId);
           }
+
+          setStatusMessage('Document uploaded and manifest data extracted successfully!');
         } catch (extractionError: any) {
           console.error('AI extraction failed:', extractionError);
           setStatusMessage('Document uploaded successfully, but AI could not extract manifest data. Admin will review manually.');

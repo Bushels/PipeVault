@@ -26,7 +26,8 @@ type CompanyRow = Database['public']['Tables']['companies']['Row'];
 type StorageRequestRow = Database['public']['Tables']['storage_requests']['Row'];
 type InventoryRow = Database['public']['Tables']['inventory']['Row'];
 type DocumentRow = Database['public']['Tables']['documents']['Row'];
-type TruckLoadRow = Database['public']['Tables']['truck_loads']['Row'];
+// DEPRECATED: truck_loads table removed in migration 20251110000003
+// type TruckLoadRow = Database['public']['Tables']['truck_loads']['Row'];
 type ShipmentRow = Database['public']['Tables']['shipments']['Row'];
 type ShipmentTruckRow = Database['public']['Tables']['shipment_trucks']['Row'];
 type DockAppointmentRow = Database['public']['Tables']['dock_appointments']['Row'];
@@ -340,6 +341,7 @@ const mapTruckingDocumentRow = (row: TruckingDocumentRow): TruckingDocument => (
   documentType: row.document_type || null,
   uploadedBy: row.uploaded_by || null,
   uploadedAt: row.uploaded_at || undefined,
+  parsedPayload: (row.parsed_payload as any) || null, // AI-extracted manifest data
 });
 const mapShipmentRow = (row: ShipmentQueryRow): Shipment => {
   const appointments = row.dock_appointments ?? [];
@@ -413,7 +415,8 @@ export const queryKeys = {
   inventoryByReference: (companyId: string, referenceId: string) => ['inventory', companyId, referenceId] as const,
   yards: ['yards'] as const,
   racks: ['racks'] as const,
-  truckLoads: ['truckLoads'] as const,
+  // DEPRECATED: truckLoads removed in migration 20251110000003
+  // truckLoads: ['truckLoads'] as const,
   truckingLoads: ['trucking-loads'] as const,
   truckingLoadsByRequest: (requestId: string) => ['trucking-loads', requestId] as const,
   truckingDocuments: ['trucking-documents'] as const,
@@ -509,13 +512,14 @@ export function useRequests(companyId?: string) {
   return useQuery({
     queryKey: companyId ? queryKeys.requestsByCompany(companyId) : queryKeys.requests,
     queryFn: async () => {
+      // Note: Using !trucking_documents_load_fkey to disambiguate duplicate foreign keys
       let query = supabase
         .from('storage_requests')
         .select(`
           *,
           trucking_loads(
             *,
-            trucking_documents(*)
+            trucking_documents!trucking_documents_load_fkey(*)
           )
         `)
         .order('created_at', { ascending: false });
@@ -1577,78 +1581,59 @@ export function useUpdateRack() {
 // TRUCK LOADS
 // ============================================================================
 
+/**
+ * @deprecated REMOVED - truck_loads table dropped in migration 20251110000003
+ *
+ * The legacy truck_loads table has been deprecated in favor of trucking_loads.
+ * Use useTruckingLoadsByRequest() instead.
+ *
+ * Migration: supabase/migrations/20251110000003_deprecate_truck_loads_table.sql
+ *
+ * These hooks are kept temporarily to prevent build errors, but will throw
+ * runtime errors if called. Remove all usages and delete these hooks.
+ *
+ * References to remove:
+ * - App.tsx line 13, 18, 36, 43 (import and usage)
+ */
 export function useTruckLoads() {
   return useQuery({
-    queryKey: queryKeys.truckLoads,
+    queryKey: ['deprecated_truck_loads'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('truck_loads')
-        .select('*')
-        .order('arrival_time', { ascending: false });
-
-      if (error) throw error;
-      const rows = (data ?? []) as TruckLoadRow[];
-      return rows.map(mapTruckLoadRow);
+      throw new Error(
+        'useTruckLoads() is deprecated. The truck_loads table was removed. ' +
+        'Use useTruckingLoadsByRequest() with the new trucking_loads schema instead.'
+      );
     },
+    enabled: false, // Prevent auto-execution
   });
 }
 
+/**
+ * @deprecated REMOVED - truck_loads table dropped in migration 20251110000003
+ * Use useCreateTruckingLoad() instead.
+ */
 export function useAddTruckLoad() {
-  const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async (newTruckLoad: Omit<TruckLoad, 'id'>) => {
-      const { data, error } = await supabase
-        .from('truck_loads')
-        .insert({
-          type: newTruckLoad.type,
-          trucking_company: newTruckLoad.truckingCompany,
-          driver_name: newTruckLoad.driverName,
-          driver_phone: newTruckLoad.driverPhone ?? null,
-          arrival_time: newTruckLoad.arrivalTime,
-          departure_time: newTruckLoad.departureTime ?? null,
-          joints_count: newTruckLoad.jointsCount,
-          storage_area_id: newTruckLoad.storageAreaId ?? null,
-          related_request_id: newTruckLoad.relatedRequestId ?? null,
-          related_pipe_ids: newTruckLoad.relatedPipeIds ?? [],
-          assigned_uwi: newTruckLoad.assignedUWI ?? null,
-          assigned_well_name: newTruckLoad.assignedWellName ?? null,
-          notes: newTruckLoad.notes ?? null,
-          photo_urls: newTruckLoad.photoUrls ?? null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return mapTruckLoadRow(data as TruckLoadRow);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.truckLoads });
+    mutationFn: async () => {
+      throw new Error(
+        'useAddTruckLoad() is deprecated. The truck_loads table was removed. ' +
+        'Use useCreateTruckingLoad() with the new trucking_loads schema instead.'
+      );
     },
   });
 }
 
+/**
+ * @deprecated REMOVED - truck_loads table dropped in migration 20251110000003
+ * Use useUpdateTruckingLoad() instead.
+ */
 export function useUpdateTruckLoad() {
-  const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<TruckLoad> }) => {
-      const { data, error } = await supabase
-        .from('truck_loads')
-        .update({
-          departure_time: updates.departureTime ?? null,
-          notes: updates.notes ?? null,
-          photo_urls: updates.photoUrls ?? null,
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return mapTruckLoadRow(data as TruckLoadRow);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.truckLoads });
+    mutationFn: async () => {
+      throw new Error(
+        'useUpdateTruckLoad() is deprecated. The truck_loads table was removed. ' +
+        'Use useUpdateTruckingLoad() with the new trucking_loads schema instead.'
+      );
     },
   });
 }

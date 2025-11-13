@@ -187,7 +187,7 @@ export const extractManifestData = async (
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash-exp',
+    model: 'gemini-2.0-flash', // Stable vision model (not experimental) with free tier quota
     generationConfig: {
       temperature: 0.1, // Low temperature for factual extraction
       topK: 1,
@@ -242,7 +242,30 @@ export const extractManifestData = async (
     return extracted;
   } catch (error: any) {
     console.error('❌ Manifest extraction failed:', error);
-    throw new Error(`Failed to extract manifest data: ${error.message}`);
+
+    // Handle specific error types with user-friendly messages
+    if (error.message && error.message.includes('429')) {
+      throw new Error(
+        'AI service rate limit reached. Please try again in a few minutes, or skip document upload and proceed with manual entry.'
+      );
+    }
+
+    if (error.message && error.message.includes('quota')) {
+      throw new Error(
+        'AI service quota exceeded. Please skip document upload for now and upload documents later, or contact MPS admin.'
+      );
+    }
+
+    if (error.message && error.message.includes('API key')) {
+      throw new Error(
+        'AI service configuration error. Please skip document upload and contact MPS admin.'
+      );
+    }
+
+    // Generic error with helpful action
+    throw new Error(
+      `Failed to extract manifest data: ${error.message}. You can skip this step and proceed without AI extraction.`
+    );
   }
 };
 
@@ -262,7 +285,7 @@ export const validateManifestData = async (
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash-exp',
+    model: 'gemini-2.0-flash', // Stable vision model (not experimental) with free tier quota
     generationConfig: {
       temperature: 0.1,
       topK: 1,

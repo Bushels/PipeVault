@@ -422,6 +422,330 @@ ${payload.storage.contactPhone}` }
 };
 
 /**
+ * Sends a notification when customer reports an issue with AI-extracted manifest data
+ * @param payload - Issue notification details
+ */
+export const sendManifestIssueNotification = async (payload: {
+  referenceId: string;
+  companyName: string;
+  contactEmail: string;
+  loadNumber: number;
+  issueDescription: string;
+  documentNames: string[];
+  loadSummary?: {
+    total_joints?: number | null;
+    total_length_ft?: number | null;
+    total_weight_lbs?: number | null;
+  } | null;
+}) => {
+  const message = {
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: '⚠️ Manifest Data Issue Reported',
+          emoji: true
+        }
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Project Reference:*\n${payload.referenceId}` },
+          { type: 'mrkdwn', text: `*Company:*\n${payload.companyName}` },
+          { type: 'mrkdwn', text: `*Reported By:*\n${payload.contactEmail}` },
+          { type: 'mrkdwn', text: `*Load Number:*\n#${payload.loadNumber}` }
+        ]
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Issue Description:*\n${payload.issueDescription}`
+        }
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: payload.loadSummary?.total_joints !== undefined && payload.loadSummary?.total_joints !== null
+              ? `*AI Extracted Joints:*\n${payload.loadSummary.total_joints}`
+              : '*AI Extracted Joints:*\nN/A'
+          },
+          {
+            type: 'mrkdwn',
+            text: payload.loadSummary?.total_length_ft !== undefined && payload.loadSummary?.total_length_ft !== null
+              ? `*AI Extracted Length:*\n${payload.loadSummary.total_length_ft} ft`
+              : '*AI Extracted Length:*\nN/A'
+          },
+          {
+            type: 'mrkdwn',
+            text: payload.loadSummary?.total_weight_lbs !== undefined && payload.loadSummary?.total_weight_lbs !== null
+              ? `*AI Extracted Weight:*\n${payload.loadSummary.total_weight_lbs} lbs`
+              : '*AI Extracted Weight:*\nN/A'
+          }
+        ]
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Documents Uploaded:*\n${payload.documentNames.join(', ')}`
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '🔧 *Action Required:* Review manifest documents and manually verify/correct the load data in PipeVault Admin Dashboard.'
+        }
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: '🔍 Review & Fix in PipeVault',
+              emoji: true
+            },
+            url: 'https://kylegronning.github.io/PipeVault/',
+            style: 'danger'
+          }
+        ]
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `📅 Reported: <!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|just now> | ⚠️ Customer is blocked from booking Load #${payload.loadNumber + 1} until this is resolved`
+          }
+        ]
+      }
+    ]
+  };
+
+  await sendSlackMessage(message);
+};
+
+/**
+ * Sends a notification when customer successfully books an inbound load
+ * @param payload - Load booking details
+ */
+export const sendLoadBookingConfirmation = async (payload: {
+  customerName: string;
+  companyName: string;
+  loadNumber: number;
+  deliveryDate: string; // ISO string
+  deliveryTimeStart: string; // "7:00 AM"
+  deliveryTimeEnd: string; // "8:00 AM"
+  isAfterHours: boolean;
+  referenceId: string;
+}) => {
+  const deliveryDay = new Date(payload.deliveryDate).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  const message = {
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `✅ Load #${payload.loadNumber} Booked`,
+          emoji: true
+        }
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Customer:*\n${payload.customerName}` },
+          { type: 'mrkdwn', text: `*Company:*\n${payload.companyName}` },
+          { type: 'mrkdwn', text: `*Load Number:*\n#${payload.loadNumber}` },
+          { type: 'mrkdwn', text: `*Reference ID:*\n${payload.referenceId}` }
+        ]
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Delivery Date:*\n${deliveryDay}` },
+          { type: 'mrkdwn', text: `*Time Slot:*\n${payload.deliveryTimeStart} - ${payload.deliveryTimeEnd}` }
+        ]
+      },
+      ...(payload.isAfterHours
+        ? [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: '⚠️ *Off-Hours Delivery* - $450 surcharge applied'
+              }
+            }
+          ]
+        : []),
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '📋 Review booking details and make any necessary adjustments in the Admin Dashboard.'
+        }
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: '🔧 View in Admin Dashboard',
+              emoji: true
+            },
+            url: 'https://kylegronning.github.io/PipeVault/',
+            style: 'primary'
+          }
+        ]
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `📅 Booked: <!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|just now>`
+          }
+        ]
+      }
+    ]
+  };
+
+  await sendSlackMessage(message);
+};
+
+/**
+ * Sends a notification when customer schedules an outbound pickup
+ * @param payload - Outbound pickup details
+ */
+export const sendOutboundPickupNotification = async (payload: {
+  companyName: string;
+  requestReference: string;
+  pickupSlot: {
+    start: string; // ISO timestamp
+    end: string; // ISO timestamp
+  };
+  destination: {
+    lsd: string;
+    wellName?: string;
+    uwi?: string;
+  };
+  shippingMethod: 'CUSTOMER_ARRANGED' | 'MPS_QUOTE';
+  contactName: string;
+  contactPhone: string;
+}) => {
+  const pickupDay = new Date(payload.pickupSlot.start).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  const pickupTimeStart = new Date(payload.pickupSlot.start).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  const pickupTimeEnd = new Date(payload.pickupSlot.end).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  const message = {
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: '📤 Outbound Pickup Scheduled',
+          emoji: true
+        }
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Company:*\n${payload.companyName}` },
+          { type: 'mrkdwn', text: `*Request Reference:*\n${payload.requestReference}` }
+        ]
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Pickup Date:*\n${pickupDay}` },
+          { type: 'mrkdwn', text: `*Time Slot:*\n${pickupTimeStart} - ${pickupTimeEnd}` }
+        ]
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*LSD:*\n${payload.destination.lsd}` },
+          ...(payload.destination.wellName
+            ? [{ type: 'mrkdwn', text: `*Well Name:*\n${payload.destination.wellName}` }]
+            : []),
+          ...(payload.destination.uwi
+            ? [{ type: 'mrkdwn', text: `*UWI:*\n${payload.destination.uwi}` }]
+            : [])
+        ]
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Shipping:*\n${payload.shippingMethod === 'CUSTOMER_ARRANGED' ? '🚚 Customer Arranged' : '💰 MPS Quote'}` },
+          { type: 'mrkdwn', text: `*Contact:*\n${payload.contactName}\n${payload.contactPhone}` }
+        ]
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '⏰ *Action Required:* Prepare inventory for pickup and mark as picked up when truck arrives.'
+        }
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: '🔧 View in Admin Dashboard',
+              emoji: true
+            },
+            url: 'https://kylegronning.github.io/PipeVault/',
+            style: 'primary'
+          }
+        ]
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `📅 Scheduled: <!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|just now>`
+          }
+        ]
+      }
+    ]
+  };
+
+  await sendSlackMessage(message);
+};
+
+/**
  * Helper function to send messages to Slack via webhook
  */
 async function sendSlackMessage(payload: any): Promise<void> {

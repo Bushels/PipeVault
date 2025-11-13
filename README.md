@@ -43,7 +43,14 @@ PipeVault is MPS Group's portal for running the 20-year anniversary "Free Pipe S
    - Trucking preference (customer delivery vs MPS pickup with details)
    - Submission generates reference ID and creates `PENDING` request
    - AI generates summary for admin approval queue
-4. **Logistics Scheduling** - "Truck to MPS" button appears on approved requests, allowing customers to schedule delivery without re-authentication (tied to `truck_loads` table)
+4. **Inbound Load Booking** - "Book First Inbound Load" button appears on approved requests:
+   - 8-step wizard: storage info, trucking method, driver details, time slot selection, document upload, review, confirmation
+   - AI manifest processing extracts pipe data (manufacturer, heat number, quantity, length, weight) from uploaded PDFs/photos
+   - Time slot picker shows MPS receiving hours (7am-4pm weekdays, weekends available with $450 off-hours surcharge)
+   - Skip documents option for when paperwork comes with trucker
+   - Single-click booking with "Verify & Confirm Booking" button
+   - Load sequence numbers track multiple deliveries (Load #1, #2, #3)
+   - **Metric units standard**: All measurements display metric first (meters, kg), imperial secondary (feet, lbs)
 5. **Roughneck Chat** - AI assistant provides:
    - Real-time weather updates with personality-driven quips
    - Request status inquiries scoped to customer's company
@@ -55,7 +62,12 @@ PipeVault is MPS Group's portal for running the 20-year anniversary "Free Pipe S
    - A temporary hard-coded email allowlist.
    - The `admin_users` table (preferred) with RLS enforcement.
 2. **Admin Dashboard Tabs** - Overview, Approvals, Requests, Companies, Inventory, Storage, Roughneck Ops. The Approvals tab now surfaces full pipe specifications (grade, connection, length, trucking preferences) alongside an internal notes field, and the All Requests table mirrors that detail with inline-editable notes, a total length column, and approver/timestamp metadata.
-3. **Truck Loads & Pickups** - record inbound and outbound loads to keep utilisation accurate.
+3. **Load Management** - Admin dashboard shows inbound/outbound loads:
+   - View AI-extracted manifest data from customer uploads (Gap 1 complete - v2.0.5)
+   - ManifestDataDisplay component shows summary cards and detailed table with 9 columns
+   - Data quality indicators (green/yellow/red based on completeness)
+   - **Pending**: Load verification UI, sequential load blocking, state transition notifications (Gaps 2-4)
+4. **Truck Loads & Pickups** - record inbound and outbound loads to keep utilisation accurate.
 
 ## Open Storage Layout & Logging
 - **Area A footprint**: 170 m (north/south) by 60 m (east/west) cleared pad dedicated to open storage. Pipe is stacked lengthwise north-to-south.
@@ -133,15 +145,29 @@ npm run preview     # test the production build locally
 
 ## Slack Integration
 
-PipeVault sends real-time notifications to your Slack workspace for all critical events using **Supabase Database Webhooks** (server-side, secure).
+PipeVault sends real-time notifications to your Slack workspace for all critical events using **Supabase Database Triggers** (server-side, secure).
 
 ### Notification Events
 
 The system automatically notifies your team when:
-1. **New User Signups** - customer creates account with name, email, company
-2. **New Storage Requests** - customer submits pipe storage request
-3. **Delivery Bookings** - truck scheduled to deliver pipe to MPS facility
-4. **Pickup Bookings** - truck scheduled to pick up pipe from MPS to well site
+1. **New User Signups** - customer creates account with full name, email, company, contact number
+2. **New Storage Requests** - customer submits pipe storage request with customer name, company, pipe specs (size, length, quantity), and storage dates
+3. **Inbound Load Bookings** - customer books delivery to MPS facility with date/time, load number, and off-hours indicator
+4. **Project Complete** - all pipe from a project has been picked up from storage
+
+### Architecture (System 1 - Database Triggers)
+
+All notifications use **PostgreSQL triggers** that call functions via `pg_net.http_post()`:
+
+```
+Event (INSERT/UPDATE) → Database Trigger → Notification Function → Slack Webhook
+```
+
+**Benefits:**
+- Secure: Webhook URL stored in Vault, never exposed to client
+- Reliable: Server-side execution with automatic retries
+- Guaranteed: Notifications sent even if user closes browser
+- Logged: All executions visible in Supabase logs
 
 ### Setup Instructions
 
@@ -155,29 +181,32 @@ The system automatically notifies your team when:
    - Create new app: "PipeVault Notifications"
    - Enable **Incoming Webhooks**
    - Add webhook to your `#pipevault-notifications` channel
-   - Copy the webhook URL (you'll need this for each webhook config)
+   - Copy the webhook URL
 
-2. **Enable pg_net Extension** (for user signup trigger)
+2. **Store Webhook in Vault**
    ```sql
    -- Run in Supabase SQL Editor:
+   INSERT INTO vault.secrets (name, secret)
+   VALUES ('slack_webhook_url', 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL');
+   ```
+
+3. **Enable pg_net Extension**
+   ```sql
    CREATE EXTENSION IF NOT EXISTS pg_net;
    ```
 
-3. **Configure Database Webhooks**
-   - Open `supabase/SETUP_SLACK_WEBHOOKS_COMPLETE.sql` in your project
-   - Follow the detailed setup instructions for all 4 webhooks:
-     - **slack-new-user-signup** (database trigger on `auth.users`)
-     - **slack-new-storage-request** (webhook on `storage_requests` INSERT with `status.eq.PENDING` filter)
-     - **slack-delivery-booking** (webhook on `truck_loads` INSERT with `type.eq.DELIVERY` filter)
-     - **slack-pickup-booking** (webhook on `truck_loads` INSERT with `type.eq.PICKUP` filter)
-   - Each webhook uses Slack Block Kit for rich, interactive notifications
-   - All notifications include direct links to PipeVault admin dashboard
+4. **Apply Database Triggers**
+   - Run all migration files in `supabase/migrations/` directory:
+     - `20251107000001_activate_slack_notification_trigger.sql` (storage requests)
+     - `20251107000002_activate_new_user_slack_notification_trigger.sql` (user signups)
+     - `20251107000003_activate_project_complete_slack_notification_trigger.sql` (project completion)
+   - These create the trigger functions and attach triggers to tables
 
-4. **Test Webhooks**
-   - Submit test storage request → verify Slack notification
-   - Create test delivery booking → verify Slack notification
-   - Create test pickup booking → verify Slack notification
-   - Check Supabase webhook logs for delivery confirmation
+5. **Test Notifications**
+   - Sign up new test account → verify Slack notification with name, company, email
+   - Submit test storage request → verify notification with customer details and pipe specs
+   - Create test delivery booking → verify notification with date/time and load number
+   - Check Supabase logs in Database → Functions for execution history
 
 **Architecture Benefits:**
 - ✅ **Secure** - Slack webhook URL never exposed in frontend code
@@ -839,45 +868,65 @@ chore: Update Resend API key and email configuration
 
 ## Current Gaps & Follow-ups
 
-### Completed
-- ✅ **Archive Feature** - Customer dashboard archive/restore functionality implemented ([RequestSummaryPanel.tsx](components/RequestSummaryPanel.tsx), [Dashboard.tsx](components/Dashboard.tsx))
-- ✅ **Cache Invalidation** - Fixed stale data on account switching with automatic React Query cache clearing ([AuthContext.tsx:73-81](lib/AuthContext.tsx#L73-L81))
-- ✅ **Slack Notifications** - Migrated from client-side to secure Supabase Database Webhooks ([SLACK_INTEGRATION_MIGRATION.md](SLACK_INTEGRATION_MIGRATION.md))
-- ✅ **Email Service** - Configured Resend API for approval/rejection emails ([emailService.ts](services/emailService.ts))
-- ✅ **Contact Email** - Standardized on `pipevault@mpsgroup.ca` across all touchpoints
-- ✅ **Authentication Modernization** - Removed 442-line WelcomeScreen component and dual authentication system
-- ✅ **Structured User Metadata** - Split full name into first/last name fields with automatic form pre-fill
-- ✅ **Tile-Based Dashboard** - Permanent Roughneck AI tile with live weather integration
-- ✅ **Enhanced Request Cards** - Thread type display and metric-first quantity formatting
-- Admin approvals now surface full pipe specifications, support persistent internal notes, and persist approver/timestamp metadata for the All Requests ledger.
-- Customer request wizard now presents casing OD and wt selections in metric-first formatting (mm, kg/m) with imperial references retained in brackets.
+### Completed (2025-11-07)
+
+**Inbound Trucking Workflow (Gap 1 Complete - v2.0.1 to v2.0.5)**:
+- ✅ **AI Manifest Display** (v2.0.5) - Admin can view extracted pipe data in document viewer with summary cards, detailed table, and data quality indicators ([ManifestDataDisplay component](components/admin/ManifestDataDisplay.tsx))
+- ✅ **Skip Documents Workflow** (v2.0.4) - Fixed blocked review step when no documents uploaded, added "Confirm Booking Without Documents" button ([LoadSummaryReview.tsx:49-125](components/LoadSummaryReview.tsx#L49-L125))
+- ✅ **Streamlined Booking UX** (v2.0.3) - Combined "Verify" and "Confirm" into single action, reduced user confusion about notification timing ([InboundShipmentWizard.tsx](components/InboundShipmentWizard.tsx))
+- ✅ **Load Sequence Numbers** (v2.0.2) - Fixed to query database directly (per-project scope), prevents race conditions ([InboundShipmentWizard.tsx:248-273](components/InboundShipmentWizard.tsx#L248-L273))
+- ✅ **Metric Units Standard** (v2.0.1) - All measurements display metric first (meters, kg), imperial secondary (feet, lbs) across entire application
+- ✅ **Weekend Bookings** - All weekend time slots marked as off-hours with $450 surcharge, visual "OFF" badge ([TimeSlotPicker.tsx](components/TimeSlotPicker.tsx))
+- ✅ **Inbound Load Notifications** - Slack notifications for new user signups (with full metadata), storage requests (with customer and pipe details), and load bookings (with date/time/load number)
+
+**Earlier Completed Features**:
+- ✅ **Archive Feature** - Customer dashboard archive/restore functionality ([RequestSummaryPanel.tsx](components/RequestSummaryPanel.tsx))
+- ✅ **Cache Invalidation** - Fixed stale data on account switching ([AuthContext.tsx:73-81](lib/AuthContext.tsx#L73-L81))
+- ✅ **Slack Notification System** - Database triggers for all events (System 1 architecture) with Vault-stored webhook URLs
+- ✅ **Email Service** - Resend API for approval/rejection emails ([emailService.ts](services/emailService.ts))
+- ✅ **Authentication Modernization** - Removed dual authentication system, structured user metadata
+- ✅ **Tile-Based Dashboard** - Roughneck AI tile with live weather integration
+- ✅ **Enhanced Request Cards** - Thread type display and metric-first formatting
+- ✅ **Admin Approvals** - Full pipe specifications, persistent internal notes, approver/timestamp metadata
 
 ### Pending (Requires User Action)
 1. **Database Schema Update** - Run [supabase/APPLY_ARCHIVE_COLUMN.sql](supabase/APPLY_ARCHIVE_COLUMN.sql) in Supabase SQL Editor to add `archived_at` column
-2. **Approval Metadata Columns** - Run [supabase/APPLY_APPROVER_METADATA.sql](supabase/APPLY_APPROVER_METADATA.sql) in Supabase SQL Editor so `storage_requests` stores approver email and internal notes.
-3. **Slack Webhook Configuration** - ⚙️ **IN PROGRESS**: Slack app created and webhook URL configured. Complete setup by:
-   - Running SQL trigger for user signups: `CREATE EXTENSION pg_net;` then execute `notify_slack_new_user()` function from [supabase/SETUP_SLACK_WEBHOOKS_COMPLETE.sql](supabase/SETUP_SLACK_WEBHOOKS_COMPLETE.sql)
-   - Creating 3 Supabase Dashboard webhooks for storage requests, deliveries, and pickups using payload templates from the SQL file
-   - Testing each webhook by triggering the corresponding event
+2. **Approval Metadata Columns** - Run [supabase/APPLY_APPROVER_METADATA.sql](supabase/APPLY_APPROVER_METADATA.sql) in Supabase SQL Editor so `storage_requests` stores approver email and internal notes
+3. **Slack Notification Triggers** - ✅ **COMPLETE**: All database triggers deployed and tested. User signup and storage request notifications working.
 4. **Domain Verification** - Add DNS records (SPF, DKIM, DMARC) for `mpsgroup.ca` in Resend dashboard to enable production email delivery
 5. **API Key Rotation** - Rotate `VITE_RESEND_API_KEY` before production launch (current key shared for development)
 
-### Pending (Development Work)
-1. **Delivery Scheduling** - Replace placeholder cards with forms that write to `truck_loads` table for scheduling deliveries to MPS and worksite
-2. **Inventory Sync** - Automate inventory record creation when admins approve storage requests (currently manual)
-3. **Session Routing** - Decide whether to show dedicated `Dashboard` view immediately after login or keep current flow
-4. **Automated Tests** - Add unit/UI test coverage:
-   - Summary calculation logic ([RequestSummaryPanel.tsx](components/RequestSummaryPanel.tsx))
-   - Rack assignment logic ([AdminDashboard.tsx](components/admin/AdminDashboard.tsx))
-   - Cache invalidation behavior ([AuthContext.tsx](lib/AuthContext.tsx))
-   - Archive/restore mutations ([useSupabaseData.ts](hooks/useSupabaseData.ts))
-5. **Production Hardening** - Replace temporary admin email allowlist ([AuthContext.tsx:96-100](lib/AuthContext.tsx#L96-L100)) with:
-   - Custom JWT claims (`app_metadata.role === 'admin'`), OR
-   - Strict `admin_users` table membership check only
-6. **Notifications UX** - Surface content from `notifications` table via:
-   - In-app notification inbox component
-   - Toast notification system for real-time alerts
-   - Badge counter for unread notifications
+### Pending (Development Work - Gaps 2-4)
+
+**Inbound Trucking Workflow Completion** (see [TRUCKING_WORKFLOW_ANALYSIS.md](docs/TRUCKING_WORKFLOW_ANALYSIS.md)):
+
+**Gap 2: Admin Load Verification UI** (4-6 hours):
+- Add "Pending Loads" tab to AdminDashboard
+- Display AI-extracted manifest data side-by-side with raw documents
+- "Approve Load" button (sets status to APPROVED, updates approved_at)
+- "Request Correction" button (notifies customer)
+- Status badges (NEW vs APPROVED vs IN_TRANSIT)
+
+**Gap 3: Sequential Load Blocking** (2-3 hours):
+- Prevent booking Load #2 until Load #1 approved
+- Show "waiting for approval" message on customer dashboard
+- Disable "Book Another Load" button until previous approved
+- Validation logic in InboundShipmentWizard
+
+**Gap 4: State Transition Notifications** (3-4 hours):
+- APPROVED notification (admin verifies load)
+- IN_TRANSIT notification (truck departs)
+- COMPLETED notification (truck arrives at MPS)
+- CANCELLED notification (cancellation requested)
+
+**Estimated Total**: 11-17 hours development + 4-6 hours testing = 2-3 days
+
+**Other Development Work**:
+1. **Inventory Sync** - Automate inventory record creation when admins approve storage requests (currently manual)
+2. **Session Routing** - Decide whether to show dedicated `Dashboard` view immediately after login or keep current flow
+3. **Automated Tests** - Add unit/UI test coverage for summary calculations, rack assignment, cache invalidation, archive/restore
+4. **Production Hardening** - Replace temporary admin email allowlist with JWT claims or strict admin_users table check
+5. **Notifications UX** - In-app notification inbox, toast system, badge counter for unread notifications
 
 ## Deployment Notes
 - GitHub Pages hosts the static bundle. Run `npm run build`, commit, then push to trigger `.github/workflows/`.

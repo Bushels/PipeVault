@@ -4,10 +4,51 @@
 
 **Recommended Stack:**
 - **Backend**: Supabase (PostgreSQL + Realtime + Storage)
-- **AI Provider**: Claude 3.5 Haiku (primary) + Gemini 2.0 Flash (simple queries)
-- **Document Processing**: Claude 3.5 Sonnet with Vision
-- **Notifications**: Supabase Realtime + Email (Resend)
-- **Estimated Monthly Cost**: $40-60 (vs $580 initially estimated!)
+- **AI Provider**: Google Gemini 2.0 Flash (manifest extraction) + Claude 3.5 Haiku (conversations)
+- **Document Processing**: Google Gemini Vision API (PDF/image manifest extraction)
+- **Notifications**: Supabase Database Triggers (Slack) + Email (Resend)
+- **Estimated Monthly Cost**: $27.50 (vs $580 initially estimated!)
+
+---
+
+## Current System Enhancements (2025-11-07)
+
+### Major Improvements Implemented
+
+1. **Inbound Trucking Workflow** (Gap 1 Complete - v2.0.1 to v2.0.5)
+   - 8-step booking wizard with AI manifest processing
+   - Time slot picker (MPS hours + weekend off-hours with $450 surcharge)
+   - Skip documents option for paperwork-with-trucker scenario
+   - Streamlined single-click booking ("Verify & Confirm Booking")
+   - Load sequence numbers (per-project scope, database-driven)
+   - Admin manifest data display with summary cards and detailed table
+
+2. **Slack Notification System** (System 1 - Database Triggers)
+   - New user signups with full metadata (name, company, email)
+   - Storage requests with customer and pipe details
+   - Inbound load bookings with date/time and load number
+   - Project completion when all pipe picked up
+   - All notifications use PostgreSQL triggers with Vault-stored webhook URLs
+
+3. **Metric Units Standard** (v2.0.1)
+   - All measurements display metric first (meters, kg), imperial secondary (feet, lbs)
+   - Applies to: casing specs, load summaries, inventory displays, time slot displays
+
+4. **AI Manifest Extraction** (Google Gemini Vision API)
+   - Extracts: manufacturer, heat_number, serial_number, tally_length_ft, quantity
+   - Handles PDF and image uploads
+   - Data stored in `trucking_documents.parsed_payload` JSONB column
+   - Admin view displays extracted data with quality indicators
+
+5. **Skip Documents Workflow** (v2.0.4)
+   - "Skip Upload" button in document upload step
+   - "Confirm Booking Without Documents" in review step
+   - Clear messaging about manual verification process
+
+6. **Weekend Bookings** (Enhancement)
+   - All weekend time slots marked as off-hours
+   - Visual "OFF" badge on weekend dates
+   - $450 surcharge automatically applied
 
 ---
 

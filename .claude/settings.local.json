@@ -28,7 +28,17 @@
       "Bash(git commit -m \"$(cat <<''EOF''\nfix: Remove duplicate Roughneck chat overlay and update icon to hardhat\n\n## Changes\n- Remove overlay Chatbot component from Dashboard (lines 186-198)\n- Remove unused state variables (isChatOpen, isChatExpanded) from Dashboard\n- Remove unused imports (Chatbot, documents, allCompanyInventory)\n- Add HardhatIcon to Icons.tsx for construction/oilfield theme\n- Update Roughneck AI tile to use HardhatIcon instead of ChatIcon\n- Simplify handleSelectOption to only use inline chat from tile\n\n## Files Modified\n- components/Dashboard.tsx - Removed overlay chat functionality\n- components/icons/Icons.tsx - Added HardhatIcon\n- components/StorageRequestMenu.tsx - Updated Roughneck tile icon\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git commit:*)",
       "Bash(npm install:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "WebFetch(domain:code.claude.com)",
+      "Bash(npm run type-check:*)",
+      "Bash(git -C \"c:\\Users\\kyle\\MPS\\PipeVault\" status --short)",
+      "Bash(npm run:*)",
+      "Bash(psql:*)",
+      "Bash(npx tsc:*)",
+      "Bash(if not exist \"components\\admin\\tiles\" mkdir \"components\\admin\\tiles\")",
+      "Bash(npm info:*)",
+      "Bash(nul)",
+      "Bash(del nul 2)"
     ],
     "deny": [],
     "ask": []

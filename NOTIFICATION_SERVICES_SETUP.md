@@ -31,100 +31,98 @@ For setup, see the original documentation. No changes are needed for this servic
 
 ## 3. Slack Notifications
 
-PipeVault sends real-time alerts to a designated Slack channel for all critical operational events, enabling the admin team to act quickly. The system uses a combination of Supabase Database Triggers and Webhooks for security and reliability.
+PipeVault sends real-time alerts to a designated Slack channel for all critical operational events using **Supabase Database Triggers** (System 1 architecture). All notifications are server-side, secure, and logged.
 
 ### Notification Events
 
-1.  **New User Signup:** When a new user creates an account.
-2.  **Pipe Approval Request:** When a customer submits a new storage request.
-3.  **Pipe Delivery Request:** When a customer wants to schedule a delivery to the MPS yard.
-4.  **Pipe Pickup Request:** When a customer wants to schedule a pickup from the MPS yard.
-5.  **Project Completion:** When all pipe from a customer's project has been picked up.
+1.  **New User Signup:** Customer creates account with full name, email, company, contact number
+2.  **New Storage Request:** Customer submits pipe storage request with customer name, company, pipe specs (size, length, quantity), and storage dates
+3.  **Inbound Load Booking:** Customer books delivery to MPS facility with date/time, load number, and off-hours indicator
+4.  **Project Completion:** All pipe from a customer's project has been picked up from storage
 
-### Setup Instructions
+### Setup Instructions (System 1 - Database Triggers)
 
 **Step 1: Create a Slack Incoming Webhook**
 
 1.  Go to `https://api.slack.com/apps`, create a new app called "PipeVault Notifications", and select your workspace.
 2.  Enable **Incoming Webhooks** and add a new webhook to your desired channel (e.g., `#pipevault-notifications`).
-3.  Copy the **Webhook URL**. You will use this for all the setups below.
+3.  Copy the **Webhook URL**. You will use this in the next step.
 
-**Step 2: Enable pg_net Extension**
+**Step 2: Store Webhook URL in Supabase Vault**
+
+1.  Go to your Supabase Project > **SQL Editor**.
+2.  Run the following command to store the webhook URL securely:
+    ```sql
+    INSERT INTO vault.secrets (name, secret)
+    VALUES ('slack_webhook_url', 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL');
+    ```
+3.  Replace `YOUR/WEBHOOK/URL` with the actual webhook URL from Step 1.
+
+**Step 3: Enable pg_net Extension**
 
 The database triggers require the `pg_net` extension to make HTTP requests.
 
-1.  Go to your Supabase Project > **SQL Editor**.
-2.  Run the following command:
+1.  In Supabase **SQL Editor**, run:
     ```sql
     CREATE EXTENSION IF NOT EXISTS pg_net;
     ```
 
-**Step 3: Apply the Database Triggers**
+**Step 4: Apply Database Triggers**
 
-1.  Open the `supabase/SETUP_SLACK_WEBHOOKS_COMPLETE.sql` file.
-2.  Replace all instances of `YOUR_SLACK_WEBHOOK_URL` with the actual URL you copied in Step 1.
-3.  Run the entire script in the Supabase **SQL Editor**. This will create the necessary functions and triggers for the "New User Signup" and "Project Completion" notifications.
+1.  Locate the migration files in `supabase/migrations/` directory:
+    *   `20251107000001_activate_slack_notification_trigger.sql` (storage requests)
+    *   `20251107000002_activate_new_user_slack_notification_trigger.sql` (user signups)
+    *   `20251107000003_activate_project_complete_slack_notification_trigger.sql` (project completion)
 
-**Step 4: Configure Supabase Webhooks**
+2.  Run each migration file in the Supabase **SQL Editor** (or use `supabase db push` via CLI).
 
-For the remaining notifications, you will use the Supabase Webhooks interface.
+3.  These create:
+    *   `notify_slack_new_user()` function + trigger on `auth.users`
+    *   `notify_slack_storage_request()` function + trigger on `storage_requests`
+    *   `notify_slack_project_complete()` function + trigger on `trucking_loads`
 
-1.  Go to your Supabase Project > **Database** > **Webhooks**.
-2.  Create a new webhook for each of the following events, using the payload templates from the `supabase/SETUP_SLACK_WEBHOOKS_COMPLETE.sql` file.
+**Step 5: Test Notifications**
 
-*   **Pipe Approval Request:**
-    *   **Name:** `slack-new-storage-request`
-    *   **Table:** `storage_requests`
-    *   **Events:** `INSERT`
-    *   **Filter:** `status` -> `eq` -> `PENDING`
-    *   **Payload:** Copy from the "NOTIFICATION 2" section of the SQL file.
+1.  **New User Signup**: Create a new account → Verify Slack notification shows name, company, email
+2.  **Storage Request**: Submit a storage request → Verify Slack notification shows customer details and pipe specs
+3.  **Load Booking**: Book inbound delivery → Verify Slack notification shows date/time and load number
+4.  Check Supabase **Database → Functions** for execution logs
 
-*   **Pipe Delivery to MPS Request:**
-    *   **Name:** `slack-pipe-delivery-request`
-    *   **Table:** `trucking_loads`
-    *   **Events:** `INSERT`
-    *   **Filter:** `direction` -> `eq` -> `INBOUND`
-    *   **Payload:** Copy from the "NOTIFICATION 3" section of the SQL file.
-
-*   **Pipe Pickup from MPS Request:**
-    *   **Name:** `slack-pipe-pickup-request`
-    *   **Table:** `trucking_loads`
-    *   **Events:** `INSERT`
-    *   **Filter:** `direction` -> `eq` -> `OUTBOUND`
-    *   **Payload:** Copy from the "NOTIFICATION 4" section of the SQL file.
-
-**Step 5: Set Up Edge Functions for Interactive Notifications (Required for Delivery/Pickup)**
-
-The "Approve Timeslot" and "Confirm Pickup" buttons in the Slack messages require backend functions to process the clicks.
-
-1.  Create two new **Edge Functions** in your Supabase project:
-    *   `approve-delivery-timeslot`
-    *   `confirm-pickup-timeslot`
-2.  Write the code for these functions to:
-    *   Receive the `action_id` from Slack.
-    *   Update the corresponding `dock_appointments` or `trucking_loads` table in the database.
-    *   Use the `response_url` from Slack's callback to update the original message to a confirmed state (e.g., "Timeslot Approved!").
-3.  In your Slack App settings (not in PipeVault), go to **Interactivity & Shortcuts** and set the **Request URL** to the URL of your new Edge Functions.
-
-### Notification Flow Diagram
+### Notification Architecture (System 1)
 
 ```
-EVENT                   | TRIGGER MECHANISM         | SLACK ACTION
-------------------------|---------------------------|------------------------------------
-User Signs Up           | DB Trigger on auth.users  | Notify channel of new user
-Pipe Request Submitted  | Webhook on storage_requests | Notify channel with link to admin panel
-Delivery Requested      | Webhook on trucking_loads | Notify with "Approve" button -> Edge Function
-Pickup Requested        | Webhook on trucking_loads | Notify with "Confirm" button -> Edge Function
-Final Pipe Picked Up    | DB Trigger on trucking_loads| Notify channel that project is complete
+EVENT                   | TRIGGER MECHANISM                     | NOTIFICATION CONTENT
+------------------------|---------------------------------------|--------------------------------
+User Signs Up           | DB Trigger on auth.users INSERT      | Name, company, email, user ID
+Storage Request         | DB Trigger on storage_requests       | Customer, company, pipe specs,
+                        | INSERT/UPDATE (status=PENDING)       | dates, reference ID
+Load Booking            | Client-side slackService call        | Date/time, load #, off-hours badge
+                        | (sendInboundDeliveryNotification)    | customer, company
+Final Pipe Picked Up    | DB Trigger on trucking_loads UPDATE  | Project ID, company, completion
+                        | (direction=OUTBOUND, inventory=0)    | confirmation
 ```
+
+**Why Database Triggers?**
+- ✅ Secure: Webhook URL never exposed in client code
+- ✅ Reliable: Server-side execution with automatic retries
+- ✅ Guaranteed: Notifications sent even if user closes browser
+- ✅ Logged: All executions visible in Supabase Dashboard
 
 ### Troubleshooting Slack Notifications
 
 *   **Notification Not Received:**
-    1.  **Check Supabase Logs:** For webhook-based notifications, go to **Database > Webhooks** and check the **Logs** for the specific webhook. For trigger-based ones, check your database and function logs.
-    2.  **Verify Webhook URL:** Ensure the URL in your SQL file and webhook configurations is correct.
-    3.  **Check Filters:** Make sure the event (e.g., a new `trucking_loads` row) matches the filter conditions for the webhook.
-*   **Interactive Button Fails:**
-    1.  **Check Edge Function Logs:** Look for errors in the specific function's logs.
-    2.  **Verify Slack Request URL:** Ensure the URL in your Slack App's "Interactivity & Shortcuts" settings points to the correct Edge Function.
-    3.  **Check Permissions:** The Edge Function needs the correct permissions to update the database.
+    1.  **Check Supabase Logs:** Go to **Database → Functions** and look for execution logs of `notify_slack_*` functions
+    2.  **Verify Vault Secret:** Ensure `slack_webhook_url` exists in Vault with correct URL
+    3.  **Check pg_net Extension:** Run `SELECT * FROM pg_extension WHERE extname = 'pg_net';` to verify installed
+    4.  **Verify Triggers Exist:** Query `SELECT * FROM pg_trigger WHERE tgname LIKE '%slack%';` to confirm triggers created
+    5.  **Test Manual Call:** Run `SELECT notify_slack_new_user();` to test function directly
+
+*   **Wrong or Missing Data in Notification:**
+    1.  **Verify Metadata Extraction:** Check `auth.users.raw_user_meta_data` contains firstName, lastName, companyName
+    2.  **Check Request Details:** Ensure `storage_requests.request_details` JSONB contains fullName, companyName, casingSpec
+    3.  **Inspect Function Code:** Review SQL migration files for correct JSONB field extraction
+
+*   **Duplicate Notifications:**
+    1.  **Check for Multiple Triggers:** Run `SELECT tgname, tgtable FROM pg_trigger WHERE tgname LIKE '%slack%';`
+    2.  **Remove Old Triggers:** Drop any duplicate triggers from System 2 migration
+    3.  **Verify Only One Execution:** Check Supabase function logs for duplicate calls

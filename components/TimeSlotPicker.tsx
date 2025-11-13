@@ -1,7 +1,8 @@
 /**
  * Time Slot Picker Component
  * Allows customers to select delivery time slot with MPS receiving hours
- * MPS Hours: 7am-4pm weekdays
+ * MPS Hours: 7am-4pm weekdays only
+ * Weekend deliveries: All hours considered off-hours with surcharge
  * Off-hours surcharge: $450
  */
 
@@ -47,14 +48,14 @@ const generateTimeSlots = (blockedSlots: string[] = []): TimeSlot[] => {
   const now = new Date();
   const blockedSet = new Set(blockedSlots);
 
-  // Generate slots for next 14 days
+  // Generate slots for next 14 days (including weekends)
   for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
     const date = new Date(now);
     date.setDate(date.getDate() + dayOffset);
     date.setHours(0, 0, 0, 0);
 
-    // Skip weekends
-    if (date.getDay() === 0 || date.getDay() === 6) continue;
+    // Note: Weekends are now included but all slots will be marked as off-hours
+    // via isWithinReceivingHours() check below
 
     // Generate time slots throughout the day
     for (let hour = 6; hour <= 18; hour += SLOT_DURATION_HOURS) {
@@ -179,7 +180,10 @@ const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({
               <strong>Standard Hours:</strong> Monday-Friday, 7:00 AM - 4:00 PM
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              Off-hours deliveries available with additional surcharge
+              <strong>Weekend & Off-hours:</strong> Available with ${OFF_HOURS_SURCHARGE} surcharge
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              All weekend time slots are considered off-hours
             </p>
           </div>
         </div>
@@ -194,16 +198,19 @@ const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({
           {dates.map(dateKey => {
             const date = new Date(dateKey);
             const isSelected = selectedDate === dateKey;
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
             return (
               <button
                 key={dateKey}
                 onClick={() => setSelectedDate(dateKey)}
                 className={`
-                  px-4 py-3 rounded-lg border-2 transition-all
+                  relative px-4 py-3 rounded-lg border-2 transition-all
                   ${isSelected
                     ? 'bg-indigo-600 border-indigo-500 text-white font-bold'
-                    : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-indigo-500/50'
+                    : isWeekend
+                      ? 'bg-yellow-900/20 border-yellow-600/50 text-gray-300 hover:border-yellow-500/70'
+                      : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-indigo-500/50'
                   }
                 `}
               >
@@ -211,6 +218,11 @@ const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({
                 <div className="text-[10px] text-gray-400 mt-1">
                   {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </div>
+                {isWeekend && (
+                  <div className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-yellow-600 text-white text-[9px] font-bold rounded-full border border-yellow-400">
+                    OFF
+                  </div>
+                )}
               </button>
             );
           })}

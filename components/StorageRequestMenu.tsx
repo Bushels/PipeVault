@@ -20,6 +20,7 @@ interface StorageRequestMenuProps {
   archivingRequestId?: string | null;
   onScheduleDelivery?: (request: StorageRequest) => void;
   onUploadDocuments?: (request: StorageRequest) => void;
+  pendingSubmission?: StorageRequest | null;
 }
 
 const StorageRequestMenu: React.FC<StorageRequestMenuProps> = ({
@@ -33,6 +34,7 @@ const StorageRequestMenu: React.FC<StorageRequestMenuProps> = ({
   archivingRequestId,
   onScheduleDelivery,
   onUploadDocuments,
+  pendingSubmission,
 }) => {
   const chatRequests = companyRequests ?? requests;
 
@@ -69,6 +71,7 @@ const StorageRequestMenu: React.FC<StorageRequestMenuProps> = ({
           archivingRequestId={archivingRequestId}
           onScheduleDelivery={onScheduleDelivery}
           onUploadDocuments={onUploadDocuments}
+          pendingSubmission={pendingSubmission}
         />
       </div>
 

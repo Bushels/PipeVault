@@ -1,30 +1,126 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { LoadSummary } from '../services/manifestProcessingService';
+import Button from './ui/Button';
 
 interface LoadSummaryReviewProps {
   loadSummary: LoadSummary | null;
   isProcessing: boolean;
   hasDocuments: boolean;
+  onVerify?: () => void;
+  onReportIssue?: (issueDescription: string) => void;
+  isConfirming?: boolean;
 }
 
 const LoadSummaryReview: React.FC<LoadSummaryReviewProps> = ({
   loadSummary,
   isProcessing,
   hasDocuments,
+  onVerify,
+  onReportIssue,
+  isConfirming = false,
 }) => {
-  // No documents uploaded yet
+  const [showIssueModal, setShowIssueModal] = useState(false);
+  const [issueDescription, setIssueDescription] = useState('');
+  const [isSubmittingIssue, setIsSubmittingIssue] = useState(false);
+
+  const handleReportIssueClick = () => {
+    setShowIssueModal(true);
+    setIssueDescription('');
+  };
+
+  const handleSubmitIssue = async () => {
+    if (!issueDescription.trim()) {
+      return;
+    }
+
+    setIsSubmittingIssue(true);
+    try {
+      if (onReportIssue) {
+        await onReportIssue(issueDescription);
+      }
+      setShowIssueModal(false);
+      setIssueDescription('');
+    } finally {
+      setIsSubmittingIssue(false);
+    }
+  };
+
+  // No documents uploaded - allow booking without AI summary
   if (!hasDocuments) {
     return (
-      <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-8 text-center">
-        <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
+      <>
+        <div className="space-y-6">
+          {/* No Documents Info */}
+          <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">No Manifest Uploaded</h3>
+                <p className="text-sm text-gray-400 mt-1">
+                  You can still proceed with your booking. MPS will verify load details manually when your driver arrives.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Confirmation Section */}
+          {onVerify && (
+            <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-6">
+              <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Ready to Confirm Booking?
+              </h4>
+              <p className="text-sm text-gray-400 mb-4">
+                Your delivery slot is reserved. You can upload documents later from your dashboard, or your driver can bring them at delivery.
+              </p>
+              <Button
+                onClick={onVerify}
+                disabled={isConfirming}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isConfirming ? (
+                  <>
+                    <svg className="w-5 h-5 inline mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Booking...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Confirm Booking Without Documents
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* Info Box */}
+          <div className="bg-blue-900/10 border border-blue-500/20 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-xs text-gray-400">
+                <p className="text-white font-medium mb-1">What happens without documents?</p>
+                <p>
+                  MPS yard crew will manually count joints, measure lengths, and weigh the load upon arrival.
+                  This process takes a bit longer, but ensures accurate inventory records. You can upload documents
+                  anytime from your dashboard to help speed up the receiving process.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-        <p className="text-gray-400 text-sm">
-          Upload your manifest in the previous step to see load summary
-        </p>
-      </div>
+      </>
     );
   }
 
@@ -101,6 +197,7 @@ const LoadSummaryReview: React.FC<LoadSummaryReviewProps> = ({
 
   // Success - show load summary
   return (
+    <>
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl border border-gray-700/50 p-6">
@@ -175,23 +272,57 @@ const LoadSummaryReview: React.FC<LoadSummaryReviewProps> = ({
         </div>
       </div>
 
-      {/* Admin Review Note */}
-      <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <svg className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg>
-          <div className="text-xs text-gray-400 space-y-2">
-            <p>
-              <strong className="text-white">Admin Verification:</strong> MPS admin will review and verify all details
-              before your delivery is scheduled. If you notice any issues, you can add notes in the confirmation step.
-            </p>
-            <p className="text-gray-500">
-              This ensures accuracy and prevents delays during unloading at our facility.
-            </p>
+      {/* Verification Buttons */}
+      {(onVerify || onReportIssue) && (
+        <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-6">
+          <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+            <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Verify Load Summary
+          </h4>
+          <p className="text-sm text-gray-400 mb-4">
+            Please review the AI-extracted totals above. Are they correct?
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            {onVerify && (
+              <Button
+                onClick={onVerify}
+                disabled={isConfirming}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isConfirming ? (
+                  <>
+                    <svg className="w-5 h-5 inline mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Booking...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Verify & Confirm Booking
+                  </>
+                )}
+              </Button>
+            )}
+            {onReportIssue && (
+              <Button
+                onClick={handleReportIssueClick}
+                disabled={isConfirming}
+                className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-3 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                Incorrect - Notify MPS
+              </Button>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       {/* Data Accuracy Info */}
       <div className="bg-blue-900/10 border border-blue-500/20 rounded-lg p-4">
@@ -203,12 +334,84 @@ const LoadSummaryReview: React.FC<LoadSummaryReviewProps> = ({
             <p className="text-white font-medium mb-1">How accurate is AI extraction?</p>
             <p>
               Our AI achieves {'>'} 95% accuracy on clear manifests. All data is double-checked by MPS admin before
-              your delivery is finalized. You can add notes or corrections in the next step if needed.
+              your delivery is finalized.
             </p>
           </div>
         </div>
       </div>
     </div>
+
+    {/* Issue Description Modal */}
+    {showIssueModal && (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl max-w-lg w-full">
+          {/* Modal Header */}
+          <div className="border-b border-gray-700 p-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <svg className="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                Report Issue
+              </h3>
+              <button
+                onClick={() => setShowIssueModal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+                disabled={isSubmittingIssue}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Modal Body */}
+          <div className="p-6">
+            <p className="text-sm text-gray-300 mb-4">
+              Please describe what's incorrect with the AI-extracted data. MPS admin will review your documents and
+              correct the information.
+            </p>
+            <textarea
+              value={issueDescription}
+              onChange={(e) => setIssueDescription(e.target.value)}
+              placeholder="Example: The total joints should be 150, not 100. Missing joints from page 3."
+              className="w-full bg-gray-800 text-white border border-gray-600 rounded-lg p-3 min-h-[120px] resize-y focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent placeholder-gray-500"
+              disabled={isSubmittingIssue}
+            />
+          </div>
+
+          {/* Modal Footer */}
+          <div className="border-t border-gray-700 p-6 flex gap-3">
+            <Button
+              onClick={() => setShowIssueModal(false)}
+              className="flex-1 bg-gray-700 hover:bg-gray-600 text-white"
+              disabled={isSubmittingIssue}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmitIssue}
+              className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-medium"
+              disabled={!issueDescription.trim() || isSubmittingIssue}
+            >
+              {isSubmittingIssue ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Notifying MPS...
+                </>
+              ) : (
+                'Submit Issue'
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 };
 

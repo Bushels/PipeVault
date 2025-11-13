@@ -21,7 +21,8 @@ import type {
 } from '../types';
 import { processManifest, calculateLoadSummary, LoadSummary } from '../services/manifestProcessingService';
 import { supabase } from '../lib/supabase';
-import { sendTruckingQuoteRequest, sendInboundDeliveryNotification } from '../services/slackService';
+import { sendTruckingQuoteRequest, sendInboundDeliveryNotification, sendManifestIssueNotification, sendLoadBookingConfirmation } from '../services/slackService';
+import { usePendingLoadForRequest } from '../hooks/useTruckingLoadQueries';
 
 type WizardStep = 'storage' | 'method' | 'trucking' | 'quote-pending' | 'timeslot' | 'documents' | 'review' | 'confirmation';
 
@@ -117,6 +118,9 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
   const [isProcessingManifest, setIsProcessingManifest] = useState(false);
   const [deliveryId, setDeliveryId] = useState<string | null>(null);
   const [quoteId, setQuoteId] = useState<string | null>(null);
+
+  // Sequential blocking: Check if this request has any pending loads
+  const { data: pendingLoad, isLoading: isCheckingPendingLoad } = usePendingLoadForRequest(request.id);
 
   type DeliveryStatusUpdate = 'pending_confirmation' | 'scheduled';
 
@@ -349,38 +353,6 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
     }
   };
 
-  const handleUseSampleDocument = () => {
-    const mockDoc: UploadedDocument = {
-      id: `mock-${Date.now()}`,
-      fileName: 'sample-manifest.pdf',
-      fileSize: 512000,
-      fileType: 'application/pdf',
-      uploadProgress: 100,
-      status: 'completed',
-      storagePath: `mock/${request.id}/sample-manifest.pdf`,
-      isMock: true,
-    };
-
-    setUploadedDocuments((prev) => {
-      const withoutPriorMock = prev.filter(doc => !doc.isMock);
-      return [...withoutPriorMock, mockDoc];
-    });
-
-    const joints = 40;
-    const lengthFt = 40 * 40; // 40 joints at 40 ft
-    const weightLbs = 40 * 1000; // approx 1000 lbs per joint
-
-    setLoadSummary({
-      total_joints: joints,
-      total_length_ft: lengthFt,
-      total_length_m: Number((lengthFt * 0.3048).toFixed(1)),
-      total_weight_lbs: weightLbs,
-      total_weight_kg: Number((weightLbs * 0.45359237).toFixed(1)),
-    });
-    setIsProcessingManifest(false);
-    setErrorMessage(null);
-  };
-
   const handleRemoveDocument = (documentId: string) => {
     setUploadedDocuments(prev => prev.filter(d => d.id !== documentId));
   };
@@ -533,6 +505,55 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
     }
 
     return createdTruckingDocs;
+  };
+
+  const handleReportIssue = async (issueDescription: string) => {
+    try {
+      // Query database directly for latest sequence number (don't trust cached data)
+      const { data: latestLoad } = await supabase
+        .from('trucking_loads')
+        .select('sequence_number')
+        .eq('storage_request_id', request.id)
+        .eq('direction', 'INBOUND')
+        .order('sequence_number', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const loadNumber = (latestLoad?.sequence_number ?? 0) + 1;
+
+      // Get document names
+      const documentNames = uploadedDocuments.map(doc => doc.fileName);
+
+      // Send Slack notification to admin
+      await sendManifestIssueNotification({
+        referenceId: request.referenceId || request.id,
+        companyName: request.request_details?.companyName || 'Unknown Company',
+        contactEmail: session.userEmail,
+        loadNumber,
+        issueDescription,
+        documentNames,
+        loadSummary: loadSummary
+          ? {
+              total_joints: loadSummary.total_joints,
+              total_length_ft: loadSummary.total_length_ft,
+              total_weight_lbs: loadSummary.total_weight_lbs,
+            }
+          : null,
+      });
+
+      // Show success message
+      setSuccessMessage(
+        'Issue reported to MPS admin. They will review your documents and contact you once the data is corrected. ' +
+        'You can proceed with booking Load #' + loadNumber + ' once the issue is resolved.'
+      );
+
+      // Go back to review step
+      // User stays on review step and can try again or go back
+    } catch (error: any) {
+      setErrorMessage(
+        'Failed to send issue notification: ' + (error.message || 'Unknown error')
+      );
+    }
   };
 
   const handleReviewConfirm = async () => {
@@ -709,10 +730,19 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
         appointment = newAppointment;
       }
 
-      const existingInboundLoads = (request.truckingLoads ?? []).filter(load => load.direction === 'INBOUND');
-      const nextSequenceNumber =
-        existingInboundLoads.reduce((max, load) => Math.max(max, load.sequenceNumber), 0) + 1;
-      const loadStatus: TruckingLoadStatus = selectedTimeSlot.is_after_hours ? 'NEW' : 'APPROVED';
+      // Query database directly for latest sequence number (don't trust cached data)
+      const { data: latestLoad } = await supabase
+        .from('trucking_loads')
+        .select('sequence_number')
+        .eq('storage_request_id', request.id)
+        .eq('direction', 'INBOUND')
+        .order('sequence_number', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const nextSequenceNumber = (latestLoad?.sequence_number ?? 0) + 1;
+      // All loads require admin approval - no auto-approval
+      const loadStatus: TruckingLoadStatus = 'NEW';
 
       // Check if trucking load already exists for this request/direction/sequence
       const { data: existingLoad } = await supabase
@@ -871,6 +901,26 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
             driverPhone: truckingData.driverPhone,
           },
           loadSummary,
+        });
+
+        // Send simplified booking confirmation notification
+        await sendLoadBookingConfirmation({
+          customerName: session.userEmail, // Using email as name since we don't have full name in context
+          companyName: session.company.name,
+          loadNumber: nextSequenceNumber,
+          deliveryDate: selectedTimeSlot.start.toISOString(),
+          deliveryTimeStart: selectedTimeSlot.start.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          }),
+          deliveryTimeEnd: selectedTimeSlot.end.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          }),
+          isAfterHours: selectedTimeSlot.is_after_hours,
+          referenceId: request.referenceId || request.id
         });
       } catch (notifyError) {
         console.error('Failed to send delivery notification:', notifyError);
@@ -1088,34 +1138,142 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
 
         {step === 'timeslot' && (
           <div className="space-y-6">
-            <TimeSlotPicker
-              selectedSlot={selectedTimeSlot}
-              onSelectSlot={handleTimeSlotSelect}
-              blockedSlots={[]}
-            />
-            <div className="flex justify-between pt-4 border-t border-gray-700">
-              <Button
-                type="button"
-                onClick={() => setStep('trucking')}
-                className="bg-gray-700 hover:bg-gray-600"
-              >
-                Back
-              </Button>
-              <div className="flex flex-col items-end gap-2">
-                {selectedTimeSlot?.is_after_hours && (
-                  <span className="text-xs text-yellow-300">
-                    After-hours deliveries include a ${selectedTimeSlot.surcharge_amount} surcharge and require confirmation.
-                  </span>
-                )}
-                <Button
-                  onClick={handleTimeSlotContinue}
-                  disabled={!selectedTimeSlot}
-                  className="bg-red-600 hover:bg-red-500 px-8 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  Continue to Documents
-                </Button>
+            {/* Sequential Load Blocking UI */}
+            {isCheckingPendingLoad ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="flex items-center gap-3">
+                  <Spinner className="w-6 h-6" />
+                  <span className="text-gray-400">Checking for pending loads...</span>
+                </div>
               </div>
-            </div>
+            ) : pendingLoad ? (
+              <div className="bg-orange-900/20 border-2 border-orange-500/50 rounded-xl p-6">
+                <div className="flex items-start gap-4">
+                  {/* Warning Icon */}
+                  <div className="flex-shrink-0">
+                    <svg className="w-12 h-12 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+
+                  {/* Blocking Message */}
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-orange-200 mb-2">
+                      Load #{(pendingLoad as any).sequence_number} Pending Admin Approval
+                    </h3>
+                    <p className="text-gray-300 mb-4">
+                      Your previous load is awaiting admin review and approval. You can schedule Load #
+                      {((pendingLoad as any).sequence_number || 0) + 1} after Load #{(pendingLoad as any).sequence_number} has been approved.
+                    </p>
+
+                    {/* Pending Load Details */}
+                    <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 mb-4">
+                      <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">Pending Load Details</p>
+                      <dl className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <dt className="text-gray-500 text-xs">Load Number</dt>
+                          <dd className="text-white font-semibold">#{(pendingLoad as any).sequence_number}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-gray-500 text-xs">Scheduled Date</dt>
+                          <dd className="text-white">
+                            {new Date((pendingLoad as any).scheduled_slot_start).toLocaleDateString('en-US', {
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-gray-500 text-xs">Scheduled Time</dt>
+                          <dd className="text-white">
+                            {new Date((pendingLoad as any).scheduled_slot_start).toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit'
+                            })}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-gray-500 text-xs">Status</dt>
+                          <dd>
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-900/30 text-yellow-300 border border-yellow-500/30">
+                              Pending Review
+                            </span>
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    {/* What Happens Next */}
+                    <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+                        <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        What happens next?
+                      </h4>
+                      <ul className="space-y-1 text-sm text-gray-300">
+                        <li className="flex items-start gap-2">
+                          <span className="text-cyan-400 mt-0.5">1.</span>
+                          <span>MPS admin will review your manifest and load details</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-cyan-400 mt-0.5">2.</span>
+                          <span>You'll receive a Slack notification once approved</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-cyan-400 mt-0.5">3.</span>
+                          <span>After approval, you can return here to schedule your next load</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Back Button */}
+                <div className="flex justify-start pt-4 mt-4 border-t border-gray-700">
+                  <Button
+                    type="button"
+                    onClick={onBack}
+                    className="bg-gray-700 hover:bg-gray-600"
+                  >
+                    Return to Dashboard
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              // No pending loads - show normal time slot picker
+              <>
+                <TimeSlotPicker
+                  selectedSlot={selectedTimeSlot}
+                  onSelectSlot={handleTimeSlotSelect}
+                  blockedSlots={[]}
+                />
+                <div className="flex justify-between pt-4 border-t border-gray-700">
+                  <Button
+                    type="button"
+                    onClick={() => setStep('trucking')}
+                    className="bg-gray-700 hover:bg-gray-600"
+                  >
+                    Back
+                  </Button>
+                  <div className="flex flex-col items-end gap-2">
+                    {selectedTimeSlot?.is_after_hours && (
+                      <span className="text-xs text-yellow-300">
+                        After-hours deliveries include a ${selectedTimeSlot.surcharge_amount} surcharge and require confirmation.
+                      </span>
+                    )}
+                    <Button
+                      onClick={handleTimeSlotContinue}
+                      disabled={!selectedTimeSlot}
+                      className="bg-red-600 hover:bg-red-500 px-8 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Continue to Documents
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -1126,7 +1284,7 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
               uploadedDocuments={uploadedDocuments}
               onRemoveDocument={handleRemoveDocument}
               isProcessing={isProcessingManifest}
-              onUseSampleDocument={handleUseSampleDocument}
+              onSkip={handleSkipDocuments}
             />
 
             {/* Skip Documents Info */}
@@ -1228,30 +1386,20 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
               loadSummary={loadSummary}
               isProcessing={isProcessingManifest}
               hasDocuments={uploadedDocuments.length > 0}
+              onVerify={handleReviewConfirm}
+              onReportIssue={handleReportIssue}
+              isConfirming={isSaving}
             />
 
             {/* Action Buttons */}
-            <div className="flex justify-between pt-4 border-t border-gray-700">
+            <div className="flex justify-start pt-4 border-t border-gray-700">
               <Button
                 type="button"
                 onClick={() => setStep('documents')}
-                className="bg-gray-700 hover:bg-gray-600"
+                disabled={isSaving}
+                className="bg-gray-700 hover:bg-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Back
-              </Button>
-              <Button
-                onClick={handleReviewConfirm}
-                disabled={isSaving}
-                className="bg-green-600 hover:bg-green-500 px-8 disabled:opacity-60"
-              >
-                {isSaving ? (
-                  <>
-                    <Spinner size="sm" className="mr-2" />
-                    Scheduling...
-                  </>
-                ) : (
-                  'Confirm & Schedule Delivery'
-                )}
               </Button>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Header from './Header';
 import StorageRequestWizard from './StorageRequestWizard';
 import StorageRequestMenu from './StorageRequestMenu';
@@ -30,6 +30,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, comp
   const [selectedOption, setSelectedOption] = useState<Omit<SelectedOption, 'chat'> | 'menu'>('menu');
   const [archivingRequestId, setArchivingRequestId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<StorageRequest | null>(null);
+  const [pendingSubmission, setPendingSubmission] = useState<StorageRequest | null>(null);
 
   // Check if user has any approved requests
   const hasActiveRequest = requests.some(r => r.status === 'APPROVED');
@@ -99,6 +100,24 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, comp
     }
   };
 
+  const handleRequestSubmitted = (newRequest: StorageRequest) => {
+    setPendingSubmission(newRequest);
+  };
+
+  const handleReturnToDashboard = () => {
+    setSelectedOption('menu');
+  };
+
+  useEffect(() => {
+    // Only clear pendingSubmission when user is viewing the menu and request has loaded
+    if (!pendingSubmission) return;
+    if (selectedOption !== 'menu') return; // Don't clear while in wizard view
+    const exists = requests.some((r) => r.id === pendingSubmission.id);
+    if (exists) {
+      setPendingSubmission(null);
+    }
+  }, [pendingSubmission, requests, selectedOption]);
+
   const renderContent = () => {
     if (selectedOption !== 'menu') {
       return (
@@ -117,6 +136,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, comp
                   session={session}
                   updateRequest={updateRequest}
                   addRequest={addRequest}
+                  onSubmitSuccess={handleRequestSubmitted}
+                  onReturnToDashboard={handleReturnToDashboard}
                 />
               </div>
               <div className="lg:col-span-1">
@@ -162,6 +183,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, comp
         archivingRequestId={archivingRequestId}
         onScheduleDelivery={handleScheduleDelivery}
         onUploadDocuments={handleUploadDocuments}
+        pendingSubmission={pendingSubmission}
       />
     );
   };
@@ -200,9 +222,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, onLogout, requests, comp
 };
 
 export default Dashboard;
-
-
-
 
 
 

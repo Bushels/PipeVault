@@ -1,6 +1,64 @@
-import type { StorageRequest, TruckingLoad } from '../types';
+import type { StorageRequest, TruckingLoad, TruckingLoadStatus } from '../types';
 
 export type LoadAggregateState = 'NONE' | 'PENDING' | 'APPROVED' | 'IN_PROGRESS' | 'COMPLETED';
+
+// ============================================================================
+// STATE TRANSITION VALIDATION
+// ============================================================================
+
+/**
+ * Valid state transitions for trucking loads
+ * Prevents invalid transitions like APPROVED → NEW or COMPLETED → anything
+ */
+const VALID_TRANSITIONS: Record<TruckingLoadStatus, TruckingLoadStatus[]> = {
+  NEW: ['APPROVED', 'REJECTED'], // Admin can approve or reject pending loads
+  APPROVED: ['IN_TRANSIT'], // Once approved, truck departs (admin marks as in transit)
+  IN_TRANSIT: ['COMPLETED'], // Once in transit, truck arrives (admin marks as completed)
+  COMPLETED: [], // Final state - no transitions allowed
+  REJECTED: [], // Final state - no transitions allowed
+};
+
+/**
+ * Validates if a state transition is allowed
+ * @param from - Current status
+ * @param to - Desired status
+ * @returns true if transition is valid, false otherwise
+ */
+export function isValidTransition(from: TruckingLoadStatus, to: TruckingLoadStatus): boolean {
+  // Same state is always valid (no-op)
+  if (from === to) return true;
+
+  const allowedTransitions = VALID_TRANSITIONS[from] || [];
+  return allowedTransitions.includes(to);
+}
+
+/**
+ * Validates and returns error message if transition is invalid
+ * @param from - Current status
+ * @param to - Desired status
+ * @returns null if valid, error message if invalid
+ */
+export function validateTransition(from: TruckingLoadStatus, to: TruckingLoadStatus): string | null {
+  if (isValidTransition(from, to)) {
+    return null;
+  }
+
+  // Generate helpful error messages
+  if (from === 'COMPLETED') {
+    return 'Cannot change status of a completed load';
+  }
+  if (from === 'REJECTED') {
+    return 'Cannot change status of a rejected load';
+  }
+  if (from === 'APPROVED' && to === 'NEW') {
+    return 'Cannot revert an approved load to pending status';
+  }
+  if (from === 'IN_TRANSIT' && to !== 'COMPLETED') {
+    return 'Loads in transit can only be marked as completed';
+  }
+
+  return `Invalid status transition from ${from} to ${to}`;
+}
 
 export interface LoadProgressSummary {
   plannedJoints: number;

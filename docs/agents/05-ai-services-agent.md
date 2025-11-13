@@ -57,10 +57,10 @@
    - Cost: Free tier (15 RPM, 1M TPM, 1500 RPD)
    - File: `services/geminiService.ts:98`
 
-2. **Gemini 2.0 Flash Exp** (`gemini-2.0-flash-exp`)
+2. **Gemini 2.0 Flash** (`gemini-2.0-flash` - stable)
    - Use: Document extraction (vision), summaries
-   - Cost: Free tier (10 RPM, 4M TPM)
-   - File: `services/manifestProcessingService.ts:190, 265`
+   - Cost: Free tier (15 RPM, 1M TPM, 1500 RPD)
+   - File: `services/manifestProcessingService.ts:190, 288`
 
 3. **Claude 3.5 Haiku** (optional, not currently used)
    - Use: Complex reasoning, multi-turn conversations
@@ -69,8 +69,8 @@
 
 ### Rate Limits (Free Tier)
 - **Gemini Flash 2.5**: 15 requests/min, 1M tokens/min, 1500 requests/day
-- **Gemini Flash 2.0**: 10 requests/min, 4M tokens/min
-- **Strategy**: Use 2.5 for chat (frequent), 2.0 for documents (less frequent)
+- **Gemini Flash 2.0** (stable): 15 requests/min, 1M tokens/min, 1500 requests/day
+- **Strategy**: Use 2.5 for chat (frequent), 2.0 for documents (vision)
 
 ---
 
@@ -121,7 +121,7 @@ Return ONLY valid JSON in this format:
 
 **API Call** (lines 186-206):
 ```typescript
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' }); // Stable model
 
 const result = await model.generateContent([
   {

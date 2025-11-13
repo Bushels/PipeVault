@@ -4,7 +4,7 @@ export interface Company {
   domain: string;
 }
 
-export type PipeStatus = 'PENDING_DELIVERY' | 'IN_STORAGE' | 'PICKED_UP' | 'IN_TRANSIT';
+export type PipeStatus = 'PENDING_DELIVERY' | 'IN_STORAGE' | 'PICKED_UP' | 'DELIVERED' | 'IN_TRANSIT';
 
 export type ShipmentStatus = 'DRAFT' | 'SCHEDULING' | 'SCHEDULED' | 'IN_TRANSIT' | 'RECEIVED' | 'CANCELLED';
 export type TruckingMethod = 'MPS_QUOTE' | 'CUSTOMER_PROVIDED';
@@ -126,6 +126,7 @@ export interface ShipmentItem {
 
 export type TruckingLoadDirection = 'INBOUND' | 'OUTBOUND';
 export type TruckingLoadStatus = 'NEW' | 'APPROVED' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
+export type ShippingMethod = 'CUSTOMER_ARRANGED' | 'MPS_QUOTE';
 
 export interface TruckingLoad {
   id: string;
@@ -141,6 +142,14 @@ export interface TruckingLoad {
   wellpadName?: string | null;
   wellName?: string | null;
   uwi?: string | null;
+
+  // Outbound-specific fields
+  destinationLsd?: string | null; // Legal Subdivision for outbound loads
+  destinationWellName?: string | null; // Well name for outbound (optional if UWI provided)
+  destinationUwi?: string | null; // Unique Well Identifier for outbound (optional if well name provided)
+  shippingMethod?: ShippingMethod | null; // How shipping is arranged
+  quoteAmount?: number | null; // Quote amount if MPS_QUOTE selected
+
   truckingCompany?: string | null;
   contactCompany?: string | null;
   contactName?: string | null;
@@ -170,6 +179,19 @@ export interface TruckingDocument {
   documentType?: string | null;
   uploadedBy?: string | null;
   uploadedAt?: string;
+  parsedPayload?: ManifestItem[] | null; // AI-extracted manifest data
+}
+
+// ManifestItem structure from manifestProcessingService.ts
+export interface ManifestItem {
+  manufacturer: string | null;
+  heat_number: string | null;
+  serial_number: string | null;
+  tally_length_ft: number | null;
+  quantity: number;
+  grade: string | null;
+  outer_diameter: number | null;
+  weight_lbs_ft: number | null;
 }
 
 export interface Pipe {
@@ -185,15 +207,15 @@ export interface Pipe {
   status: PipeStatus;
   // Tracking timestamps
   dropOffTimestamp?: string; // ISO 8601 timestamp when pipe arrived
-  pickUpTimestamp?: string; // ISO 8601 timestamp when pipe was picked up
+  pickUpTimestamp?: string; // ISO 8601 timestamp when pipe was picked up (for outbound loads)
   // Assignment information for pick-up
   assignedUWI?: string; // Unique Well Identifier
   assignedWellName?: string; // Well name
   // Storage location
   storageAreaId?: string; // Which rack/area the pipe is stored in
-  // Related truck load
-  deliveryTruckLoadId?: string; // ID of the truck load that delivered this pipe
-  pickupTruckLoadId?: string; // ID of the truck load that picked up this pipe
+  // Related truck loads
+  deliveryTruckLoadId?: string; // ID of the inbound load that delivered this pipe
+  pickupTruckLoadId?: string; // ID of the outbound load that picked up this pipe
   manifestItemId?: string; // Link back to parsed manifest row when available
 }
 
@@ -279,7 +301,12 @@ export interface StorageRequest {
   userId: string;
   referenceId: string;
   status: RequestStatus;
-  archivedAt?: string | null;
+
+  // Archival fields
+  archived?: boolean; // True if project is completed and archived
+  archivedAt?: string | null; // Timestamp when archived
+  archivedBy?: string | null; // Admin email who archived it
+
   createdAt?: string;
   updatedAt?: string;
   approvedAt?: string | null;

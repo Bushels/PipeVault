@@ -9,8 +9,8 @@ import type {
   StorageRequest,
   Company,
   Yard,
+  Rack,
   Pipe,
-  TruckLoad,
   RequestStatus,
   Shipment,
   ShipmentTruck,
@@ -22,6 +22,7 @@ import type {
 } from '../../types';
 import AdminHeader from './AdminHeader';
 import AdminAIAssistant from './AdminAIAssistant';
+import ManifestDataDisplay from './ManifestDataDisplay';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { formatDate, formatStatus } from '../../utils/dateUtils';
@@ -40,6 +41,15 @@ import {
   getStatusBadgeTone,
   type StatusBadgeTone,
 } from '../../utils/truckingStatus';
+import { isFeatureEnabled, FEATURES } from '../../utils/featureFlags';
+import CompanyTileCarousel from './tiles/CompanyTileCarousel';
+import CompanyDetailModal from './CompanyDetailModal';
+import ManualRackAdjustmentModal from './ManualRackAdjustmentModal';
+import PendingLoadsTile from './tiles/PendingLoadsTile';
+import ApprovedLoadsTile from './tiles/ApprovedLoadsTile';
+import InTransitTile from './tiles/InTransitTile';
+import OutboundLoadsTile from './tiles/OutboundLoadsTile';
+import { usePendingLoadsCount, useApprovedLoadsCount, useInTransitLoadsCount } from '../../hooks/useTruckingLoadQueries';
 
 interface AdminDashboardProps {
   session: AdminSession;
@@ -48,16 +58,14 @@ interface AdminDashboardProps {
   companies: Company[];
   yards: Yard[];
   inventory: Pipe[];
-  truckLoads: TruckLoad[];
   shipments: Shipment[];
   approveRequest: (requestId: string, assignedRackIds: string[], requiredJoints: number, notes?: string) => void;
-  rejectRequest: (requestId: string, reason: string) => void;
-  addTruckLoad: (truckLoad: Omit<TruckLoad, 'id'>) => void;
+  rejectRequest: (requestId: string, reason: string, notes?: string) => void;
   pickUpPipes: (pipeIds: string[], uwi: string, wellName: string, truckLoadId?: string) => void;
   updateRequest: (request: StorageRequest) => Promise<unknown>;
 }
 
-type TabType = 'overview' | 'approvals' | 'requests' | 'companies' | 'inventory' | 'storage' | 'shipments' | 'ai';
+type TabType = 'overview' | 'approvals' | 'pending-loads' | 'approved-loads' | 'in-transit' | 'outbound-loads' | 'requests' | 'companies' | 'inventory' | 'storage' | 'shipments' | 'ai';
 
 const adminStatusBadgeThemes: Record<StatusBadgeTone, string> = {
   pending: 'bg-yellow-500/20 text-yellow-300',
@@ -86,11 +94,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   companies,
   yards,
   inventory,
-  truckLoads,
   shipments,
   approveRequest,
   rejectRequest,
-  addTruckLoad,
   pickUpPipes,
   updateRequest,
 }) => {
@@ -109,12 +115,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [inventoryPerPage, setInventoryPerPage] = useState(50);
   const [editingLoad, setEditingLoad] = useState<{id: string; requestId: string} | null>(null);
   const [loadToDelete, setLoadToDelete] = useState<{id: string; requestId: string; sequenceNumber: number} | null>(null);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+  const [isCompanyDetailOpen, setCompanyDetailOpen] = useState(false);
+  const [selectedRack, setSelectedRack] = useState<Rack | null>(null);
+  const [isRackAdjustmentOpen, setRackAdjustmentOpen] = useState(false);
 
   const updateShipmentMutation = useUpdateShipment();
   const updateShipmentTruckMutation = useUpdateShipmentTruck();
   const updateShipmentItemMutation = useUpdateShipmentItem();
   const updateDockAppointmentMutation = useUpdateDockAppointment();
   const updateInventoryItemMutation = useUpdateInventoryItem();
+
+  // Get load counts for badges
+  const { data: pendingLoadsCount = 0 } = usePendingLoadsCount();
+  const { data: approvedLoadsCount = 0 } = useApprovedLoadsCount();
+  const { data: inTransitLoadsCount = 0 } = useInTransitLoadsCount();
 
   const getRequestStatusMeta = (request: StorageRequest) => {
     const snapshot = getRequestLogisticsSnapshot(request);
@@ -601,31 +616,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const requestMap = new Map<string, StorageRequest>();
     requests.forEach((req) => requestMap.set(req.id, req));
 
-    const pickupLoads = truckLoads.filter(load => load.type === 'PICKUP');
-    const upcomingPickups = pickupLoads
-      .map(load => ({
-        load,
-        date: new Date(load.arrivalTime),
-      }))
-      .filter(({ date }) => !Number.isNaN(date.getTime()) && date >= now)
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
-
-    const nextPickupInfo = upcomingPickups[0] ?? null;
-    const nextPickupDays = nextPickupInfo
-      ? Math.max(0, Math.ceil((nextPickupInfo.date.getTime() - now.getTime()) / msPerDay))
-      : null;
-
+    // NOTE: Legacy truck_loads table deprecated - pickup metrics temporarily disabled
+    // TODO: Replace with trucking_loads data from useProjectSummaries hook
+    const pickupLoads: never[] = [];
+    const upcomingPickups: never[] = [];
+    const nextPickupInfo = null;
+    const nextPickupDays = null;
     const pickupsThisMonthCompanies = new Set<string>();
-    pickupLoads.forEach(load => {
-      const date = new Date(load.arrivalTime);
-      if (Number.isNaN(date.getTime())) return;
-      if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) {
-        const related = load.relatedRequestId ? requestMap.get(load.relatedRequestId) : undefined;
-        if (related) {
-          pickupsThisMonthCompanies.add(related.companyId);
-        }
-      }
-    });
 
     const pendingTruckingQuotes = requests.filter(
       req => req.status === 'PENDING' && req.truckingInfo?.truckingType === 'quote'
@@ -687,7 +684,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       },
       documents: truckingDocumentSummary,
     };
-  }, [requests, yards, companies, inventory, truckLoads, shipments, pendingTruckEntries]);
+  }, [requests, yards, companies, inventory, shipments, pendingTruckEntries]);
 
   // ===== GLOBAL SEARCH =====
   const searchResults = useMemo(() => {
@@ -715,6 +712,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const tabs: Array<{ id: TabType; label: string; badge?: number }> = [
     { id: 'overview', label: 'Overview' },
     { id: 'approvals', label: 'Approvals', badge: analytics.requests.pending },
+    { id: 'pending-loads', label: 'Pending Loads', badge: pendingLoadsCount },
+    { id: 'approved-loads', label: 'Approved Loads', badge: approvedLoadsCount },
+    { id: 'in-transit', label: 'In Transit', badge: inTransitLoadsCount },
+    { id: 'outbound-loads', label: 'Outbound Pickups' },
     { id: 'requests', label: 'All Requests', badge: requests.length },
     { id: 'companies', label: 'Companies', badge: companies.length },
     { id: 'inventory', label: 'Inventory', badge: inventory.length },
@@ -724,7 +725,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   ];
 
   // ===== RENDER FUNCTIONS =====
-  const renderOverview = () => (
+  const renderOverview = () => {
+    // Feature flag: Use tile-based UI or legacy overview
+    const useTileUI = isFeatureEnabled(FEATURES.TILE_ADMIN);
+
+    if (useTileUI) {
+      return (
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold text-white">Company Dashboard</h2>
+
+          {/* Tile-Based Company Carousel */}
+          <CompanyTileCarousel
+            onCompanyClick={(companyId) => {
+              setSelectedCompanyId(companyId);
+            }}
+            onViewCompanyDetails={(companyId) => {
+              console.log('🔍 Opening company detail modal for:', companyId);
+              setSelectedCompanyId(companyId);
+              setCompanyDetailOpen(true);
+            }}
+            selectedCompanyId={selectedCompanyId}
+            yards={yards}
+          />
+        </div>
+      );
+    }
+
+    // Legacy overview UI
+    return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-white">Dashboard Overview</h2>
 
@@ -915,7 +943,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       </Card>
     </div>
-  );
+    );
+  };
 
   const renderApprovals = () => {
     const pendingRequests = requests.filter(r => r.status === 'PENDING');
@@ -1375,12 +1404,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       {area.racks.map(rack => {
                         const rackUtil = rack.capacity > 0 ? (rack.occupied / rack.capacity * 100) : 0;
                         return (
-                          <div
+                          <button
                             key={rack.id}
-                            className="bg-gray-800 p-2 rounded text-center border-2"
+                            onClick={() => {
+                              setSelectedRack(rack);
+                              setRackAdjustmentOpen(true);
+                            }}
+                            className="bg-gray-800 p-2 rounded text-center border-2 hover:bg-gray-700 transition-colors cursor-pointer"
                             style={{
                               borderColor: rackUtil > 90 ? '#ef4444' : rackUtil > 50 ? '#eab308' : '#22c55e'
                             }}
+                            title={`Click to adjust occupancy for ${rack.name}`}
                           >
                             <p className="text-xs font-semibold text-white">{rack.name}</p>
                             <p className="text-xs text-gray-400">
@@ -1388,7 +1422,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 ? `${rack.occupied}/${rack.capacity} locations`
                                 : `${Math.round(rack.occupiedMeters)}m / ${Math.round(rack.capacityMeters)}m`}
                             </p>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -2001,24 +2035,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {docCount === 0 ? (
                       <p className="text-xs text-gray-500">No documents uploaded yet.</p>
                     ) : (
-                      <ul className="space-y-2">
+                      <ul className="space-y-4">
                         {documents.map(document => (
                           <li
                             key={document.id}
-                            className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
+                            className="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3"
                           >
-                            <div>
-                              <p className="text-sm text-white font-semibold">{document.fileName}</p>
-                              <p className="text-xs text-gray-400">
-                                {(document.documentType || 'Uncategorized')} -{' '}
-                                {document.uploadedAt ? formatDate(document.uploadedAt, true) : 'Uploaded'}
-                              </p>
+                            {/* Document header */}
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                              <div>
+                                <p className="text-sm text-white font-semibold">{document.fileName}</p>
+                                <p className="text-xs text-gray-400">
+                                  {(document.documentType || 'Uncategorized')} -{' '}
+                                  {document.uploadedAt ? formatDate(document.uploadedAt, true) : 'Uploaded'}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button variant="secondary" onClick={() => handlePreviewTruckingDocument(document)}>
+                                  View
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Button variant="secondary" onClick={() => handlePreviewTruckingDocument(document)}>
-                                View
-                              </Button>
-                            </div>
+
+                            {/* AI-extracted manifest data */}
+                            <ManifestDataDisplay
+                              data={document.parsedPayload}
+                              documentFileName={document.fileName}
+                            />
                           </li>
                         ))}
                       </ul>
@@ -2238,6 +2281,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* Tab Content */}
           {activeTab === 'overview' && renderOverview()}
           {activeTab === 'approvals' && renderApprovals()}
+          {activeTab === 'pending-loads' && <PendingLoadsTile />}
+          {activeTab === 'approved-loads' && <ApprovedLoadsTile />}
+          {activeTab === 'in-transit' && <InTransitTile />}
+          {activeTab === 'outbound-loads' && <OutboundLoadsTile />}
           {activeTab === 'requests' && renderRequests()}
           {activeTab === 'companies' && renderCompanies()}
           {activeTab === 'inventory' && renderInventory()}
@@ -2247,6 +2294,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       </div>
       {renderDocumentsViewer()}
+      <CompanyDetailModal
+        isOpen={isCompanyDetailOpen}
+        companyId={selectedCompanyId}
+        onClose={() => setCompanyDetailOpen(false)}
+      />
+      <ManualRackAdjustmentModal
+        rack={selectedRack}
+        isOpen={isRackAdjustmentOpen}
+        onClose={() => {
+          setRackAdjustmentOpen(false);
+          setSelectedRack(null);
+        }}
+        onSuccess={() => {
+          // Refresh yards data - the parent will re-fetch via useSupabaseData
+          window.location.reload(); // Simple refresh for now
+        }}
+      />
 
       {/* Delete Load Confirmation Dialog */}
       {loadToDelete && (
@@ -2879,7 +2943,8 @@ const ApprovalCard: React.FC<{
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 text-sm">
         <div className="bg-gray-800/40 border border-gray-700 rounded-md p-3">
           <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Contact</p>
-          <p className="text-white break-words">{request.userId}</p>
+          <p className="text-white font-semibold">{request.requestDetails?.fullName || 'Name not provided'}</p>
+          <p className="text-xs text-gray-400 break-words mt-1">{request.userId}</p>
         </div>
         <div className="bg-gray-800/40 border border-gray-700 rounded-md p-3">
           <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Total Volume</p>
@@ -3033,9 +3098,5 @@ const ApprovalCard: React.FC<{
 };
 
 export default AdminDashboard;
-
-
-
-
 
 

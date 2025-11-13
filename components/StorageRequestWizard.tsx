@@ -7,6 +7,7 @@ import Spinner from './ui/Spinner';
 import { generateRequestSummary } from '../services/geminiService';
 import { CASING_DATA } from '../data/casingData';
 import { supabase } from '../lib/supabase';
+import toast, { Toaster } from 'react-hot-toast';
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -15,6 +16,8 @@ interface StorageRequestWizardProps {
   session: Session;
   updateRequest: (request: StorageRequest) => MaybePromise<StorageRequest | void>;
   addRequest: (request: Omit<StorageRequest, 'id'>) => MaybePromise<StorageRequest>;
+  onSubmitSuccess?: (request: StorageRequest) => void;
+  onReturnToDashboard?: () => void;
 }
 
 const Label: React.FC<{ children: React.ReactNode; htmlFor?: string }> = ({ children, htmlFor }) => (
@@ -71,7 +74,14 @@ const initialTruckingDetails: ProvidedTruckingDetails = {
     specialInstructions: ''
 };
 
-const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, session, updateRequest, addRequest }) => {
+const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({
+    request,
+    session,
+    updateRequest,
+    addRequest,
+    onSubmitSuccess,
+    onReturnToDashboard
+}) => {
     const { signOut, user } = useAuth();
     const userMetadata = user?.user_metadata ?? {};
     const metadataCompanyName = typeof userMetadata.company_name === 'string' ? userMetadata.company_name : '';
@@ -275,10 +285,12 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
                 approvalSummary: summary,
             };
 
+            let createdRequest: StorageRequest | null = null;
+
             if (request) {
                 await Promise.resolve(updateRequest({ ...request, ...newRequestData }));
             } else {
-                await Promise.resolve(addRequest(newRequestData));
+                createdRequest = await Promise.resolve(addRequest(newRequestData));
                 // Slack notification handled automatically by Supabase webhook on INSERT
             }
 
@@ -290,6 +302,26 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
                 fullName: requestDetails.fullName,
                 contactNumber: requestDetails.contactNumber,
             }));
+
+            if (createdRequest) {
+                onSubmitSuccess?.(createdRequest);
+
+                // Show success toast
+                toast.success(
+                    `Request ${normalizedReferenceId} submitted successfully!`,
+                    {
+                        duration: 5000,
+                        position: 'top-center',
+                        style: {
+                            background: '#065f46',
+                            color: '#fff',
+                            padding: '16px',
+                            borderRadius: '8px',
+                        },
+                        icon: '✓',
+                    }
+                );
+            }
 
             setWizardStep('submitted');
         } catch (err: any) {
@@ -554,6 +586,14 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
         window.location.reload(); // Refresh to go back to auth screen
     };
 
+    const handleDashboardReturn = () => {
+        if (onReturnToDashboard) {
+            onReturnToDashboard();
+        } else {
+            setWizardStep('details');
+        }
+    };
+
     const renderSubmitted = () => (
          <WizardCard title="Thank You For Your Request!">
             <div className="text-center space-y-4">
@@ -572,8 +612,14 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
 
                 <p className="text-red-500 font-semibold mt-4">MPS Celebrating 20 Years</p>
 
-                <div className="mt-6 pt-6 border-t border-gray-700">
-                    <p className="text-sm text-gray-400 mb-3">You are now signed in to PipeVault</p>
+                <div className="mt-6 pt-6 border-t border-gray-700 space-y-3">
+                    <p className="text-sm text-gray-400">You are now signed in to PipeVault</p>
+                    <Button
+                        onClick={handleDashboardReturn}
+                        className="w-full py-3 bg-red-600 hover:bg-red-700 focus:ring-red-500"
+                    >
+                        Back to Dashboard
+                    </Button>
                     <Button
                         onClick={handleLogout}
                         className="w-full py-3 bg-gray-700 hover:bg-gray-600"
@@ -628,10 +674,13 @@ const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({ request, se
         }
     }
 
-    return renderStep(request?.status || 'DRAFT', wizardStep);
+    return (
+        <>
+            <Toaster />
+            {renderStep(request?.status || 'DRAFT', wizardStep)}
+        </>
+    );
 };
 
 export default StorageRequestWizard;
-
-
 

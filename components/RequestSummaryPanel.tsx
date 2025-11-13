@@ -9,6 +9,7 @@ import {
   getStatusBadgeTone,
   type StatusBadgeTone,
 } from '../utils/truckingStatus';
+import LoadTimelineView from './LoadTimelineView';
 
 interface RequestSummaryPanelProps {
   heading?: string;
@@ -19,6 +20,7 @@ interface RequestSummaryPanelProps {
   archivingRequestId?: string | null;
   onScheduleDelivery?: (request: StorageRequest) => void;
   onUploadDocuments?: (request: StorageRequest) => void;
+  pendingSubmission?: StorageRequest | null;
 }
 
 const badgeThemes: Record<StatusBadgeTone, string> = {
@@ -38,12 +40,14 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
   archivingRequestId,
   onScheduleDelivery,
   onUploadDocuments,
+  pendingSubmission,
 }) => {
   const nowIso = useMemo(() => new Date().toISOString(), []);
   const [showArchived, setShowArchived] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [expandedLoadTimeline, setExpandedLoadTimeline] = useState<string | null>(null);
 
   const normalizedRequests = useMemo(() => {
     if (!currentUserEmail) return requests;
@@ -52,13 +56,19 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
     return filtered.length ? filtered : requests;
   }, [requests, currentUserEmail]);
 
+  const normalizedRequestsWithPending = useMemo(() => {
+    if (!pendingSubmission) return normalizedRequests;
+    const exists = normalizedRequests.some((request) => request.id === pendingSubmission.id);
+    return exists ? normalizedRequests : [pendingSubmission, ...normalizedRequests];
+  }, [normalizedRequests, pendingSubmission]);
+
   const sortedRequests = useMemo(() => {
-    return [...normalizedRequests].sort((a, b) => {
+    return [...normalizedRequestsWithPending].sort((a, b) => {
       const dateA = a.createdAt ? Date.parse(a.createdAt) : a.updatedAt ? Date.parse(a.updatedAt) : 0;
       const dateB = b.createdAt ? Date.parse(b.createdAt) : b.updatedAt ? Date.parse(b.updatedAt) : 0;
       return dateB - dateA;
     });
-  }, [normalizedRequests]);
+  }, [normalizedRequestsWithPending]);
 
   const archivedCount = useMemo(
     () => sortedRequests.filter((request) => Boolean(request.archivedAt)).length,
@@ -97,20 +107,47 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
     }
   }, [visibleRequests]);
 
-  const handleWheelScroll = (event: React.WheelEvent<HTMLDivElement>) => {
-    if (!scrollContainerRef.current) return;
+  // Wheel scroll handler: Only intercept with Shift key for horizontal scroll
+  // This fixes the passive listener preventDefault error and allows normal page scrolling
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
 
-    const isVerticalIntent = Math.abs(event.deltaY) > Math.abs(event.deltaX);
-    if (!isVerticalIntent) {
-      return;
-    }
+    const handleWheel = (e: WheelEvent) => {
+      // Only intercept if Shift is held down (horizontal scroll intent)
+      if (e.shiftKey && Math.abs(e.deltaY) > 0) {
+        e.preventDefault();
+        container.scrollBy({
+          left: e.deltaY,
+          behavior: 'smooth',
+        });
+      }
+      // Otherwise, let normal vertical scrolling work
+    };
 
-    event.preventDefault();
-    scrollContainerRef.current.scrollBy({
-      left: event.deltaY,
-      behavior: 'smooth',
-    });
-  };
+    // Add with { passive: false } to allow preventDefault
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  // Keyboard navigation for accessibility
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        scrollToPrev();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        scrollToNext();
+      }
+    };
+
+    container.addEventListener('keydown', handleKeyDown);
+    return () => container.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const scrollToNext = () => {
     if (!scrollContainerRef.current) return;
@@ -126,8 +163,98 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
     container.scrollBy({ left: -(cardWidth + 24), behavior: 'smooth' });
   };
 
-  // Show special onboarding card for new users
-  if (!sortedRequests.length) {
+  // Show special onboarding card or pending confirmation when no requests yet
+  if (!normalizedRequests.length) {
+    if (pendingSubmission) {
+      const submittedAt =
+        pendingSubmission.createdAt ||
+        pendingSubmission.updatedAt ||
+        new Date().toISOString();
+
+      return (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-xl font-semibold text-white">{heading}</h2>
+            <p className="text-sm text-gray-400">{description}</p>
+          </div>
+
+          <div className="relative max-w-[600px]">
+            <div className="absolute -inset-1 bg-gradient-to-r from-yellow-600 via-amber-500 to-orange-500 rounded-2xl blur-lg opacity-40 animate-pulse" />
+
+            <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl border border-yellow-600/60 shadow-2xl overflow-hidden h-[480px]">
+              <div className="absolute inset-0 bg-grid-pattern opacity-5" />
+              <div className="absolute inset-0 opacity-10 bg-gradient-to-br from-yellow-500/70 to-transparent" />
+
+              <div className="relative p-6 h-full flex flex-col gap-6">
+                <div className="flex items-center justify-between pb-4 border-b border-yellow-600/30">
+                  <div>
+                    <p className="text-[10px] text-yellow-300 uppercase tracking-widest font-semibold mb-2">
+                      Request Submitted
+                    </p>
+                    <h3 className="text-2xl font-bold text-white">Awaiting Approval</h3>
+                    <p className="text-sm text-gray-400 mt-1">
+                      We received your details and notified the MPS admin team.
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-[11px] uppercase tracking-wider text-gray-400">
+                      Reference ID
+                    </span>
+                    <span className="text-2xl font-bold text-yellow-300">
+                      {pendingSubmission.referenceId}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-gray-800/60 rounded-xl border border-gray-700/60 p-4 flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-yellow-500/20 text-yellow-300 flex items-center justify-center text-xl">
+                      ⏳
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold">Next Steps</p>
+                      <p className="text-sm text-gray-300">
+                        An MPS admin reviews every request. You&apos;ll receive email confirmation
+                        as soon as it&apos;s approved or if we need any clarifications.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-900/40 border border-gray-700 rounded-lg p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-gray-400">
+                        Submitted
+                      </p>
+                      <p className="text-lg font-semibold text-white mt-1">
+                        {formatDate(submittedAt)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-900/40 border border-gray-700 rounded-lg p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-gray-400">
+                        Status
+                      </p>
+                      <p className="text-lg font-semibold text-yellow-300 mt-1">
+                        Pending Approval
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-auto space-y-3 text-sm text-gray-400">
+                  <p>
+                    You can close this page—your request is saved. Return anytime to upload
+                    manifests, schedule deliveries, or request updates from Roughneck AI.
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Reference ID is required for any follow-up questions. Keep it handy!
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-3">
         <div>
@@ -239,9 +366,10 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-end">
             {visibleRequests.length > 1 && (
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Swipe to view {visibleRequests.length} requests
-              </span>
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <span className="hidden sm:inline">Use arrow buttons, Shift+wheel, or swipe to view {visibleRequests.length} requests</span>
+                <span className="sm:hidden">Swipe to view {visibleRequests.length} requests</span>
+              </div>
             )}
             {archivedCount > 0 && (
               <Button
@@ -307,7 +435,9 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
         <div
           ref={scrollContainerRef}
           className="flex gap-6 overflow-x-auto overflow-y-visible pb-6 snap-x snap-mandatory scrollbar-hide"
-          onWheel={handleWheelScroll}
+          role="region"
+          aria-label="Storage request tiles"
+          tabIndex={0}
         >
           {visibleRequests.map((request, index) => {
             const requestDetails = request.requestDetails;
@@ -420,14 +550,14 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                 key={request.id}
                 className="flex-none w-full sm:w-[calc(100%-2rem)] lg:w-[600px] snap-center"
               >
-              <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl border border-gray-700/50 shadow-2xl overflow-hidden h-[480px]">
+              <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl border border-gray-700/50 shadow-2xl overflow-hidden min-h-[480px] max-h-[600px] flex flex-col">
                 {/* Subtle background pattern */}
                 <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
 
                 {/* Glow effect based on status */}
                 <div className={`absolute inset-0 opacity-10 ${backgroundGlowClass}`}></div>
 
-                <div className="relative p-6 h-full flex flex-col overflow-y-auto">
+                <div className="relative p-6 flex-1 flex flex-col overflow-y-auto">
                   {/* Status and Next Steps Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-gray-700/50 flex-shrink-0">
                     <div className="flex items-center gap-4">
@@ -556,6 +686,84 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                               <span className="font-semibold text-gray-100">Inbound:</span> {inboundStatusLabel}
                             </p>
                           )}
+
+                          {/* Individual Inbound Load Status Badges */}
+                          {inboundLoads.length > 0 && (
+                            <div className="space-y-1.5 pt-1">
+                              {inboundLoads.map(load => {
+                                const loadBadgeClass = (() => {
+                                  switch (load.status) {
+                                    case 'NEW':
+                                      return 'bg-yellow-900/40 text-yellow-300 border-yellow-700/50';
+                                    case 'APPROVED':
+                                      return 'bg-green-900/40 text-green-300 border-green-700/50';
+                                    case 'IN_TRANSIT':
+                                      return 'bg-blue-900/40 text-blue-300 border-blue-700/50';
+                                    case 'COMPLETED':
+                                      return 'bg-green-900/40 text-green-300 border-green-700/50';
+                                    case 'REJECTED':
+                                      return 'bg-red-900/40 text-red-300 border-red-700/50';
+                                    default:
+                                      return 'bg-gray-800/40 text-gray-300 border-gray-700/50';
+                                  }
+                                })();
+                                const loadStatusEmoji = (() => {
+                                  switch (load.status) {
+                                    case 'NEW': return '⏳';
+                                    case 'APPROVED': return '✓';
+                                    case 'IN_TRANSIT': return '🚛';
+                                    case 'COMPLETED': return '✓';
+                                    case 'REJECTED': return '✗';
+                                    default: return '•';
+                                  }
+                                })();
+                                const loadStatusText = (() => {
+                                  switch (load.status) {
+                                    case 'NEW': return 'Pending Approval';
+                                    case 'APPROVED': return 'Approved';
+                                    case 'IN_TRANSIT': return 'En Route';
+                                    case 'COMPLETED': return 'Delivered';
+                                    case 'REJECTED': return 'Rejected';
+                                    default: return load.status;
+                                  }
+                                })();
+                                const isTimelineExpanded = expandedLoadTimeline === load.id;
+
+                                return (
+                                  <div key={load.id} className="space-y-2">
+                                    <div className="flex items-center justify-between text-xs">
+                                      <button
+                                        onClick={() => setExpandedLoadTimeline(isTimelineExpanded ? null : load.id)}
+                                        className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group"
+                                      >
+                                        <span>Load #{load.sequenceNumber}</span>
+                                        <svg
+                                          className={`w-3 h-3 transition-transform ${isTimelineExpanded ? 'rotate-180' : ''}`}
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                      </button>
+                                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-semibold ${loadBadgeClass}`}>
+                                        <span>{loadStatusEmoji}</span>
+                                        <span>{loadStatusText}</span>
+                                      </span>
+                                    </div>
+
+                                    {/* Expandable Timeline */}
+                                    {isTimelineExpanded && (
+                                      <div className="pl-2 pt-2 border-l-2 border-gray-700">
+                                        <LoadTimelineView load={load} direction="INBOUND" />
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
                           {deliveredQuantity != null && (
                             <p className="text-xs text-gray-300">
                               <span className="font-semibold text-gray-100">Delivered:</span>{' '}
@@ -568,11 +776,91 @@ const RequestSummaryPanel: React.FC<RequestSummaryPanelProps> = ({
                               <span className="font-semibold text-gray-100">Remaining:</span> {remainingQuantity} joints
                             </p>
                           )}
+
+                          {/* Outbound Loads Section */}
                           {outboundStatusLabel && (
-                            <p className="text-xs text-blue-300">
+                            <p className="text-xs text-blue-300 pt-2">
                               <span className="font-semibold text-gray-100">Outbound:</span> {outboundStatusLabel}
                             </p>
                           )}
+
+                          {/* Individual Outbound Load Status Badges */}
+                          {outboundLoads.length > 0 && (
+                            <div className="space-y-1.5">
+                              {outboundLoads.map(load => {
+                                const loadBadgeClass = (() => {
+                                  switch (load.status) {
+                                    case 'NEW':
+                                      return 'bg-yellow-900/40 text-yellow-300 border-yellow-700/50';
+                                    case 'APPROVED':
+                                      return 'bg-green-900/40 text-green-300 border-green-700/50';
+                                    case 'IN_TRANSIT':
+                                      return 'bg-blue-900/40 text-blue-300 border-blue-700/50';
+                                    case 'COMPLETED':
+                                      return 'bg-green-900/40 text-green-300 border-green-700/50';
+                                    case 'REJECTED':
+                                      return 'bg-red-900/40 text-red-300 border-red-700/50';
+                                    default:
+                                      return 'bg-gray-800/40 text-gray-300 border-gray-700/50';
+                                  }
+                                })();
+                                const loadStatusEmoji = (() => {
+                                  switch (load.status) {
+                                    case 'NEW': return '⏳';
+                                    case 'APPROVED': return '✓';
+                                    case 'IN_TRANSIT': return '🚛';
+                                    case 'COMPLETED': return '✓';
+                                    case 'REJECTED': return '✗';
+                                    default: return '•';
+                                  }
+                                })();
+                                const loadStatusText = (() => {
+                                  switch (load.status) {
+                                    case 'NEW': return 'Pending Approval';
+                                    case 'APPROVED': return 'Approved';
+                                    case 'IN_TRANSIT': return 'En Route';
+                                    case 'COMPLETED': return 'Picked Up';
+                                    case 'REJECTED': return 'Rejected';
+                                    default: return load.status;
+                                  }
+                                })();
+                                const isTimelineExpanded = expandedLoadTimeline === load.id;
+
+                                return (
+                                  <div key={load.id} className="space-y-2">
+                                    <div className="flex items-center justify-between text-xs">
+                                      <button
+                                        onClick={() => setExpandedLoadTimeline(isTimelineExpanded ? null : load.id)}
+                                        className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group"
+                                      >
+                                        <span>Pickup #{load.sequenceNumber}</span>
+                                        <svg
+                                          className={`w-3 h-3 transition-transform ${isTimelineExpanded ? 'rotate-180' : ''}`}
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                      </button>
+                                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-semibold ${loadBadgeClass}`}>
+                                        <span>{loadStatusEmoji}</span>
+                                        <span>{loadStatusText}</span>
+                                      </span>
+                                    </div>
+
+                                    {/* Expandable Timeline */}
+                                    {isTimelineExpanded && (
+                                      <div className="pl-2 pt-2 border-l-2 border-gray-700">
+                                        <LoadTimelineView load={load} direction="OUTBOUND" />
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
                           {outboundRemaining != null && (
                             <p className="text-xs text-gray-300">
                               <span className="font-semibold text-gray-100">Outbound Remaining:</span> {outboundRemaining} joints

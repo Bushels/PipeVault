@@ -10,18 +10,16 @@ import {
   useInventory,
   useDocuments,
   useYards,
-  useTruckLoads,
   useShipments,
   useAddCompany,
   useAddRequest,
   useUpdateRequest,
-  useAddTruckLoad,
   useUpdateInventoryItem,
   useUpdateRack,
   queryKeys,
 } from './hooks/useSupabaseData';
-import type { AppSession, Session, StorageRequest, Company, TruckLoad, Pipe, Shipment } from './types';
-import * as emailService from './services/emailService';
+import { useApproveRequest, useRejectRequest } from './hooks/useApprovalWorkflow';
+import type { AppSession, Session, StorageRequest, Company, Pipe, Shipment } from './types';
 import { queryClient } from './lib/QueryProvider';
 
 function App() {
@@ -33,16 +31,18 @@ function App() {
   const { data: inventory = [], isLoading: loadingInventory } = useInventory();
   const { data: documents = [], isLoading: loadingDocuments } = useDocuments();
   const { data: yards = [], isLoading: loadingYards } = useYards();
-  const { data: truckLoads = [], isLoading: loadingTruckLoads } = useTruckLoads();
   const { data: shipments = [], isLoading: loadingShipments } = useShipments();
 
   // Mutations
   const addCompanyMutation = useAddCompany();
   const addRequestMutation = useAddRequest();
   const updateRequestMutation = useUpdateRequest();
-  const addTruckLoadMutation = useAddTruckLoad();
   const updateInventoryMutation = useUpdateInventoryItem();
   const updateRackMutation = useUpdateRack();
+
+  // Atomic approval/rejection workflow
+  const approveRequestMutation = useApproveRequest();
+  const rejectRequestMutation = useRejectRequest();
 
   const handleLogout = async () => {
     try {
@@ -65,148 +65,62 @@ function App() {
     return updateRequestMutation.mutateAsync(updatedRequest);
   };
 
+  /**
+   * Atomic approval workflow using SECURITY DEFINER stored procedure
+   * Replaces legacy multi-step approval with single RPC call
+   */
   const approveRequest = async (
     requestId: string,
     assignedRackIds: string[],
     requiredJoints: number,
     notes?: string,
   ) => {
-    const request = requests.find(r => r.id === requestId);
-    if (!request || !request.requestDetails) {
-      console.error('[OpenStorage] Approval aborted - request missing details', { requestId });
-      return;
-    }
-
     try {
-      const avgJointLength = request.requestDetails.avgJointLength;
-      const approvedAt = new Date().toISOString();
-      const approvedBy = user?.email ?? 'admin@pipevault';
-      const sourceNotes = typeof notes === 'string' ? notes : request.internalNotes ?? '';
-      const trimmedNotes = sourceNotes.trim();
-      const internalNotes = trimmedNotes.length > 0 ? trimmedNotes : null;
-
-      // Determine the human-readable location string
-      const firstRackId = assignedRackIds[0];
-      const [firstYardId, firstAreaId] = firstRackId.split('-');
-      const firstYard = yards.find(y => y.id === firstYardId);
-      const firstArea = firstYard?.areas.find(a => a.id === `${firstYardId}-${firstAreaId}`);
-
-      let assignedLocation = '';
-      if (firstYard && firstArea) {
-        if (assignedRackIds.length > 1) {
-          assignedLocation = `${firstYard.name}, ${firstArea.name}, ${assignedRackIds.length} Locations`;
-        } else {
-          const firstRack = firstArea.racks.find(r => r.id === firstRackId);
-          assignedLocation = `${firstYard.name}, ${firstArea.name}, ${firstRack?.name ?? firstRackId}`;
-        }
-      } else {
-        console.error('[OpenStorage] Unable to resolve location label', {
-          requestId,
-          firstRackId,
-          firstYardId,
-          firstAreaId,
-        });
-      }
-
-      // Update request status
-      await updateRequestMutation.mutateAsync({
-        ...request,
-        status: 'APPROVED',
+      const result = await approveRequestMutation.mutateAsync({
+        requestId,
         assignedRackIds,
-        assignedLocation,
-        approvedAt,
-        approvedBy,
-        internalNotes,
-        rejectionReason: null,
-        rejectedAt: null,
+        requiredJoints,
+        notes: notes || undefined,
       });
 
-      // Update yard occupancy
-      let jointsToAllocate = requiredJoints;
-      for (const rackId of assignedRackIds) {
-        const [yardId, areaId] = rackId.split('-');
-        const yard = yards.find(y => y.id === yardId);
-        if (!yard) {
-          console.error('[OpenStorage] Yard not found during allocation', { requestId, rackId, yardId });
-          continue;
-        }
+      console.log('✅ Approval successful:', result);
 
-        const area = yard.areas.find(a => a.id === `${yardId}-${areaId}`);
-        if (!area) {
-          console.error('[OpenStorage] Area not found during allocation', { requestId, rackId, yardId, areaId });
-          continue;
-        }
-
-        const rack = area.racks.find(r => r.id === rackId);
-        if (!rack) {
-          console.error('[OpenStorage] Rack not found during allocation', { requestId, rackId });
-          continue;
-        }
-
-        if (rack.allocationMode === 'SLOT') {
-          await updateRackMutation.mutateAsync({
-            id: rackId,
-            updates: {
-              occupied: rack.capacity,
-              occupiedMeters: rack.capacityMeters,
-            },
-          });
-        } else {
-          const spaceInRack = Math.min(jointsToAllocate, Math.max(0, rack.capacity - rack.occupied));
-          const metersForRack = spaceInRack * avgJointLength;
-
-          await updateRackMutation.mutateAsync({
-            id: rackId,
-            updates: {
-              occupied: rack.occupied + spaceInRack,
-              occupiedMeters: (rack.occupiedMeters || 0) + metersForRack,
-            },
-          });
-
-          jointsToAllocate -= spaceInRack;
-        }
-      }
-
-      // Send notification
-      if (assignedLocation) {
-        emailService.sendApprovalEmail(request.userId, request.referenceId, assignedLocation);
-      }
-
+      // Invalidate legacy queries for backward compatibility
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.requests }),
         queryClient.invalidateQueries({ queryKey: queryKeys.companies }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.requestsByCompany(request.companyId) }),
+        queryClient.invalidateQueries({ queryKey: ['projectSummaries'] }),
       ]);
     } catch (error) {
-      console.error('[OpenStorage] Approval workflow failed', { requestId, assignedRackIds }, error);
+      console.error('❌ Approval failed:', error);
       throw error;
     }
   };
 
-  const rejectRequest = async (requestId: string, reason: string) => {
-    const request = requests.find(r => r.id === requestId);
-    if (!request) return;
+  /**
+   * Atomic rejection workflow using SECURITY DEFINER stored procedure
+   * Replaces legacy multi-step rejection with single RPC call
+   */
+  const rejectRequest = async (requestId: string, reason: string, notes?: string) => {
+    try {
+      const result = await rejectRequestMutation.mutateAsync({
+        requestId,
+        rejectionReason: reason,
+        notes: notes || undefined,
+      });
 
-    await updateRequestMutation.mutateAsync({
-      ...request,
-      status: 'REJECTED',
-      rejectionReason: reason,
-      approvedAt: null,
-      approvedBy: null,
-    });
+      console.log('✅ Rejection successful:', result);
 
-    // Send notification
-    emailService.sendRejectionEmail(request.userId, request.referenceId, reason);
-
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.requests }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.companies }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.requestsByCompany(request.companyId) }),
-    ]);
-  };
-
-  const addTruckLoad = (newTruckLoad: Omit<TruckLoad, 'id'>) => {
-    return addTruckLoadMutation.mutateAsync(newTruckLoad);
+      // Invalidate legacy queries for backward compatibility
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.requests }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.companies }),
+        queryClient.invalidateQueries({ queryKey: ['projectSummaries'] }),
+      ]);
+    } catch (error) {
+      console.error('❌ Rejection failed:', error);
+      throw error;
+    }
   };
 
   const pickUpPipes = async (pipeIds: string[], uwi: string, wellName: string, truckLoadId?: string) => {
@@ -230,7 +144,7 @@ function App() {
   };
 
   // Show loading state
-  if (authLoading || loadingCompanies || loadingRequests || loadingInventory || loadingDocuments || loadingYards || loadingTruckLoads || loadingShipments) {
+  if (authLoading || loadingCompanies || loadingRequests || loadingInventory || loadingDocuments || loadingYards || loadingShipments) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-100 font-sans flex items-center justify-center">
         <div className="text-center">
@@ -257,11 +171,9 @@ function App() {
                 companies={companies}
                 yards={yards}
                 inventory={inventory}
-                truckLoads={truckLoads}
                 shipments={shipments}
                 approveRequest={approveRequest}
                 rejectRequest={rejectRequest}
-                addTruckLoad={addTruckLoad}
                 pickUpPipes={pickUpPipes}
                 updateRequest={updateRequest}
             />
