@@ -44,7 +44,11 @@
       "Bash(if not exist \"docs\\planning\" mkdir \"docs\\planning\")",
       "Bash(move \"C:\\Users\\kyle\\MPS\\PipeVault\\docs\\ELEVATOR_PITCH.md\" \"C:\\Users\\kyle\\MPS\\PipeVault\\docs\\planning\"\" && move \"C:UserskyleMPSPipeVaultdocsPROJECT_STATISTICS.md\" \"C:UserskyleMPSPipeVaultdocsplanning\"\")",
       "Bash(move \"C:\\Users\\kyle\\MPS\\PipeVault\\docs\\FLUTTER_MIGRATION_EXPLORATION.md\" \"C:\\Users\\kyle\\MPS\\PipeVault\\docs\\planning\"\" && move \"C:UserskyleMPSPipeVaultdocsMOBILE_OPTIMIZATION_PLAN.md\" \"C:UserskyleMPSPipeVaultdocsplanning\"\")",
-      "Bash(move \"C:\\Users\\kyle\\MPS\\PipeVault\\docs\\DOCUMENTATION_REORGANIZATION_PLAN.md\" \"C:\\Users\\kyle\\MPS\\PipeVault\\docs\\planning\"\" && move \"C:UserskyleMPSPipeVaultdocsDATABASE_OPTIMIZATION_ANALYSIS.md\" \"C:UserskyleMPSPipeVaultdocsplanning\"\")"
+      "Bash(move \"C:\\Users\\kyle\\MPS\\PipeVault\\docs\\DOCUMENTATION_REORGANIZATION_PLAN.md\" \"C:\\Users\\kyle\\MPS\\PipeVault\\docs\\planning\"\" && move \"C:UserskyleMPSPipeVaultdocsDATABASE_OPTIMIZATION_ANALYSIS.md\" \"C:UserskyleMPSPipeVaultdocsplanning\"\")",
+      "Bash(npm uninstall:*)",
+      "Bash(del tailwind.config.js)",
+      "Bash(rm:*)",
+      "Bash(xargs:*)"
     ],
     "deny": [],
     "ask": []

@@ -156,6 +156,300 @@ Please contact our team to discuss alternative solutions or timing for your stor
 
 Thank you for your interest in MPS Group!
     `.trim();
+
+  } else if (notification.type === 'load_approved') {
+    htmlBody = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background: #f4f4f4; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+          .header { background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; padding: 30px; text-align: center; }
+          .header h1 { margin: 0 0 10px 0; font-size: 28px; }
+          .header p { margin: 0; font-size: 16px; opacity: 0.9; }
+          .content { padding: 30px; }
+          .content p { margin: 0 0 15px 0; }
+          .details-box { background: #D1FAE5; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10B981; }
+          .details-box h3 { margin: 0 0 15px 0; color: #065F46; font-size: 18px; }
+          .details-box ul { margin: 0; padding: 0; list-style: none; }
+          .details-box li { padding: 8px 0; border-bottom: 1px solid #A7F3D0; }
+          .details-box li:last-child { border-bottom: none; }
+          .details-box strong { color: #065F46; }
+          .cta-button { display: inline-block; background: #10B981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: bold; }
+          .footer { background: #F9FAFB; padding: 20px; text-align: center; color: #6B7280; font-size: 14px; border-top: 1px solid #E5E7EB; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>✅ Load #${payload.loadNumber} Approved!</h1>
+            <p>Your delivery has been scheduled</p>
+          </div>
+
+          <div class="content">
+            <p>Hi <strong>${payload.companyName}</strong> team,</p>
+            <p>Great news! Your <strong>Load #${payload.loadNumber}</strong> for storage request <strong>${payload.referenceId}</strong> has been approved and scheduled.</p>
+
+            <div class="details-box">
+              <h3>📅 Delivery Details</h3>
+              <ul>
+                <li><strong>Scheduled Date:</strong> ${payload.scheduledDate}</li>
+                <li><strong>Scheduled Time:</strong> ${payload.scheduledTime}</li>
+                <li><strong>Trucking Company:</strong> ${payload.truckingCompany}</li>
+                <li><strong>Driver:</strong> ${payload.driverName}</li>
+                <li><strong>Driver Phone:</strong> ${payload.driverPhone}</li>
+                <li><strong>Expected Joints:</strong> ${payload.totalJoints}</li>
+              </ul>
+            </div>
+
+            <p><strong>What's Next?</strong></p>
+            <ul>
+              <li>Your driver should arrive at the scheduled time</li>
+              <li>Have your manifest ready for upload upon arrival</li>
+              <li>Track your load status in real-time on your dashboard</li>
+            </ul>
+
+            <a href="https://kylegronning.github.io/PipeVault/" class="cta-button">View Dashboard</a>
+
+            <p>If you need to make any changes or have questions, please contact our team immediately.</p>
+
+            <p>Thank you for choosing MPS Group!</p>
+          </div>
+
+          <div class="footer">
+            <p>This is an automated notification from PipeVault.</p>
+            <p>MPS Group | Free Pipe Storage | pipevault@mpsgroup.ca</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `.trim();
+
+    textBody = `
+✅ Load #${payload.loadNumber} Approved!
+
+Hi ${payload.companyName} team,
+
+Great news! Your Load #${payload.loadNumber} for storage request ${payload.referenceId} has been approved and scheduled.
+
+📅 DELIVERY DETAILS
+- Scheduled Date: ${payload.scheduledDate}
+- Scheduled Time: ${payload.scheduledTime}
+- Trucking Company: ${payload.truckingCompany}
+- Driver: ${payload.driverName}
+- Driver Phone: ${payload.driverPhone}
+- Expected Joints: ${payload.totalJoints}
+
+WHAT'S NEXT?
+- Your driver should arrive at the scheduled time
+- Have your manifest ready for upload upon arrival
+- Track your load status in real-time on your dashboard
+
+View Dashboard: https://kylegronning.github.io/PipeVault/
+
+If you need to make any changes or have questions, please contact our team immediately.
+
+Thank you for choosing MPS Group!
+
+---
+This is an automated notification from PipeVault.
+MPS Group | Free Pipe Storage | pipevault@mpsgroup.ca
+    `.trim();
+
+  } else if (notification.type === 'load_completed') {
+    htmlBody = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background: #f4f4f4; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+          .header { background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 100%); color: white; padding: 30px; text-align: center; }
+          .header h1 { margin: 0 0 10px 0; font-size: 28px; }
+          .header p { margin: 0; font-size: 16px; opacity: 0.9; }
+          .content { padding: 30px; }
+          .content p { margin: 0 0 15px 0; }
+          .details-box { background: #DBEAFE; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3B82F6; }
+          .details-box h3 { margin: 0 0 15px 0; color: #1E40AF; font-size: 18px; }
+          .details-box ul { margin: 0; padding: 0; list-style: none; }
+          .details-box li { padding: 8px 0; border-bottom: 1px solid #BFDBFE; }
+          .details-box li:last-child { border-bottom: none; }
+          .details-box strong { color: #1E40AF; }
+          .highlight-box { background: #FEF3C7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #F59E0B; }
+          .cta-button { display: inline-block; background: #3B82F6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: bold; }
+          .footer { background: #F9FAFB; padding: 20px; text-align: center; color: #6B7280; font-size: 14px; border-top: 1px solid #E5E7EB; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎉 Load #${payload.loadNumber} Delivered!</h1>
+            <p>Your pipe is now safely stored at MPS</p>
+          </div>
+
+          <div class="content">
+            <p>Hi <strong>${payload.companyName}</strong> team,</p>
+            <p>Excellent news! <strong>Load #${payload.loadNumber}</strong> has been successfully delivered and your pipe is now in secure storage.</p>
+
+            <div class="details-box">
+              <h3>📦 Delivery Summary</h3>
+              <ul>
+                <li><strong>Joints Received:</strong> ${payload.jointsReceived}</li>
+                <li><strong>Total Length:</strong> ${payload.totalLength} ft</li>
+                <li><strong>Total Weight:</strong> ${payload.totalWeight} tonnes</li>
+                <li><strong>Storage Location:</strong> ${payload.rackLocation}</li>
+              </ul>
+            </div>
+
+            <div class="highlight-box">
+              <p style="margin: 0;"><strong>📊 Project Total:</strong> ${payload.projectTotalJoints} joints now in storage for request ${payload.referenceId}</p>
+            </div>
+
+            <p><strong>What You Can Do Now:</strong></p>
+            <ul>
+              <li>View detailed inventory breakdown on your dashboard</li>
+              <li>Schedule additional loads if needed</li>
+              <li>Request outbound shipment when ready</li>
+            </ul>
+
+            <a href="https://kylegronning.github.io/PipeVault/" class="cta-button">View Inventory</a>
+
+            <p>Your pipe is secure and ready whenever you need it. Thank you for trusting MPS Group with your storage needs!</p>
+          </div>
+
+          <div class="footer">
+            <p>This is an automated notification from PipeVault.</p>
+            <p>MPS Group | Free Pipe Storage | pipevault@mpsgroup.ca</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `.trim();
+
+    textBody = `
+🎉 Load #${payload.loadNumber} Delivered!
+
+Hi ${payload.companyName} team,
+
+Excellent news! Load #${payload.loadNumber} has been successfully delivered and your pipe is now in secure storage.
+
+📦 DELIVERY SUMMARY
+- Joints Received: ${payload.jointsReceived}
+- Total Length: ${payload.totalLength} ft
+- Total Weight: ${payload.totalWeight} tonnes
+- Storage Location: ${payload.rackLocation}
+
+📊 PROJECT TOTAL
+${payload.projectTotalJoints} joints now in storage for request ${payload.referenceId}
+
+WHAT YOU CAN DO NOW
+- View detailed inventory breakdown on your dashboard
+- Schedule additional loads if needed
+- Request outbound shipment when ready
+
+View Inventory: https://kylegronning.github.io/PipeVault/
+
+Your pipe is secure and ready whenever you need it. Thank you for trusting MPS Group with your storage needs!
+
+---
+This is an automated notification from PipeVault.
+MPS Group | Free Pipe Storage | pipevault@mpsgroup.ca
+    `.trim();
+
+  } else if (notification.type === 'load_in_transit') {
+    htmlBody = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background: #f4f4f4; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+          .header { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: white; padding: 30px; text-align: center; }
+          .header h1 { margin: 0 0 10px 0; font-size: 28px; }
+          .header p { margin: 0; font-size: 16px; opacity: 0.9; }
+          .content { padding: 30px; }
+          .content p { margin: 0 0 15px 0; }
+          .details-box { background: #FEF3C7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #F59E0B; }
+          .details-box h3 { margin: 0 0 15px 0; color: #92400E; font-size: 18px; }
+          .details-box ul { margin: 0; padding: 0; list-style: none; }
+          .details-box li { padding: 8px 0; border-bottom: 1px solid #FDE68A; }
+          .details-box li:last-child { border-bottom: none; }
+          .details-box strong { color: #92400E; }
+          .cta-button { display: inline-block; background: #F59E0B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: bold; }
+          .footer { background: #F9FAFB; padding: 20px; text-align: center; color: #6B7280; font-size: 14px; border-top: 1px solid #E5E7EB; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🚛 Load #${payload.loadNumber} En Route!</h1>
+            <p>Your delivery is on the way to MPS</p>
+          </div>
+
+          <div class="content">
+            <p>Hi <strong>${payload.companyName}</strong> team,</p>
+            <p><strong>Load #${payload.loadNumber}</strong> for storage request <strong>${payload.referenceId}</strong> is now in transit to MPS Group.</p>
+
+            <div class="details-box">
+              <h3>🚚 Transit Details</h3>
+              <ul>
+                <li><strong>Driver:</strong> ${payload.driverName}</li>
+                <li><strong>Driver Phone:</strong> ${payload.driverPhone}</li>
+                <li><strong>Estimated Arrival:</strong> ${payload.eta}</li>
+                <li><strong>Expected Joints:</strong> ${payload.totalJoints}</li>
+              </ul>
+            </div>
+
+            <p><strong>Next Steps:</strong></p>
+            <ul>
+              <li>Driver is en route to MPS facility</li>
+              <li>We'll inspect and count upon arrival</li>
+              <li>You'll receive confirmation once delivery is complete</li>
+              <li>Track real-time status on your dashboard</li>
+            </ul>
+
+            <a href="https://kylegronning.github.io/PipeVault/" class="cta-button">Track Load</a>
+
+            <p>We'll notify you as soon as your pipe is safely stored.</p>
+          </div>
+
+          <div class="footer">
+            <p>This is an automated notification from PipeVault.</p>
+            <p>MPS Group | Free Pipe Storage | pipevault@mpsgroup.ca</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `.trim();
+
+    textBody = `
+🚛 Load #${payload.loadNumber} En Route!
+
+Hi ${payload.companyName} team,
+
+Load #${payload.loadNumber} for storage request ${payload.referenceId} is now in transit to MPS Group.
+
+🚚 TRANSIT DETAILS
+- Driver: ${payload.driverName}
+- Driver Phone: ${payload.driverPhone}
+- Estimated Arrival: ${payload.eta}
+- Expected Joints: ${payload.totalJoints}
+
+NEXT STEPS
+- Driver is en route to MPS facility
+- We'll inspect and count upon arrival
+- You'll receive confirmation once delivery is complete
+- Track real-time status on your dashboard
+
+Track Load: https://kylegronning.github.io/PipeVault/
+
+We'll notify you as soon as your pipe is safely stored.
+
+---
+This is an automated notification from PipeVault.
+MPS Group | Free Pipe Storage | pipevault@mpsgroup.ca
+    `.trim();
   }
 
   // Send via Resend API
