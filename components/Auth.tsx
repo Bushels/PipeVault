@@ -3,15 +3,16 @@
  */
 
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../lib/AuthContext';
-import Card from './ui/Card';
-import Button from './ui/Button';
-import { PipeVaultIcon } from './icons/Icons';
+import GlassCard from './ui/GlassCard';
+import GlassButton from './ui/GlassButton';
+import { PipeVaultIcon, ChevronLeftIcon } from './icons/Icons';
 
 const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => (
   <input
     {...props}
-    className={`w-full bg-gray-800/60 text-white placeholder-gray-400 border border-gray-600 rounded-md py-2.5 px-4 focus:outline-none focus:ring-2 focus:ring-red-500 ${props.className || ''}`}
+    className={`w-full glass-input rounded-lg py-3 px-4 ${props.className || ''}`}
   />
 );
 
@@ -147,42 +148,57 @@ const Auth: React.FC = () => {
   };
 
   return (
-    <div
-      className="flex items-center justify-center min-h-screen p-4 bg-gray-900 bg-cover bg-center"
-      style={{
-        backgroundImage:
-          "url('https://images.unsplash.com/photo-1588239333339-10db68428ade?q=80&w=2531&auto=format&fit=crop')",
-      }}
-    >
-      <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm"></div>
+    <div className="flex items-center justify-center min-h-screen p-4 relative overflow-hidden">
+      {/* Background Elements */}
+      <div className="absolute inset-0 bg-slate-950">
+        <div className="absolute inset-0 bg-grid-pattern opacity-20"></div>
+        <div className="absolute top-0 left-0 w-full h-full bg-linear-to-b from-slate-900/50 via-transparent to-slate-900/80 pointer-events-none"></div>
+      </div>
+      
+      {/* Animated Glow Orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyan-500/10 rounded-full blur-[100px] animate-pulse-glow"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500/10 rounded-full blur-[100px] animate-pulse-glow" style={{ animationDelay: '1s' }}></div>
 
-      <div className="relative w-full max-w-md">
-        <Card className="p-8 bg-gray-900/70 backdrop-blur-xl">
-          <div className="text-center mb-8">
+      <GlassCard className="w-full max-w-md p-8 z-10 border-slate-700/50 shadow-2xl shadow-black/50">
+        <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-8"
+        >
             <div className="flex items-center justify-center gap-4 mb-4">
-              <button
-                  type="button"
-                  onClick={handleLogoClick}
-                  className="focus:outline-none"
-              >
-                <PipeVaultIcon className="w-14 h-14 text-red-500 hover:text-red-400 transition-colors" />
-              </button>
-              <div className="text-left">
-                <h1 className="text-3xl font-bold text-white tracking-tight">PipeVault</h1>
-                <p className="text-sm text-gray-400">Secure access for customers and admins</p>
-              </div>
+               <motion.button
+                 type="button"
+                 onClick={handleLogoClick}
+                 className="focus:outline-none"
+                 whileHover={{ scale: 1.05 }}
+                 whileTap={{ scale: 0.95 }}
+               >
+                   <PipeVaultIcon className="w-14 h-14 text-cyan-500 drop-shadow-[0_0_10px_rgba(6,182,212,0.5)] hover:text-cyan-400 transition-colors"/>
+               </motion.button>
+               <div className="text-left">
+                 <h1 className="text-3xl font-bold text-slate-100 tracking-tight drop-shadow-lg">PipeVault</h1>
+                 <p className="text-sm text-slate-400">Secure access for customers and admins</p>
+               </div>
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-slate-500">
               Click the logo to switch between customer and admin login.
             </p>
-          </div>
+        </motion.div>
 
+        <AnimatePresence mode="wait">
           {showAdminLogin ? (
-            <>
-              <h2 className="text-lg font-semibold text-white mb-4">Admin Access</h2>
+            <motion.div
+                key="admin"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+            >
+              <h2 className="text-lg font-semibold text-cyan-100 mb-4">Admin Access</h2>
               <form onSubmit={handleAdminSignIn} className="space-y-4">
                 <div>
-                  <label htmlFor="adminEmail" className="block text-sm font-medium text-gray-300 mb-2">
+                  <label htmlFor="adminEmail" className="text-xs uppercase tracking-wider text-slate-500 font-semibold ml-1">
                     Admin Email
                   </label>
                   <Input
@@ -197,7 +213,7 @@ const Auth: React.FC = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-300 mb-2">
+                  <label htmlFor="adminPassword" className="text-xs uppercase tracking-wider text-slate-500 font-semibold ml-1">
                     Password
                   </label>
                   <Input
@@ -212,31 +228,40 @@ const Auth: React.FC = () => {
                 </div>
 
                 {error && (
-                  <div className="p-3 bg-red-900/50 border border-red-700 rounded-md">
-                    <p className="text-sm text-red-200">{error}</p>
-                  </div>
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="p-3 bg-red-950/30 border border-red-900/50 rounded-md"
+                  >
+                    <p className="text-sm text-red-400">{error}</p>
+                  </motion.div>
                 )}
                 {info && (
-                  <div className="p-3 bg-blue-900/40 border border-blue-700 rounded-md">
-                    <p className="text-sm text-blue-200">{info}</p>
-                  </div>
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="p-3 bg-blue-950/30 border border-blue-900/50 rounded-md"
+                  >
+                    <p className="text-sm text-blue-400">{info}</p>
+                  </motion.div>
                 )}
 
-                <Button type="submit" disabled={loading} className="w-full py-3 bg-red-600 hover:bg-red-700">
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </Button>
+                <GlassButton type="submit" disabled={loading} className="w-full py-3" isLoading={loading} variant="primary">
+                  Sign In
+                </GlassButton>
               </form>
 
               <div className="mt-4">
-                <Button
+                <GlassButton
                   type="button"
                   onClick={handleCreateAdminAccount}
                   disabled={loading}
-                  className="w-full py-2 bg-gray-700 hover:bg-gray-600 text-sm"
+                  className="w-full py-2 text-sm"
+                  variant="secondary"
                 >
                   Create Admin Account
-                </Button>
-                <p className="text-xs text-gray-500 text-center mt-2">
+                </GlassButton>
+                <p className="text-xs text-slate-500 text-center mt-2">
                   First time? Create an admin account with your email above.
                 </p>
               </div>
@@ -245,16 +270,22 @@ const Auth: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleLogoClick}
-                  className="text-sm text-gray-400 hover:text-white transition-colors"
+                  className="text-sm text-slate-400 hover:text-white transition-colors flex items-center justify-center w-full"
                 >
-                  &lt; Back to Customer Access
+                  <ChevronLeftIcon className="w-4 h-4 mr-1"/> Back to Customer Access
                 </button>
               </div>
-            </>
+            </motion.div>
           ) : (
-            <>
+            <motion.div
+                key="customer"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3 }}
+            >
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold text-cyan-100">
                   {customerMode === 'login' ? 'Sign In to PipeVault' : 'Create a PipeVault Account'}
                 </h2>
                 <div className="flex gap-2">
@@ -264,8 +295,8 @@ const Auth: React.FC = () => {
                       resetMessages();
                       setCustomerMode('login');
                     }}
-                    className={`text-xs px-3 py-1 rounded ${
-                      customerMode === 'login' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-300'
+                    className={`text-xs px-3 py-1 rounded transition-colors ${
+                      customerMode === 'login' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                     }`}
                   >
                     Sign In
@@ -276,8 +307,8 @@ const Auth: React.FC = () => {
                       resetMessages();
                       setCustomerMode('signup');
                     }}
-                    className={`text-xs px-3 py-1 rounded ${
-                      customerMode === 'signup' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-300'
+                    className={`text-xs px-3 py-1 rounded transition-colors ${
+                      customerMode === 'signup' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                     }`}
                   >
                     Create Account
@@ -287,7 +318,7 @@ const Auth: React.FC = () => {
 
               <form onSubmit={handleCustomerSubmit} className="space-y-4">
                 <div>
-                  <label htmlFor="customerEmail" className="block text-sm font-medium text-gray-300 mb-2">
+                  <label htmlFor="customerEmail" className="text-xs uppercase tracking-wider text-slate-500 font-semibold ml-1">
                     Email Address
                   </label>
                   <Input
@@ -302,7 +333,7 @@ const Auth: React.FC = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="customerPassword" className="block text-sm font-medium text-gray-300 mb-2">
+                  <label htmlFor="customerPassword" className="text-xs uppercase tracking-wider text-slate-500 font-semibold ml-1">
                     Password
                   </label>
                   <Input
@@ -317,26 +348,28 @@ const Auth: React.FC = () => {
                 </div>
 
                 {customerMode === 'signup' && (
-                  <div>
-                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
-                      Confirm Password
-                    </label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      placeholder="Re-enter your password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                )}
-
-                {customerMode === 'signup' && (
-                  <>
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="space-y-4"
+                  >
                     <div>
-                      <label htmlFor="companyName" className="block text-sm font-medium text-gray-300 mb-2">
+                      <label htmlFor="confirmPassword" className="text-xs uppercase tracking-wider text-slate-500 font-semibold ml-1">
+                        Confirm Password
+                      </label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        placeholder="Re-enter your password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        disabled={loading}
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="companyName" className="text-xs uppercase tracking-wider text-slate-500 font-semibold ml-1">
                         Company Name
                       </label>
                       <Input
@@ -352,7 +385,7 @@ const Auth: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label htmlFor="firstName" className="block text-sm font-medium text-gray-300 mb-2">
+                        <label htmlFor="firstName" className="text-xs uppercase tracking-wider text-slate-500 font-semibold ml-1">
                           First Name
                         </label>
                         <Input
@@ -366,7 +399,7 @@ const Auth: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label htmlFor="lastName" className="block text-sm font-medium text-gray-300 mb-2">
+                        <label htmlFor="lastName" className="text-xs uppercase tracking-wider text-slate-500 font-semibold ml-1">
                           Last Name
                         </label>
                         <Input
@@ -382,7 +415,7 @@ const Auth: React.FC = () => {
                     </div>
 
                     <div>
-                      <label htmlFor="contactNumber" className="block text-sm font-medium text-gray-300 mb-2">
+                      <label htmlFor="contactNumber" className="text-xs uppercase tracking-wider text-slate-500 font-semibold ml-1">
                         Contact Number
                       </label>
                       <Input
@@ -395,49 +428,55 @@ const Auth: React.FC = () => {
                         disabled={loading}
                       />
                     </div>
-                  </>
+                  </motion.div>
                 )}
 
                 {error && (
-                  <div className="p-3 bg-red-900/50 border border-red-700 rounded-md">
-                    <p className="text-sm text-red-200">{error}</p>
-                  </div>
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="p-3 bg-red-950/30 border border-red-900/50 rounded-md"
+                  >
+                    <p className="text-sm text-red-400">{error}</p>
+                  </motion.div>
                 )}
                 {info && (
-                  <div className="p-3 bg-blue-900/40 border border-blue-700 rounded-md">
-                    <p className="text-sm text-blue-200">{info}</p>
-                  </div>
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="p-3 bg-blue-950/30 border border-blue-900/50 rounded-md"
+                  >
+                    <p className="text-sm text-blue-400">{info}</p>
+                  </motion.div>
                 )}
 
-                <Button
+                <GlassButton
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 bg-red-600 hover:bg-red-700"
+                  className="w-full py-3"
+                  variant="primary"
+                  isLoading={loading}
                 >
-                  {loading ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      {customerMode === 'login' ? 'Signing in...' : 'Creating account...'}
-                    </div>
-                  ) : customerMode === 'login' ? (
-                    'Sign In'
-                  ) : (
-                    'Create Account'
-                  )}
-                </Button>
+                  {customerMode === 'login' ? 'Sign In' : 'Create Account'}
+                </GlassButton>
               </form>
 
-              <div className="mt-6 p-4 bg-gray-800/50 border border-gray-700 rounded-md">
-                <h3 className="text-sm font-semibold text-white mb-2">Why create an account?</h3>
-                <ul className="text-xs text-gray-400 space-y-1">
+              <div className="mt-6 p-4 bg-slate-800/50 border border-slate-700/50 rounded-md">
+                <h3 className="text-sm font-semibold text-slate-200 mb-2">Why create an account?</h3>
+                <ul className="text-xs text-slate-400 space-y-1">
                   <li>- Save and track your storage requests</li>
                   <li>- Schedule deliveries once approved</li>
                   <li>- Chat with the AI assistant about your inventory</li>
                 </ul>
               </div>
-            </>
+            </motion.div>
           )}
-        </Card>
+        </AnimatePresence>
+      </GlassCard>
+      
+      {/* Footer */}
+      <div className="absolute bottom-4 text-slate-600 text-xs">
+        &copy; 2025 MPS Group. All rights reserved.
       </div>
     </div>
   );

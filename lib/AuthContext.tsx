@@ -27,6 +27,7 @@ interface AuthContextType {
   ) => Promise<void>;
   signInWithOAuth: (provider: 'google' | 'apple' | 'azure') => Promise<void>;
   signOut: () => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -95,12 +96,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     try {
       // Method 1: Hardcoded admin email (for testing/initial setup)
-      // TODO: Remove this after setting up proper admin in Supabase
+      // TODO: Replace with admin_users table once all admins are set up
       const adminEmails = [
-        'admin@mpsgroup.com',
-        'kyle@bushels.com',
-        'admin@bushels.com',
-        'kylegronning@mpsgroup.ca'
+        'kylegronning@mpsgroup.ca',
+        'nathan@mpsgroup.ca',
+        'tyrel@mpsgroup.ca'
       ];
       if (user.email && adminEmails.includes(user.email.toLowerCase())) {
         setIsAdmin(true);
@@ -162,7 +162,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const { error } = await supabase.auth.signUp({
       email: normalizedEmail || email,
       password,
-      options: Object.keys(metadata).length ? { data: metadata } : undefined,
+      options: {
+        ...(Object.keys(metadata).length ? { data: metadata } : {}),
+        emailRedirectTo: `${window.location.origin}`,
+      },
     });
 
     if (error) {
@@ -198,6 +201,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Clear React Query cache to prevent stale data when logging in with different account
       console.log('Logout - clearing all cached queries');
       queryClient.clear();
+    }
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      throw error;
     }
   };
 
@@ -277,6 +290,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signUpWithEmail,
     signInWithOAuth,
     signOut,
+    updatePassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

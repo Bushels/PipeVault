@@ -1,16 +1,17 @@
-
 import React from 'react';
+import GlassCard from './GlassCard';
 
 interface CardProps {
   children: React.ReactNode;
   className?: string;
+  hoverEffect?: boolean;
 }
 
-const Card: React.FC<CardProps> = ({ children, className = '' }) => {
+const Card: React.FC<CardProps> = ({ children, className = '', hoverEffect = false }) => {
   return (
-    <div className={`bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-6 ${className}`}>
+    <GlassCard className={className} hoverEffect={hoverEffect}>
       {children}
-    </div>
+    </GlassCard>
   );
 };
 

@@ -10,6 +10,8 @@ import React, { useState } from 'react';
 import { useApprovedLoads, calculateSurcharge } from '../../../hooks/useTruckingLoadQueries';
 import { formatDate } from '../../../utils/dateUtils';
 import LoadDetailModal from '../LoadDetailModal';
+import GlassCard from '../../ui/GlassCard';
+import GlassButton from '../../ui/GlassButton';
 
 const ApprovedLoadsTile: React.FC = () => {
   const { data: loads = [], isLoading, error, refetch } = useApprovedLoads();
@@ -17,48 +19,49 @@ const ApprovedLoadsTile: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+      <GlassCard className="p-6 border-slate-700/50 shadow-xl">
         <h2 className="text-2xl font-bold text-white mb-4">Approved Loads</h2>
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-24 bg-gray-800/50 rounded-xl animate-pulse" />
+            <div key={i} className="h-24 bg-slate-800/50 rounded-xl animate-pulse" />
           ))}
         </div>
-      </div>
+      </GlassCard>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-gray-900 border border-red-700 rounded-2xl p-6">
+      <GlassCard className="p-6 border-red-900/50 shadow-xl bg-red-950/20">
         <h2 className="text-2xl font-bold text-white mb-4">Approved Loads</h2>
-        <div className="bg-red-900/30 border border-red-700 rounded-xl p-4">
+        <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-4">
           <p className="text-red-400 mb-2">Failed to load approved loads</p>
           <p className="text-red-300 text-sm mb-3">{error.message}</p>
-          <button
+          <GlassButton
             onClick={() => refetch()}
-            className="px-4 py-2 bg-red-800 hover:bg-red-700 text-white rounded-lg text-sm"
+            className="px-4 py-2 bg-red-800/80 hover:bg-red-700/80 text-white rounded-lg text-sm"
+            variant="primary"
           >
             Retry
-          </button>
+          </GlassButton>
         </div>
-      </div>
+      </GlassCard>
     );
   }
 
   return (
     <>
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-        <div className="flex items-center justify-between mb-4">
+      <GlassCard className="p-6 border-slate-700/50 shadow-xl h-full flex flex-col">
+        <div className="flex items-center justify-between mb-4 shrink-0">
           <h2 className="text-2xl font-bold text-white">Approved Loads</h2>
-          <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-sm font-semibold">
+          <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-sm font-semibold border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]">
             {loads.length} ready for transit
           </span>
         </div>
 
         {loads.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            <div className="text-6xl mb-4">✓</div>
+          <div className="text-center py-12 text-slate-400 flex-1 flex flex-col justify-center">
+            <div className="text-6xl mb-4 opacity-50">✓</div>
             <p className="text-lg font-semibold mb-2">All loads dispatched!</p>
             <p className="text-sm">No approved loads waiting for departure</p>
           </div>
@@ -71,7 +74,7 @@ const ApprovedLoadsTile: React.FC = () => {
                 <button
                   key={load.loadId}
                   onClick={() => setSelectedLoadId(load.loadId)}
-                  className="w-full text-left bg-gray-800/60 hover:bg-gray-800 border border-gray-700 hover:border-blue-500 rounded-xl p-4 transition-all group"
+                  className="w-full text-left bg-slate-800/40 hover:bg-slate-700/60 border border-slate-700/50 hover:border-blue-500/50 rounded-xl p-4 transition-all duration-300 group backdrop-blur-sm"
                 >
                   {/* Header */}
                   <div className="flex items-start justify-between mb-2">
@@ -143,7 +146,7 @@ const ApprovedLoadsTile: React.FC = () => {
             })}
           </div>
         )}
-      </div>
+      </GlassCard>
 
       {/* Load Detail Modal */}
       {selectedLoadId && (
