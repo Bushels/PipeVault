@@ -231,6 +231,7 @@ export interface CasingSpec {
 
 
 export interface NewRequestDetails {
+  referenceId: string;
   companyName: string;
   fullName: string;
   contactEmail: string;
@@ -240,15 +241,24 @@ export interface NewRequestDetails {
   sandControlScreenType?: 'DWW' | 'PPS' | 'SL' | 'Other';
   sandControlScreenTypeOther?: string;
   casingSpec: CasingSpec | null;
-  grade: 'H40' | 'J55' | 'L80' | 'N80' | 'C90' | 'T95' | 'P110' | 'Other';
+  grade?: 'H40' | 'J55' | 'L80' | 'N80' | 'C90' | 'T95' | 'P110' | 'Other';
   gradeOther?: string;
-  connection: 'Blank' | 'NUE' | 'EUE' | 'BTC' | 'Premium' | 'Semi-Premium' | 'Other';
+  connection?: 'Blank' | 'NUE' | 'EUE' | 'BTC' | 'Premium' | 'Semi-Premium' | 'Other';
   connectionOther?: string;
   threadType?: string;
   avgJointLength: number;
   totalJoints: number;
   storageStartDate: string;
   storageEndDate: string;
+  truckingType?: 'quote' | 'provided' | 'none';
+  storageCompany?: string;
+  storageContactName?: string;
+  storageContactEmail?: string;
+  storageContactNumber?: string;
+  storageLocation?: string;
+  specialInstructions?: string;
+  outerDiameter: number;
+  weight: number;
 }
 
 export interface DetailedRequestInfo {
@@ -372,6 +382,20 @@ export interface Rack {
   allocationMode: RackAllocationMode;
   lengthMeters?: number | null; // physical footprint north-south
   widthMeters?: number | null; // physical footprint east-west
+}
+
+export interface RackReservation {
+  id: string;
+  rack_id: string;
+  request_id: string;
+  company_id?: string;
+  start_date: string;
+  end_date?: string;
+  reserved_joints: number;
+  reserved_meters: number;
+  status: 'ACTIVE' | 'CANCELLED' | 'COMPLETED';
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface YardArea {

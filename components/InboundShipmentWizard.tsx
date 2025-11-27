@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import clsx from 'clsx';
-import Card from './ui/Card';
-import Button from './ui/Button';
+import GlassCard from './ui/GlassCard';
+import GlassButton from './ui/GlassButton';
 import Spinner from './ui/Spinner';
 import StorageYardStep, { StorageYardFormData } from './StorageYardStep';
 import TruckingMethodStep, { TruckingMethod } from './TruckingMethodStep';
@@ -64,19 +64,19 @@ const StepIndicator: React.FC<{ current: WizardStep; truckingMethod: TruckingMet
   const currentIndex = steps.findIndex(step => step.key === current);
 
   return (
-    <div className="flex items-center justify-between gap-2 mb-8 overflow-x-auto pb-2">
+    <div className="flex items-center justify-between gap-2 mb-8 overflow-x-auto pb-4 pt-2 px-2">
       {steps.map((step, idx) => {
         const isActive = idx === currentIndex;
         const isCompleted = idx < currentIndex;
         return (
-          <div key={step.key} className="flex items-center flex-shrink-0">
-            <div className="flex flex-col items-center">
+          <div key={step.key} className="flex items-center shrink-0 relative">
+            <div className="flex flex-col items-center relative z-10">
               <div
                 className={clsx(
-                  'flex items-center justify-center w-10 h-10 rounded-full border-2 text-sm font-semibold transition-all',
-                  isActive && 'border-red-500 text-red-200 bg-red-500/20 scale-110',
-                  isCompleted && 'border-green-500 text-green-200 bg-green-500/20',
-                  !isActive && !isCompleted && 'border-gray-600 text-gray-400 bg-gray-800',
+                  'flex items-center justify-center w-10 h-10 rounded-full border-2 text-sm font-bold transition-all duration-300 shadow-lg backdrop-blur-md',
+                  isActive && 'border-cyan-500 text-white bg-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.5)] scale-110',
+                  isCompleted && 'border-emerald-500 text-white bg-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.3)]',
+                  !isActive && !isCompleted && 'border-slate-700 text-slate-500 bg-slate-800/50'
                 )}
               >
                 {isCompleted ? (
@@ -87,12 +87,15 @@ const StepIndicator: React.FC<{ current: WizardStep; truckingMethod: TruckingMet
                   idx + 1
                 )}
               </div>
-              <span className="mt-2 text-xs text-center text-gray-400 max-w-[80px]">{step.label}</span>
+              <span className={clsx(
+                "mt-2 text-xs text-center font-medium max-w-[80px] transition-colors duration-300",
+                isActive ? "text-cyan-400" : isCompleted ? "text-emerald-400" : "text-slate-500"
+              )}>{step.label}</span>
             </div>
             {idx < steps.length - 1 && (
               <div className={clsx(
-                'w-12 h-0.5 mx-2 transition-colors',
-                idx < currentIndex ? 'bg-green-500' : 'bg-gray-700'
+                'w-12 h-0.5 mx-2 transition-all duration-500 rounded-full',
+                idx < currentIndex ? 'bg-linear-to-r from-emerald-600 to-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 'bg-slate-700'
               )} />
             )}
           </div>
@@ -107,6 +110,7 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Form data
   const [storageData, setStorageData] = useState<StorageYardFormData | null>(null);
@@ -527,7 +531,7 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
       // Send Slack notification to admin
       await sendManifestIssueNotification({
         referenceId: request.referenceId || request.id,
-        companyName: request.request_details?.companyName || 'Unknown Company',
+        companyName: request.requestDetails?.companyName || 'Unknown Company',
         contactEmail: session.userEmail,
         loadNumber,
         issueDescription,
@@ -775,7 +779,7 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
               : null,
             delivery_location: {
               facility: 'MPS Pipe Storage',
-              address: 'Bobs Address 123', // TODO: Replace with actual MPS facility address from env/config
+              address: 'E Range Rd #3264, Pierceland, SK S0M 2K0',
             },
             trucking_company: truckingData.truckingCompanyName,
             contact_company: storageData.storageCompanyName,
@@ -884,29 +888,6 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
       }
 
       try {
-        await sendInboundDeliveryNotification({
-          referenceId: request.referenceId,
-          companyName: session.company.name,
-          contactEmail: session.userId,
-          slotStart: slotStartIso,
-          slotEnd: slotEndIso,
-          isAfterHours: selectedTimeSlot.is_after_hours,
-          surchargeAmount: selectedTimeSlot.surcharge_amount,
-          storage: {
-            companyName: storageData.storageCompanyName,
-            address: storageData.storageYardAddress,
-            contactName: storageData.storageContactName,
-            contactPhone: storageData.storageContactPhone,
-            contactEmail: storageData.storageContactEmail,
-          },
-          trucking: {
-            companyName: truckingData.truckingCompanyName,
-            driverName: truckingData.driverName,
-            driverPhone: truckingData.driverPhone,
-          },
-          loadSummary,
-        });
-
         // Send simplified booking confirmation notification
         await sendLoadBookingConfirmation({
           customerName: session.userEmail, // Using email as name since we don't have full name in context
@@ -964,24 +945,22 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
   );
 
   return (
-    <Card className="bg-gray-950/70 border border-gray-800 shadow-2xl max-w-5xl mx-auto">
+    <GlassCard className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 shadow-2xl max-w-5xl mx-auto animate-slide-up">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-8 flex items-center justify-between border-b border-slate-700/50 pb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white">Schedule Delivery to MPS</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Request {request.referenceId} • {request.requestDetails?.itemType ?? 'Pipe'}
+          <h2 className="text-3xl font-bold text-white tracking-tight">Schedule Delivery to MPS</h2>
+          <p className="text-sm text-slate-400 mt-1">
+            Request <span className="text-indigo-400 font-mono">{request.referenceId}</span> • {request.requestDetails?.itemType ?? 'Pipe'}
           </p>
         </div>
-        <Button onClick={onBack} className="bg-gray-700 hover:bg-gray-600 px-4 py-2">
-          &lt; Back
-        </Button>
+        <GlassButton onClick={onBack} variant="secondary" className="px-4 py-2">
+          Back to Menu
+        </GlassButton>
       </div>
 
-      {/* Step Indicator */}
       <StepIndicator current={step} truckingMethod={selectedTruckingMethod} />
 
-      {/* Status Messages */}
       {statusMessage && (
         <div className="mb-4 p-3 rounded-md bg-green-500/10 border border-green-400/40 text-sm text-green-100">
           {statusMessage}
@@ -994,295 +973,167 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
         </div>
       )}
 
-      {/* Step Content */}
-      <div className="min-h-[500px]">
-        {step === 'storage' && (
-          <form onSubmit={storageForm.handleSubmit(handleStorageSubmit)} className="space-y-6">
-            <StorageYardStep
-              register={storageForm.register}
-              errors={storageForm.formState.errors}
-            />
-            <div className="flex justify-end pt-4 border-t border-gray-700">
-              <Button
-                type="submit"
-                className="bg-red-600 hover:bg-red-500 px-8"
-              >
-                Continue to Transportation
-              </Button>
-            </div>
-          </form>
-        )}
-
-        {step === 'method' && (
-          <div className="space-y-6">
-            <TruckingMethodStep
-              selectedMethod={selectedTruckingMethod}
-              onSelectMethod={handleMethodSelect}
-            />
-            <div className="flex justify-between pt-4 border-t border-gray-700">
-              <Button
-                type="button"
-                onClick={() => setStep('storage')}
-                className="bg-gray-700 hover:bg-gray-600"
-              >
-                Back
-              </Button>
-              {/* Method selection happens via button clicks in TruckingMethodStep */}
-            </div>
-          </div>
-        )}
-
-        {step === 'quote-pending' && (
-          <div className="py-8">
-            <div className="text-center max-w-2xl mx-auto space-y-6">
-              {/* Icon */}
-              <div className="w-20 h-20 bg-blue-600/20 border-2 border-blue-500 rounded-full flex items-center justify-center mx-auto">
-                <svg className="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-
-              <div>
-                <h3 className="text-2xl font-bold text-white mb-2">Trucking Quote Requested</h3>
-                {quoteId && (
-                  <p className="text-blue-400 font-mono text-sm mb-4">
-                    {quoteId}
-                  </p>
-                )}
-                <p className="text-gray-400">
-                  MPS has been notified of your quote request. Our team will review your storage location
-                  and provide a detailed transportation quote within 24-48 hours.
-                </p>
-              </div>
-
-              {/* Info Box */}
-              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-6 text-left">
-                <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  What happens next?
-                </h4>
-                <ul className="space-y-2 text-sm text-gray-300">
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-400 mt-0.5">1.</span>
-                    <span>MPS admin reviews your storage location and calculates transportation logistics</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-400 mt-0.5">2.</span>
-                    <span>You'll receive a detailed quote in your dashboard with pricing breakdown</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-400 mt-0.5">3.</span>
-                    <span>Review and approve the quote with a single click</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-400 mt-0.5">4.</span>
-                    <span>Once approved, MPS handles all delivery coordination</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-blue-400 mt-0.5">5.</span>
-                    <span>You'll be able to schedule a delivery time slot after approval</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Storage Info Summary */}
-              <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 text-left">
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">Pickup Location</h4>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <p className="text-gray-400">Storage Company</p>
-                    <p className="text-white font-medium">{storageData?.storageCompanyName}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400">Address</p>
-                    <p className="text-white">{storageData?.storageYardAddress}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-4 justify-center pt-4">
-                <Button
+      {isCheckingPendingLoad ? (
+        <div className="flex items-center justify-center py-20">
+          <Spinner />
+        </div>
+      ) : (
+        <>
+          {step === 'storage' && (
+            <div className="space-y-8 animate-slide-up">
+              <StorageYardStep
+                register={storageForm.register}
+                errors={storageForm.formState.errors}
+              />
+              <div className="flex justify-between pt-6 border-t border-slate-700/50">
+                <GlassButton
+                  type="button"
                   onClick={onBack}
-                  className="bg-gray-700 hover:bg-gray-600 px-6"
+                  variant="secondary"
                 >
-                  Return to Dashboard
-                </Button>
+                  Back to Menu
+                </GlassButton>
+                <GlassButton
+                  onClick={storageForm.handleSubmit(handleStorageSubmit)}
+                  className="px-8 shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(79,70,229,0.6)]"
+                >
+                  Continue
+                </GlassButton>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {step === 'trucking' && (
-          <form onSubmit={truckingForm.handleSubmit(handleTruckingSubmit)} className="space-y-6">
-            <TruckingDriverStep
-              register={truckingForm.register}
-              errors={truckingForm.formState.errors}
-              storageCompanyName={storageData?.storageCompanyName}
-            />
-            <div className="flex justify-between pt-4 border-t border-gray-700">
-              <Button
-                type="button"
-                onClick={() => setStep('method')}
-                className="bg-gray-700 hover:bg-gray-600"
-              >
-                Back
-              </Button>
-              <Button
-                type="submit"
-                className="bg-red-600 hover:bg-red-500 px-8"
-              >
-                Continue to Time Slot
-              </Button>
-            </div>
-          </form>
-        )}
-
-        {step === 'timeslot' && (
-          <div className="space-y-6">
-            {/* Sequential Load Blocking UI */}
-            {isCheckingPendingLoad ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="flex items-center gap-3">
-                  <Spinner className="w-6 h-6" />
-                  <span className="text-gray-400">Checking for pending loads...</span>
-                </div>
+          {step === 'method' && (
+            <div className="space-y-8 animate-slide-up">
+              <TruckingMethodStep
+                selectedMethod={selectedTruckingMethod}
+                onSelectMethod={handleMethodSelect}
+              />
+              <div className="flex justify-start pt-6 border-t border-slate-700/50">
+                <GlassButton
+                  type="button"
+                  onClick={() => setStep('storage')}
+                  variant="secondary"
+                >
+                  Back
+                </GlassButton>
               </div>
-            ) : pendingLoad ? (
-              <div className="bg-orange-900/20 border-2 border-orange-500/50 rounded-xl p-6">
-                <div className="flex items-start gap-4">
-                  {/* Warning Icon */}
-                  <div className="flex-shrink-0">
-                    <svg className="w-12 h-12 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                  </div>
+            </div>
+          )}
 
-                  {/* Blocking Message */}
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-orange-200 mb-2">
-                      Load #{(pendingLoad as any).sequence_number} Pending Admin Approval
-                    </h3>
-                    <p className="text-gray-300 mb-4">
-                      Your previous load is awaiting admin review and approval. You can schedule Load #
-                      {((pendingLoad as any).sequence_number || 0) + 1} after Load #{(pendingLoad as any).sequence_number} has been approved.
-                    </p>
+          {step === 'trucking' && (
+            <div className="space-y-8 animate-slide-up">
+              <TruckingDriverStep
+                register={truckingForm.register}
+                errors={truckingForm.formState.errors}
+                storageCompanyName={storageData?.storageCompanyName}
+              />
+              <div className="flex justify-between pt-6 border-t border-slate-700/50">
+                <GlassButton
+                  type="button"
+                  onClick={() => setStep('method')}
+                  variant="secondary"
+                >
+                  Back
+                </GlassButton>
+                <GlassButton
+                  onClick={truckingForm.handleSubmit(handleTruckingSubmit)}
+                  className="px-8 shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(79,70,229,0.6)]"
+                >
+                  Continue
+                </GlassButton>
+              </div>
+            </div>
+          )}
 
-                    {/* Pending Load Details */}
-                    <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 mb-4">
-                      <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">Pending Load Details</p>
-                      <dl className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <dt className="text-gray-500 text-xs">Load Number</dt>
-                          <dd className="text-white font-semibold">#{(pendingLoad as any).sequence_number}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-gray-500 text-xs">Scheduled Date</dt>
-                          <dd className="text-white">
-                            {new Date((pendingLoad as any).scheduled_slot_start).toLocaleDateString('en-US', {
-                              weekday: 'short',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-gray-500 text-xs">Scheduled Time</dt>
-                          <dd className="text-white">
-                            {new Date((pendingLoad as any).scheduled_slot_start).toLocaleTimeString('en-US', {
-                              hour: 'numeric',
-                              minute: '2-digit'
-                            })}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-gray-500 text-xs">Status</dt>
-                          <dd>
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-900/30 text-yellow-300 border border-yellow-500/30">
-                              Pending Review
-                            </span>
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    {/* What Happens Next */}
-                    <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-                      <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                        <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        What happens next?
-                      </h4>
-                      <ul className="space-y-1 text-sm text-gray-300">
-                        <li className="flex items-start gap-2">
-                          <span className="text-cyan-400 mt-0.5">1.</span>
-                          <span>MPS admin will review your manifest and load details</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <span className="text-cyan-400 mt-0.5">2.</span>
-                          <span>You'll receive a Slack notification once approved</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <span className="text-cyan-400 mt-0.5">3.</span>
-                          <span>After approval, you can return here to schedule your next load</span>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
+          {step === 'quote-pending' && (
+            <div className="py-12 animate-slide-up">
+              <div className="text-center max-w-2xl mx-auto space-y-8">
+                <div className="w-24 h-24 bg-blue-600/20 border-2 border-blue-500 rounded-full flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(59,130,246,0.3)]">
+                  <svg className="w-12 h-12 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                 </div>
 
-                {/* Back Button */}
-                <div className="flex justify-start pt-4 mt-4 border-t border-gray-700">
-                  <Button
-                    type="button"
+                <div>
+                  <h3 className="text-3xl font-bold text-white mb-3">Quote Requested</h3>
+                  <p className="text-slate-400 text-lg">
+                    We've received your request for an MPS trucking quote.
+                  </p>
+                </div>
+
+                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 text-left">
+                  <h4 className="text-base font-bold text-white mb-4">What happens next?</h4>
+                  <ul className="space-y-3 text-sm text-slate-300">
+                    <li className="flex items-start gap-3">
+                      <span className="text-blue-400 mt-0.5 font-bold">✓</span>
+                      <span>MPS logistics team will review your location and load details</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-blue-400 mt-0.5 font-bold">✓</span>
+                      <span>You'll receive a quote (PV-XXXX) within 24-48 hours</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-blue-400 mt-0.5 font-bold">✓</span>
+                      <span>Once approved, we'll handle all transportation logistics</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="flex justify-center pt-6">
+                  <GlassButton
                     onClick={onBack}
-                    className="bg-gray-700 hover:bg-gray-600"
+                    variant="secondary"
+                    className="px-8"
                   >
-                    Return to Dashboard
-                  </Button>
+                    Back to Dashboard
+                  </GlassButton>
+                </div>
+
+                {quoteId && (
+                  <div className="text-xs text-slate-500 pt-4">
+                    Quote Reference: <span className="text-slate-400 font-mono">{quoteId}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {step === 'timeslot' && (
+            <div className="space-y-8 animate-slide-up">
+              <TimeSlotPicker
+                selectedSlot={selectedTimeSlot}
+                onSelectSlot={handleTimeSlotSelect}
+                blockedSlots={[]}
+              />
+              <div className="flex justify-between pt-6 border-t border-slate-700/50">
+                <GlassButton
+                  type="button"
+                  onClick={() => setStep('trucking')}
+                  variant="secondary"
+                >
+                  Back
+                </GlassButton>
+                <div className="flex flex-col items-end gap-2">
+                  {selectedTimeSlot?.is_after_hours && (
+                    <span className="text-xs text-yellow-300 font-medium bg-yellow-900/30 px-2 py-1 rounded">
+                      After-hours: ${selectedTimeSlot.surcharge_amount} surcharge
+                    </span>
+                  )}
+                  <GlassButton
+                    onClick={handleTimeSlotContinue}
+                    disabled={!selectedTimeSlot}
+                    className="px-8 shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(79,70,229,0.6)]"
+                  >
+                    Continue to Documents
+                  </GlassButton>
                 </div>
               </div>
-            ) : (
-              // No pending loads - show normal time slot picker
-              <>
-                <TimeSlotPicker
-                  selectedSlot={selectedTimeSlot}
-                  onSelectSlot={handleTimeSlotSelect}
-                  blockedSlots={[]}
-                />
-                <div className="flex justify-between pt-4 border-t border-gray-700">
-                  <Button
-                    type="button"
-                    onClick={() => setStep('trucking')}
-                    className="bg-gray-700 hover:bg-gray-600"
-                  >
-                    Back
-                  </Button>
-                  <div className="flex flex-col items-end gap-2">
-                    {selectedTimeSlot?.is_after_hours && (
-                      <span className="text-xs text-yellow-300">
-                        After-hours deliveries include a ${selectedTimeSlot.surcharge_amount} surcharge and require confirmation.
-                      </span>
-                    )}
-                    <Button
-                      onClick={handleTimeSlotContinue}
-                      disabled={!selectedTimeSlot}
-                      className="bg-red-600 hover:bg-red-500 px-8 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      Continue to Documents
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
         {step === 'documents' && (
-          <div className="space-y-6">
+          <div className="space-y-8 animate-slide-up">
             <DocumentUploadStep
               onFilesSelected={handleFilesSelected}
               uploadedDocuments={uploadedDocuments}
@@ -1291,15 +1142,14 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
               onSkip={handleSkipDocuments}
             />
 
-            {/* Skip Documents Info */}
             {uploadedDocuments.length === 0 && (
-              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-indigo-900/20 border border-indigo-500/30 rounded-xl p-6">
+                <div className="flex items-start gap-4">
+                  <svg className="w-6 h-6 text-indigo-400 mt-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <div className="text-xs text-gray-300">
-                    <p className="font-semibold text-white mb-1">Don't have documents ready?</p>
+                  <div className="text-sm text-slate-300">
+                    <p className="font-bold text-white mb-1">Don't have documents ready?</p>
                     <p>
                       You can skip this step and upload your manifest later from your dashboard.
                       However, uploading now helps us prepare for your arrival.
@@ -1309,79 +1159,78 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
               </div>
             )}
 
-            <div className="flex justify-between pt-4 border-t border-gray-700">
-              <Button
+            <div className="flex justify-between pt-6 border-t border-slate-700/50">
+              <GlassButton
                 type="button"
                 onClick={() => setStep('timeslot')}
-                className="bg-gray-700 hover:bg-gray-600"
+                variant="secondary"
               >
                 Back
-              </Button>
-              <div className="flex gap-3">
+              </GlassButton>
+              <div className="flex gap-4">
                 {uploadedDocuments.length === 0 && (
-                  <Button
+                  <GlassButton
                     onClick={handleSkipDocuments}
-                    className="bg-gray-700 hover:bg-gray-600 px-6"
+                    variant="secondary"
                   >
                     Skip for Now
-                  </Button>
+                  </GlassButton>
                 )}
-                <Button
+                <GlassButton
                   onClick={handleDocumentsContinue}
                   disabled={!hasCompletedDocuments || isProcessingManifest}
-                  className="bg-red-600 hover:bg-red-500 px-8 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="px-8 shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(79,70,229,0.6)]"
                 >
                   {isProcessingManifest ? 'Processing...' : 'Continue to Review'}
-                </Button>
+                </GlassButton>
               </div>
             </div>
           </div>
         )}
 
         {step === 'review' && (
-          <div className="space-y-6">
+          <div className="space-y-8 animate-slide-up">
             {/* Delivery Summary */}
-            <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-6 space-y-4">
-              <h3 className="text-lg font-bold text-white mb-4">Delivery Summary</h3>
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 space-y-6">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Delivery Summary
+              </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
                 <div>
-                  <p className="text-gray-400 mb-1">Storage Company</p>
-                  <p className="text-white font-medium">{storageData?.storageCompanyName}</p>
-                  <p className="text-gray-500 text-xs mt-1">{storageData?.storageYardAddress}</p>
+                  <p className="text-slate-400 mb-1 uppercase tracking-wider text-xs">Storage Company</p>
+                  <p className="text-white font-medium text-lg">{storageData?.storageCompanyName}</p>
+                  <p className="text-slate-500 mt-1">{storageData?.storageYardAddress}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400 mb-1">Storage Contact</p>
-                  <p className="text-white font-medium">{storageData?.storageContactName}</p>
-                  <p className="text-gray-500 text-xs mt-1">{storageData?.storageContactEmail}</p>
-                  <p className="text-gray-500 text-xs">{storageData?.storageContactPhone}</p>
+                  <p className="text-slate-400 mb-1 uppercase tracking-wider text-xs">Storage Contact</p>
+                  <p className="text-white font-medium text-lg">{storageData?.storageContactName}</p>
+                  <p className="text-slate-500 mt-1">{storageData?.storageContactEmail}</p>
+                  <p className="text-slate-500">{storageData?.storageContactPhone}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400 mb-1">Trucking Company</p>
-                  <p className="text-white font-medium">{truckingData?.truckingCompanyName}</p>
+                  <p className="text-slate-400 mb-1 uppercase tracking-wider text-xs">Trucking Company</p>
+                  <p className="text-white font-medium text-lg">{truckingData?.truckingCompanyName}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400 mb-1">Driver</p>
-                  <p className="text-white font-medium">{truckingData?.driverName}</p>
-                  <p className="text-gray-500 text-xs mt-1">{truckingData?.driverPhone}</p>
+                  <p className="text-slate-400 mb-1 uppercase tracking-wider text-xs">Driver</p>
+                  <p className="text-white font-medium text-lg">{truckingData?.driverName}</p>
+                  <p className="text-slate-500 mt-1">{truckingData?.driverPhone}</p>
                 </div>
-                <div>
-                  <p className="text-gray-400 mb-1">Delivery Time</p>
-                  <p className="text-white font-medium">
-                    {selectedTimeSlot?.start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                <div className="col-span-2 bg-slate-900/50 p-4 rounded-lg border border-slate-700/50">
+                  <p className="text-slate-400 mb-1 uppercase tracking-wider text-xs">Delivery Time</p>
+                  <p className="text-white font-medium text-xl">
+                    {selectedTimeSlot?.start.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                   </p>
-                  <p className="text-gray-500 text-xs mt-1">
+                  <p className="text-indigo-400 font-mono mt-1 text-lg">
                     {selectedTimeSlot?.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                     {' - '}
                     {selectedTimeSlot?.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                   </p>
                 </div>
-                {selectedTimeSlot?.is_after_hours && (
-                  <div>
-                    <p className="text-gray-400 mb-1">After-Hours Surcharge</p>
-                    <p className="text-yellow-300 font-medium">${selectedTimeSlot.surcharge_amount}</p>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1396,32 +1245,32 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
             />
 
             {/* Action Buttons */}
-            <div className="flex justify-start pt-4 border-t border-gray-700">
-              <Button
+            <div className="flex justify-start pt-6 border-t border-slate-700/50">
+              <GlassButton
                 type="button"
                 onClick={() => setStep('documents')}
                 disabled={isSaving}
-                className="bg-gray-700 hover:bg-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                variant="secondary"
               >
                 Back
-              </Button>
+              </GlassButton>
             </div>
           </div>
         )}
 
         {step === 'confirmation' && (
-          <div className="py-8">
-            <div className="text-center max-w-2xl mx-auto space-y-6">
+          <div className="py-12 animate-slide-up">
+            <div className="text-center max-w-2xl mx-auto space-y-8">
               {/* Success Icon */}
-              <div className="w-20 h-20 bg-green-600/20 border-2 border-green-500 rounded-full flex items-center justify-center mx-auto">
-                <svg className="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-24 h-24 bg-green-600/20 border-2 border-green-500 rounded-full flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(34,197,94,0.3)]">
+                <svg className="w-12 h-12 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
 
               <div>
-                <h3 className="text-2xl font-bold text-white mb-2">Delivery Scheduled!</h3>
-                <p className="text-gray-400">
+                <h3 className="text-3xl font-bold text-white mb-3">Delivery Scheduled!</h3>
+                <p className="text-slate-400 text-lg">
                   Your delivery to MPS has been successfully scheduled for{' '}
                   <strong className="text-white">
                     {selectedTimeSlot?.start.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -1430,67 +1279,63 @@ const InboundShipmentWizard: React.FC<InboundShipmentWizardProps> = ({ request, 
               </div>
 
               {/* Next Steps */}
-              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-6 text-left">
-                <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 text-left">
+                <h4 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
                   What happens next?
                 </h4>
-                <ul className="space-y-2 text-sm text-gray-300">
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-400 mt-0.5">✓</span>
+                <ul className="space-y-3 text-sm text-slate-300">
+                  <li className="flex items-start gap-3">
+                    <span className="text-green-400 mt-0.5 font-bold">✓</span>
                     <span>MPS admin will review and verify your manifest details</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-400 mt-0.5">✓</span>
+                  <li className="flex items-start gap-3">
+                    <span className="text-green-400 mt-0.5 font-bold">✓</span>
                     <span>You'll receive a calendar invite (.ics file) via email</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-400 mt-0.5">✓</span>
+                  <li className="flex items-start gap-3">
+                    <span className="text-green-400 mt-0.5 font-bold">✓</span>
                     <span>Our team has been notified via Slack</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-green-400 mt-0.5">✓</span>
+                  <li className="flex items-start gap-3">
+                    <span className="text-green-400 mt-0.5 font-bold">✓</span>
                     <span>Yard crew will be ready to receive your delivery</span>
                   </li>
                 </ul>
               </div>
 
               {/* Actions */}
-              <div className="flex gap-4 justify-center pt-4">
-                <Button
+              <div className="flex gap-4 justify-center pt-6">
+                <GlassButton
                   onClick={onBack}
-                  className="bg-gray-700 hover:bg-gray-600 px-6"
+                  variant="secondary"
+                  className="px-8"
                 >
                   Return to Dashboard
-                </Button>
-                <Button
+                </GlassButton>
+                <GlassButton
                   onClick={() => window.print()}
-                  className="bg-blue-600 hover:bg-blue-500 px-6"
+                  className="px-8"
                 >
                   Print Confirmation
-                </Button>
+                </GlassButton>
               </div>
 
               {/* Reference Number */}
               {deliveryId && (
-                <div className="text-xs text-gray-500 pt-4">
-                  Delivery Reference: <span className="text-gray-400 font-mono">{deliveryId}</span>
+                <div className="text-xs text-slate-500 pt-4">
+                  Delivery Reference: <span className="text-slate-400 font-mono">{deliveryId}</span>
                 </div>
               )}
             </div>
           </div>
         )}
-      </div>
-    </Card>
+        </>
+      )}
+    </GlassCard>
   );
 };
 
 export default InboundShipmentWizard;
-
-
-
-
-
-

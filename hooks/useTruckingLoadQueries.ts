@@ -420,7 +420,7 @@ export function usePendingLoadForRequest(requestId?: string) {
         .select('*')
         .eq('storage_request_id', requestId)
         .eq('direction', 'INBOUND')
-        .not('status', 'in', '(COMPLETED,REJECTED)') // Block on NEW, APPROVED, IN_TRANSIT
+        .not('status', 'in', '(COMPLETED,CANCELLED)') // Block on NEW, APPROVED, IN_TRANSIT
         .order('sequence_number', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -435,5 +435,30 @@ export function usePendingLoadForRequest(requestId?: string) {
     staleTime: 10 * 1000, // Short stale time for real-time blocking
     refetchOnWindowFocus: true,
     refetchInterval: 30 * 1000, // Auto-refresh every 30 seconds
+  });
+}
+
+/**
+ * Get count of outbound loads for badge display
+ */
+export function useOutboundLoadsCount() {
+  return useQuery<number>({
+    queryKey: ['trucking-loads', 'outbound', 'count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('trucking_loads')
+        .select('*', { count: 'exact', head: true })
+        .eq('direction', 'OUTBOUND')
+        .eq('status', 'NEW');
+
+      if (error) {
+        console.error('[useOutboundLoadsCount] Query error:', error);
+        throw error;
+      }
+
+      return count || 0;
+    },
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
   });
 }

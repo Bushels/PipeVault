@@ -17,7 +17,7 @@
  * - Hover: 3D glow effect
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import type { CompanySummary } from '../../../hooks/useCompanyData';
@@ -28,6 +28,7 @@ import CompanyTileHeader from './CompanyTileHeader';
 import CompanyTileStats from './CompanyTileStats';
 import CompanyTileActions from './CompanyTileActions';
 import RackAssignmentModal from './RackAssignmentModal';
+import GlassCard from '../../ui/GlassCard';
 
 interface CompanyTileProps {
   company: CompanySummary;
@@ -129,8 +130,8 @@ const CompanyTile: React.FC<CompanyTileProps> = ({
 
   // Status-based background glow
   const backgroundGlowClass = hasPending
-    ? 'bg-gradient-to-br from-yellow-500 to-transparent'
-    : 'bg-gradient-to-br from-cyan-500 to-transparent';
+    ? 'bg-gradient-to-br from-amber-500/20 to-transparent'
+    : 'bg-gradient-to-br from-cyan-500/20 to-transparent';
 
   return (
     <div
@@ -155,18 +156,15 @@ const CompanyTile: React.FC<CompanyTileProps> = ({
         />
 
         {/* Card Container */}
-        <div
-          className={`relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl shadow-2xl overflow-hidden min-h-[480px] max-h-[600px] transition-all duration-200 group-hover:transform group-hover:-translate-y-1 flex flex-col ${
+        <GlassCard
+          className={`relative min-h-[480px] max-h-[600px] transition-all duration-200 group-hover:transform group-hover:-translate-y-1 flex flex-col ${
             isSelected
-              ? 'border-2 border-cyan-500'
-              : 'border border-gray-700/50'
+              ? 'border-2 border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.3)]'
+              : 'border-slate-700/50 shadow-2xl'
           }`}
         >
-          {/* Subtle background pattern */}
-          <div className="absolute inset-0 bg-grid-pattern opacity-5" />
-
           {/* Status glow (yellow for pending, cyan for approved) */}
-          <div className={`absolute inset-0 opacity-10 ${backgroundGlowClass}`} />
+          <div className={`absolute inset-0 opacity-30 ${backgroundGlowClass}`} />
 
           {/* Content */}
           <div className="relative p-6 flex-1 flex flex-col overflow-y-auto">
@@ -178,34 +176,34 @@ const CompanyTile: React.FC<CompanyTileProps> = ({
 
             {/* Activity Feed (140px) */}
             <div className="flex-1 py-4">
-              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
                 Recent Activity
               </h4>
               <div className="space-y-2">
                 {company.latestActivity ? (
                   <>
                     <div className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full mt-1.5 flex-shrink-0" />
-                      <p className="text-sm text-gray-300">
+                      <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full mt-1.5 flex-shrink-0 shadow-[0_0_5px_rgba(34,211,238,0.5)]" />
+                      <p className="text-sm text-slate-300">
                         Latest activity:{' '}
                         {new Date(company.latestActivity).toLocaleDateString()}
                       </p>
                     </div>
                     <div className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 bg-gray-600 rounded-full mt-1.5 flex-shrink-0" />
-                      <p className="text-sm text-gray-400">
+                      <div className="w-1.5 h-1.5 bg-slate-600 rounded-full mt-1.5 flex-shrink-0" />
+                      <p className="text-sm text-slate-400">
                         {company.totalRequests} total request{company.totalRequests === 1 ? '' : 's'}
                       </p>
                     </div>
                     <div className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 bg-gray-600 rounded-full mt-1.5 flex-shrink-0" />
-                      <p className="text-sm text-gray-400">
+                      <div className="w-1.5 h-1.5 bg-slate-600 rounded-full mt-1.5 flex-shrink-0" />
+                      <p className="text-sm text-slate-400">
                         {company.totalLoads} trucking load{company.totalLoads === 1 ? '' : 's'}
                       </p>
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm text-gray-500 italic">
+                  <p className="text-sm text-slate-500 italic">
                     No recent activity
                   </p>
                 )}
@@ -220,7 +218,7 @@ const CompanyTile: React.FC<CompanyTileProps> = ({
               isLoadingApproval={loadingRequest}
             />
           </div>
-        </div>
+        </GlassCard>
       </div>
 
       {/* Rack Assignment Modal (rendered outside tile for proper z-index layering) */}

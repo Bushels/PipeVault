@@ -1,10 +1,17 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { useAuth } from '../lib/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import GlassCard from './ui/GlassCard';
+import GlassButton from './ui/GlassButton';
+import {
+  ChevronRightIcon,
+  ChevronLeftIcon,
+  CheckCircleIcon,
+  DocumentTextIcon
+} from './icons/Icons';
 import type { StorageRequest, Session, NewRequestDetails, RequestStatus, TruckingInfo, ProvidedTruckingDetails } from '../types';
-import Card from './ui/Card';
-import Button from './ui/Button';
-import Spinner from './ui/Spinner';
-import { generateRequestSummary } from '../services/geminiService';
+import { useAuth } from '../lib/AuthContext';
 import { CASING_DATA } from '../data/casingData';
 import { supabase } from '../lib/supabase';
 import toast, { Toaster } from 'react-hot-toast';
@@ -12,675 +19,473 @@ import toast, { Toaster } from 'react-hot-toast';
 type MaybePromise<T> = T | Promise<T>;
 
 interface StorageRequestWizardProps {
-  request: StorageRequest | null;
+  request?: StorageRequest;
   session: Session;
-  updateRequest: (request: StorageRequest) => MaybePromise<StorageRequest | void>;
-  addRequest: (request: Omit<StorageRequest, 'id'>) => MaybePromise<StorageRequest>;
-  onSubmitSuccess?: (request: StorageRequest) => void;
+  onSubmit: (data: NewRequestDetails) => MaybePromise<void>;
+  isSubmitting: boolean;
   onReturnToDashboard?: () => void;
 }
 
-const Label: React.FC<{ children: React.ReactNode; htmlFor?: string }> = ({ children, htmlFor }) => (
-    <label htmlFor={htmlFor} className="block text-sm font-medium text-gray-300 mb-2">{children}</label>
-);
-
-const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) => (
-    <select {...props} className={`w-full bg-gray-700 text-white placeholder-gray-400 border border-gray-600 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed ${props.className || ''}`} />
-);
-
-const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => (
-    <input {...props} className={`w-full bg-gray-700 text-white placeholder-gray-400 border border-gray-600 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 ${props.className || ''}`} />
-);
-
-const Textarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = (props) => (
-    <textarea {...props} rows={3} className={`w-full bg-gray-700 text-white placeholder-gray-400 border border-gray-600 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 ${props.className || ''}`} />
-);
-
 const WizardCard: React.FC<{ title: string; subtitle?: string; children: React.ReactNode }> = ({ title, subtitle, children }) => (
-    <div className="max-w-4xl mx-auto">
-        <Card>
-            <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-white">{title}</h2>
-                {subtitle && <p className="text-gray-400 mt-1">{subtitle}</p>}
-            </div>
-            {children}
-        </Card>
+    <div className="max-w-4xl mx-auto animate-slide-up">
+        <div className="relative group">
+            {/* Glow effect */}
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500/20 via-indigo-500/20 to-purple-500/20 rounded-2xl blur-lg opacity-30 group-hover:opacity-50 transition duration-500 animate-pulse-slow"></div>
+            
+            {/* Glassmorphism card */}
+            <GlassCard className="relative border-slate-700/50 shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-indigo-500/5 to-purple-500/5 rounded-xl"></div>
+                <div className="relative p-2">
+                    <div className="text-center mb-8">
+                        <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-cyan-100 to-indigo-200 tracking-tight mb-2 drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">{title}</h2>
+                        {subtitle && <p className="text-slate-400 text-lg">{subtitle}</p>}
+                    </div>
+                    {children}
+                </div>
+            </GlassCard>
+        </div>
     </div>
 );
 
-const initialFormState: NewRequestDetails = {
-    companyName: '',
-    fullName: '',
-    contactEmail: '',
-    contactNumber: '',
-    itemType: 'Blank Pipe',
-    sandControlScreenType: 'DWW',
-    casingSpec: null,
-    grade: 'J55',
-    connection: 'Blank',
-    threadType: '',
-    avgJointLength: 12.00,
-    totalJoints: 100,
-    storageStartDate: new Date().toISOString().split('T')[0],
-    storageEndDate: '',
-};
+const Label: React.FC<{ htmlFor: string; children: React.ReactNode; required?: boolean }> = ({ htmlFor, children, required }) => (
+    <label htmlFor={htmlFor} className="block text-sm font-medium text-slate-300 mb-1.5 ml-1">
+        {children} {required && <span className="text-red-400">*</span>}
+    </label>
+);
 
-const initialTruckingDetails: ProvidedTruckingDetails = {
-    storageCompany: '',
-    storageContactName: '',
-    storageContactEmail: '',
-    storageContactNumber: '',
-    storageLocation: '',
-    specialInstructions: ''
-};
+const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
+    <div className="relative group">
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition duration-300"></div>
+        <input
+            ref={ref}
+            className={`relative w-full glass-input rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-400/50 transition-all duration-200 ${className}`}
+            {...props}
+        />
+    </div>
+));
+Input.displayName = "Input";
+
+const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(({ className, ...props }, ref) => (
+    <div className="relative group">
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition duration-300"></div>
+        <div className="relative">
+            <select
+                ref={ref}
+                className={`w-full glass-input rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-400/50 transition-all duration-200 appearance-none ${className}`}
+                {...props}
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+        </div>
+    </div>
+));
+Select.displayName = "Select";
+
+const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...props }, ref) => (
+    <div className="relative group">
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-lg blur opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition duration-300"></div>
+        <textarea
+            ref={ref}
+            className={`relative w-full bg-slate-800/70 border border-slate-600/50 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400/50 focus:bg-slate-800/90 transition-all duration-200 hover:border-slate-500 backdrop-blur-sm ${className}`}
+            {...props}
+        />
+    </div>
+));
+Textarea.displayName = "Textarea";
+
+// Zod Schema for form validation
+const schema = z.object({
+    referenceId: z.string().min(1, 'Project Reference ID is required').max(50, 'Reference ID too long'),
+    companyName: z.string().min(1, 'Company Name is required'),
+    fullName: z.string().min(1, 'Full Name is required'),
+    contactEmail: z.string().email('Invalid email address').min(1, 'Contact Email is required'),
+    contactNumber: z.string().min(1, 'Contact Number is required'),
+    itemType: z.enum(['Blank Pipe', 'Sand Control', 'Flow Control', 'Tools', 'Other']),
+    sandControlScreenType: z.string().optional(),
+    sandControlScreenTypeOther: z.string().optional(),
+    casingSpec: z.object({
+        size_in: z.number(),
+        size_mm: z.number(),
+        weight_lbs_ft: z.number(),
+        id_in: z.number(),
+        id_mm: z.number(),
+        drift_in: z.number(),
+        drift_mm: z.number(),
+    }).nullable(),
+    grade: z.string().optional(),
+    connection: z.string().optional(),
+    threadType: z.string().optional(),
+    avgJointLength: z.number().min(0.1, 'Average joint length must be positive'),
+    totalJoints: z.number().int().min(1, 'Total joints must be at least 1'),
+    storageStartDate: z.string().min(1, 'Start Date is required'),
+    storageEndDate: z.string().min(1, 'End Date is required'),
+    truckingType: z.enum(['quote', 'provided', 'none']).optional(),
+    storageCompany: z.string().optional(),
+    storageContactName: z.string().optional(),
+    storageContactEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
+    storageContactNumber: z.string().optional(),
+    storageLocation: z.string().optional(),
+    specialInstructions: z.string().optional(),
+    outerDiameter: z.number().gt(0, 'Outer Diameter is required'),
+    weight: z.number().gt(0, 'Weight is required'),
+}).superRefine((data, ctx) => {
+    if (data.itemType === 'Sand Control' && !data.sandControlScreenType) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Sand Control Screen Type is required for Sand Control items',
+            path: ['sandControlScreenType'],
+        });
+    }
+    if (data.sandControlScreenType === 'Other' && !data.sandControlScreenTypeOther) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Please specify other screen type',
+            path: ['sandControlScreenTypeOther'],
+        });
+    }
+    if (data.truckingType === 'provided') {
+        if (!data.storageCompany) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Storage Company is required', path: ['storageCompany'] });
+        if (!data.storageContactName) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Contact Name is required', path: ['storageContactName'] });
+        if (!data.storageContactEmail) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Contact Email is required', path: ['storageContactEmail'] });
+        if (!data.storageContactNumber) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Contact Number is required', path: ['storageContactNumber'] });
+        if (!data.storageLocation) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Storage Location is required', path: ['storageLocation'] });
+    }
+});
 
 const StorageRequestWizard: React.FC<StorageRequestWizardProps> = ({
     request,
     session,
-    updateRequest,
-    addRequest,
-    onSubmitSuccess,
+    onSubmit,
+    isSubmitting,
     onReturnToDashboard
 }) => {
-    const { signOut, user } = useAuth();
-    const userMetadata = user?.user_metadata ?? {};
-    const metadataCompanyName = typeof userMetadata.company_name === 'string' ? userMetadata.company_name : '';
-    const metadataFirstName = typeof userMetadata.first_name === 'string' ? userMetadata.first_name : '';
-    const metadataLastName = typeof userMetadata.last_name === 'string' ? userMetadata.last_name : '';
-    const metadataFullName = metadataFirstName && metadataLastName ? `${metadataFirstName} ${metadataLastName}` : '';
-    const metadataContactNumber = typeof userMetadata.contact_number === 'string' ? userMetadata.contact_number : '';
-    const [isLoading, setIsLoading] = useState(false);
-    const [wizardStep, setWizardStep] = useState<'details' | 'submitted'>('details');
-    const [error, setError] = useState<string | null>(null);
-
-    // State for Step 1
-    const loggedInEmail = user?.email ?? '';
-    const [formData, setFormData] = useState<NewRequestDetails>({
-        ...initialFormState,
-        companyName: metadataCompanyName || session.company.name,
-        fullName: metadataFullName || '',
-        contactEmail: loggedInEmail,
-        contactNumber: metadataContactNumber || '',
+    const [step, setStep] = useState(1);
+    const { user } = useAuth();
+    
+    const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm({
+        resolver: zodResolver(schema),
+        defaultValues: {
+            referenceId: '',
+            companyName: session.company.name,
+            fullName: user?.user_metadata?.first_name && user?.user_metadata?.last_name
+                ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+                : '',
+            contactEmail: user?.email || '',
+            contactNumber: user?.user_metadata?.contact_number || '',
+            itemType: 'Blank Pipe',
+            grade: undefined,
+            connection: undefined,
+            avgJointLength: 0,
+            totalJoints: 0,
+            storageStartDate: '',
+            storageEndDate: '',
+            truckingType: 'none',
+            specialInstructions: '',
+            outerDiameter: 0,
+            weight: 0
+        }
     });
-    const [referenceId, setReferenceId] = useState('');
-    
-    // State for Step 2
-    const [truckingType, setTruckingType] = useState<'quote' | 'provided' | null>(null);
-    const [truckingDetails, setTruckingDetails] = useState<ProvidedTruckingDetails>(initialTruckingDetails);
 
+    const [unitSystem, setUnitSystem] = useState<'imperial' | 'metric'>('imperial'); // Kept for compatibility if needed, but UI now shows both
 
-    const [selectedSize, setSelectedSize] = useState<number | null>(null);
+    const itemType = watch('itemType');
+    const sandControlScreenType = watch('sandControlScreenType');
+    const truckingType = watch('truckingType');
+    const outerDiameter = watch('outerDiameter');
+    const weight = watch('weight');
 
-    const uniqueSizes = useMemo(() => Array.from(new Set(CASING_DATA.map(d => d.size_in))).sort((a,b) => a - b), []);
-    const availableWeights = useMemo(() => {
-        if (!selectedSize) return [];
-        return CASING_DATA.filter(d => d.size_in === selectedSize);
-    }, [selectedSize]);
+    // Get unique ODs from CASING_DATA
+    // We use imperial size as the unique key
+    const uniqueODs = Array.from(new Set(CASING_DATA.map(d => d.size_in))).sort((a, b) => a - b);
 
-    const formatOdOption = (sizeIn: number) => {
-        const matchingSpec = CASING_DATA.find(d => d.size_in === sizeIn);
-        const sizeMm = matchingSpec?.size_mm ?? sizeIn * 25.4;
-        const mmDisplay = Number(sizeMm.toFixed(2)).toString();
-        const inchDisplay = Number(sizeIn.toFixed(3)).toString();
-        return `${mmDisplay} (${inchDisplay})`;
-    };
+    // Filter weights based on selected OD
+    const availableWeights = CASING_DATA
+        .filter(d => d.size_in === outerDiameter)
+        .sort((a, b) => a.weight_lbs_ft - b.weight_lbs_ft);
 
-    const formatWeightOption = (weightLbsPerFt: number) => {
-        const kgPerMeter = weightLbsPerFt * 1.48816394;
-        const metricDisplay = kgPerMeter.toFixed(1);
-        const imperialDisplay = weightLbsPerFt.toFixed(1);
-        return `${metricDisplay} (${imperialDisplay})`;
-    };
-
+    // Auto-populate ID and Drift when Weight is selected
     useEffect(() => {
-        // Reset weight and spec if size changes
-        setFormData(f => ({ ...f, casingSpec: null }));
-    }, [selectedSize]);
-    
-    useEffect(() => {
-        // Reset dependent fields when itemType changes
-        setSelectedSize(null);
-        setFormData(prev => {
-            const next = { ...prev, casingSpec: null };
-            if (formData.itemType === 'Sand Control') {
-                return {
-                    ...next,
-                    sandControlScreenType: prev.sandControlScreenType ?? 'DWW',
-                    sandControlScreenTypeOther:
-                        prev.sandControlScreenType === 'Other' ? prev.sandControlScreenTypeOther ?? '' : undefined,
-                };
-            }
-            return {
-                ...next,
-                sandControlScreenType: undefined,
-                sandControlScreenTypeOther: undefined,
-            };
-        });
-    }, [formData.itemType]);
-
-    useEffect(() => {
-        // Clear any previous error message when the user changes steps
-        setError(null);
-    }, [wizardStep]);
-
-    useEffect(() => {
-        setFormData(prev => ({
-            ...prev,
-            companyName: prev.companyName || metadataCompanyName || session.company.name,
-            fullName: prev.fullName || metadataFullName,
-            contactEmail: loggedInEmail || prev.contactEmail,
-            contactNumber: prev.contactNumber || metadataContactNumber,
-        }));
-    }, [metadataCompanyName, metadataFullName, metadataContactNumber, loggedInEmail, session.company.name]);
-
-    const handleDetailsSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        const normalizedReferenceId = referenceId.trim().toUpperCase();
-        const normalizedCompanyName = formData.companyName.trim() || session.company.name;
-        const normalizedEmail = formData.contactEmail.trim().toLowerCase();
-
-        if (!normalizedReferenceId) {
-            setError('Please enter a project reference ID before continuing.');
-            return;
-        }
-
-        if (!normalizedEmail) {
-            setError('Please enter a contact email before continuing.');
-            return;
-        }
-
-        // Now submit the request directly (no trucking step)
-        await handleSubmitRequest(normalizedReferenceId, normalizedCompanyName, normalizedEmail);
-    }
-
-    const handleSubmitRequest = async (normalizedReferenceId: string, normalizedCompanyName: string, normalizedEmail: string) => {
-
-        // Trucking info will be added later via "Schedule Delivery to MPS"
-        const truckingInfo: TruckingInfo | undefined = undefined;
-
-        const requestDetails: NewRequestDetails = {
-            ...formData,
-            companyName: normalizedCompanyName,
-            contactEmail: normalizedEmail,
-        };
-
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            if (!user) {
-                setError('Please sign in before submitting a storage request.');
-                return;
-            }
-
-            const { data: existingRequests, error: referenceLookupError } = await supabase
-                .from('storage_requests')
-                .select('id')
-                .eq('reference_id', normalizedReferenceId)
-                .limit(1);
-
-            if (referenceLookupError) {
-                throw referenceLookupError;
-            }
-
-            const firstMatch = (existingRequests as Array<{ id: string }> | null)?.[0] || null;
-            const duplicateExists = Boolean(firstMatch && firstMatch.id !== request?.id);
-
-            if (duplicateExists) {
-                setError('A storage request with this reference ID already exists. Please choose another reference ID.');
-                return;
-            }
-
-            const summarySession: Session = {
-                company: {
-                    ...session.company,
-                    name: normalizedCompanyName,
-                },
-                userId: normalizedEmail,
-                referenceId: normalizedReferenceId,
-            };
-
-            let summary = '';
-            try {
-                summary = await generateRequestSummary(
-                    normalizedCompanyName,
-                    summarySession,
-                    normalizedReferenceId,
-                    requestDetails,
-                    truckingInfo
-                );
-            } catch (summaryError) {
-                console.error('Error generating AI summary:', summaryError);
-                summary = `Storage request for ${normalizedCompanyName} (Reference ${normalizedReferenceId}). Recommend approval.`;
-            }
-
-            if (user) {
-                const currentMetadata = user.user_metadata ?? {};
-                // Update user metadata if needed (company and contact number only)
-                const updatedMetadata: Record<string, string> = {};
-                if (normalizedCompanyName && normalizedCompanyName !== (currentMetadata.company_name ?? '')) {
-                    updatedMetadata.company_name = normalizedCompanyName;
-                }
-                if (requestDetails.contactNumber && requestDetails.contactNumber !== (currentMetadata.contact_number ?? '')) {
-                    updatedMetadata.contact_number = requestDetails.contactNumber;
-                }
-                if (Object.keys(updatedMetadata).length) {
-                    const { error: updateMetadataError } = await supabase.auth.updateUser({
-                        data: updatedMetadata,
-                    });
-                    if (updateMetadataError) {
-                        console.warn('Unable to update user profile metadata:', updateMetadataError.message);
-                    }
-                }
-            }
-
-            const newRequestData: Omit<StorageRequest, 'id'> = {
-                companyId: session.company.id,
-                userId: normalizedEmail,
-                referenceId: normalizedReferenceId,
-                status: 'PENDING' as RequestStatus,
-                requestDetails,
-                truckingInfo,
-                approvalSummary: summary,
-            };
-
-            let createdRequest: StorageRequest | null = null;
-
-            if (request) {
-                await Promise.resolve(updateRequest({ ...request, ...newRequestData }));
-            } else {
-                createdRequest = await Promise.resolve(addRequest(newRequestData));
-                // Slack notification handled automatically by Supabase webhook on INSERT
-            }
-
-            setReferenceId(normalizedReferenceId);
-            setFormData((prev) => ({
-                ...prev,
-                companyName: normalizedCompanyName,
-                contactEmail: normalizedEmail,
-                fullName: requestDetails.fullName,
-                contactNumber: requestDetails.contactNumber,
-            }));
-
-            if (createdRequest) {
-                onSubmitSuccess?.(createdRequest);
-
-                // Show success toast
-                toast.success(
-                    `Request ${normalizedReferenceId} submitted successfully!`,
-                    {
-                        duration: 5000,
-                        position: 'top-center',
-                        style: {
-                            background: '#065f46',
-                            color: '#fff',
-                            padding: '16px',
-                            borderRadius: '8px',
-                        },
-                        icon: '✓',
-                    }
-                );
-            }
-
-            setWizardStep('submitted');
-        } catch (err: any) {
-            console.error('Error submitting storage request:', err);
-            setError(err?.message || 'We ran into an issue while submitting your request. Please try again.');
-        } finally {
-            setIsLoading(false);
-        }
-    }
-    
-    const handleTruckingTypeChange = (type: 'quote' | 'provided') => {
-        setTruckingType(type);
-        setTruckingDetails(initialTruckingDetails); 
-        setError(null);
-    }
-    
-    const handleComplete = () => {
-         if (!request) return;
-        // This flow is now simplified, as trucking is handled pre-approval.
-        updateRequest({ ...request, status: 'COMPLETED' });
-    }
-    
-    const renderDetailsForm = () => {
-        const totalLength = formData.avgJointLength * formData.totalJoints;
-        return (
-            <WizardCard title="New Storage Request" subtitle="Fill in the details below to submit your project for approval.">
-                <form onSubmit={handleDetailsSubmit} className="space-y-6">
-                    {error && (
-                        <div className="p-3 bg-red-900/40 border border-red-700 rounded-md text-sm text-red-200">
-                            {error}
-                        </div>
-                    )}
-                    {/* Contact Info - Hidden since we have it from signup */}
-                    <div className="p-4 bg-gray-800/30 border border-gray-700 rounded-lg">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="text-green-400 text-lg">✓</span>
-                            <p className="text-sm font-semibold text-white">Your Contact Information</p>
-                        </div>
-                        <div className="text-sm text-gray-300 space-y-2 grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div>
-                                <span className="text-gray-500 font-medium">Company:</span>
-                                <span className="ml-2">{formData.companyName}</span>
-                            </div>
-                            <div>
-                                <span className="text-gray-500 font-medium">Name:</span>
-                                <span className="ml-2">{formData.fullName}</span>
-                            </div>
-                            <div>
-                                <span className="text-gray-500 font-medium">Email:</span>
-                                <span className="ml-2">{formData.contactEmail}</span>
-                            </div>
-                            <div>
-                                <span className="text-gray-500 font-medium">Phone:</span>
-                                <span className="ml-2">{formData.contactNumber}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Item Details */}
-                    <fieldset>
-                        <legend className="text-lg font-semibold text-white mb-2">Item Details</legend>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             <div>
-                                <Label htmlFor="itemType">Type</Label>
-                                <Select id="itemType" value={formData.itemType} onChange={e => setFormData({...formData, itemType: e.target.value as any})}>
-                                    <option>Blank Pipe</option><option>Sand Control</option><option>Flow Control</option><option>Tools</option><option>Other</option>
-                                </Select>
-                            </div>
-                            {formData.itemType === 'Other' && (
-                                <div><Label htmlFor="itemTypeOther">Please Specify</Label><Input id="itemTypeOther" type="text" value={formData.itemTypeOther || ''} onChange={e => setFormData({...formData, itemTypeOther: e.target.value})} required /></div>
-                            )}
-                         </div>
-                    </fieldset>
-                    
-                    {/* Sand Control Specs */}
-                    {formData.itemType === 'Sand Control' && (
-                        <fieldset>
-                            <legend className="text-lg font-semibold text-white mb-2">Sand Control Specification</legend>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <Label htmlFor="sandControlType">Screen Type</Label>
-                                    <Select id="sandControlType" value={formData.sandControlScreenType} onChange={e => setFormData({...formData, sandControlScreenType: e.target.value as any})}>
-                                        <option>DWW</option><option>PPS</option><option>SL</option><option>Other</option>
-                                    </Select>
-                                </div>
-                                {formData.sandControlScreenType === 'Other' && (
-                                    <div>
-                                        <Label htmlFor="sandControlTypeOther">Please Specify Screen Type</Label>
-                                        <Input id="sandControlTypeOther" type="text" value={formData.sandControlScreenTypeOther || ''} onChange={e => setFormData({...formData, sandControlScreenTypeOther: e.target.value})} required />
-                                    </div>
-                                )}
-                            </div>
-                        </fieldset>
-                    )}
-                    
-                     {/* Casing Specs */}
-                    {(formData.itemType === 'Blank Pipe' || formData.itemType === 'Sand Control') && (
-                        <fieldset>
-                            <legend className="text-lg font-semibold text-white mb-2">API Casing Specification</legend>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div>
-                                    <Label htmlFor="casing-od">OD (mm / in)</Label>
-                                    <Select id="casing-od" value={selectedSize || ''} onChange={e => setSelectedSize(parseFloat(e.target.value))} required>
-                                        <option value="" disabled>Select Size</option>
-                                        {uniqueSizes.map(s => (
-                                            <option key={s} value={s}>
-                                                {formatOdOption(s)}
-                                            </option>
-                                        ))}
-                                    </Select>
-                                </div>
-                                 <div>
-                                    <Label htmlFor="casing-weight">Wt (kg/m / lbs/ft)</Label>
-                                    <Select id="casing-weight" value={formData.casingSpec?.weight_lbs_ft || ''} disabled={!selectedSize} onChange={e => {
-                                        const spec = availableWeights.find(w => w.weight_lbs_ft === parseFloat(e.target.value));
-                                        setFormData({...formData, casingSpec: spec || null});
-                                    }} required>
-                                        <option value="" disabled>Select Weight</option>
-                                        {availableWeights.map(w => (
-                                            <option key={w.weight_lbs_ft} value={w.weight_lbs_ft}>
-                                                {formatWeightOption(w.weight_lbs_ft)}
-                                            </option>
-                                        ))}
-                                    </Select>
-                                </div>
-                                <div className="p-2 bg-gray-800 rounded-md">
-                                    <p className="text-xs text-gray-400">ID (in / mm)</p>
-                                    <p className="font-mono text-white">{formData.casingSpec ? `${formData.casingSpec.id_in.toFixed(3)} / ${formData.casingSpec.id_mm.toFixed(2)}` : '-'}</p>
-                                </div>
-                                <div className="p-2 bg-gray-800 rounded-md">
-                                    <p className="text-xs text-gray-400">Drift ID (in / mm)</p>
-                                    <p className="font-mono text-white">{formData.casingSpec ? `${formData.casingSpec.drift_in.toFixed(3)} / ${formData.casingSpec.drift_mm.toFixed(2)}` : '-'}</p>
-                                </div>
-                            </div>
-                        </fieldset>
-                    )}
-
-                    {/* Grade, Connection, Thread */}
-                    <fieldset className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div>
-                            <Label htmlFor="grade">Grade</Label>
-                            <Select id="grade" value={formData.grade} onChange={e => setFormData({...formData, grade: e.target.value as any})}>
-                                <option>H40</option><option>J55</option><option>L80</option><option>N80</option><option>C90</option><option>T95</option><option>P110</option><option>Other</option>
-                            </Select>
-                        </div>
-                        {formData.grade === 'Other' && (
-                             <div className="sm:col-start-auto lg:col-start-auto"><Label htmlFor="gradeOther">Please Specify Grade</Label><Input id="gradeOther" type="text" value={formData.gradeOther || ''} onChange={e => setFormData({...formData, gradeOther: e.target.value})} required /></div>
-                        )}
-                         <div>
-                            <Label htmlFor="connection">Connection</Label>
-                            <Select id="connection" value={formData.connection} onChange={e => setFormData({...formData, connection: e.target.value as any})}>
-                                <option>Blank</option><option>NUE</option><option>EUE</option><option>BTC</option><option>Premium</option><option>Semi-Premium</option><option>Other</option>
-                            </Select>
-                        </div>
-                        {formData.connection === 'Other' && (
-                             <div className="sm:col-start-auto lg:col-start-auto"><Label htmlFor="connectionOther">Please Specify Connection</Label><Input id="connectionOther" type="text" value={formData.connectionOther || ''} onChange={e => setFormData({...formData, connectionOther: e.target.value})} required /></div>
-                        )}
-                        <div>
-                            <Label htmlFor="threadType">Thread Type</Label>
-                            <Input id="threadType" type="text" value={formData.threadType || ''} onChange={e => setFormData({...formData, threadType: e.target.value})} />
-                        </div>
-                    </fieldset>
-                    
-                     <fieldset className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <div>
-                            <Label htmlFor="avgLength">Average length of joint (m)</Label>
-                            <Input id="avgLength" type="number" min="0" step="0.01" value={formData.avgJointLength} onChange={e => setFormData({...formData, avgJointLength: parseFloat(e.target.value) || 0})} required />
-                        </div>
-                        <div>
-                            <Label htmlFor="totalJoints">Total number of Joints</Label>
-                            <Input id="totalJoints" type="number" min="1" value={formData.totalJoints} onChange={e => setFormData({...formData, totalJoints: parseInt(e.target.value) || 0})} required />
-                        </div>
-                        <div className="p-2 bg-gray-800 rounded-md">
-                           <p className="text-xs text-gray-400">Total Calculated Length (m)</p>
-                           <p className="font-mono text-white text-lg">{totalLength.toFixed(2)}</p>
-                        </div>
-                     </fieldset>
-
-
-                    {/* Timeline & Reference */}
-                    <fieldset className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                         <legend className="text-lg font-semibold text-white mb-2 col-span-full">Timeline & Reference</legend>
-                        <div>
-                            <Label htmlFor="startDate">Requested Start Date</Label>
-                            <Input id="startDate" type="date" value={formData.storageStartDate} onChange={e => setFormData({...formData, storageStartDate: e.target.value})} required />
-                        </div>
-                        <div>
-                            <Label htmlFor="endDate">Requested End Date</Label>
-                            <Input id="endDate" type="date" value={formData.storageEndDate} onChange={e => setFormData({...formData, storageEndDate: e.target.value})} required />
-                        </div>
-                        <div>
-                            <Label htmlFor="referenceId">Project Reference Number <span className="text-xs text-gray-400">(make unique)</span></Label>
-                            <Input id="referenceId" type="text" placeholder="AFE, Project Name, etc." value={referenceId} onChange={e => setReferenceId(e.target.value)} required />
-                        </div>
-                    </fieldset>
-
-                    <Button type="submit" className="w-full py-3 mt-4" disabled={isLoading}>
-                        {isLoading ? 'Submitting Request...' : 'Submit Request'}
-                    </Button>
-                </form>
-            </WizardCard>
-        );
-    }
-    
-    const renderTruckingForm = () => {
-        const handleTruckingDetailsChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-            const { name, value } = e.target;
-            setTruckingDetails(prev => ({...prev, [name]: value}));
-        }
-
-        return (
-            <WizardCard title="Current Storage & Trucking" subtitle="How will your items get to our facility?">
-                <form onSubmit={handleTruckingSubmit} className="space-y-6">
-                    {error && (
-                        <div className="p-3 bg-red-900/40 border border-red-700 rounded-md text-sm text-red-200">
-                            {error}
-                        </div>
-                    )}
-                    <div>
-                        <Label>Do you require a trucking quote or have your own trucking?</Label>
-                        <div className="flex flex-col sm:flex-row gap-4">
-                            <button type="button" onClick={() => handleTruckingTypeChange('quote')} className={`w-full p-3 rounded-md text-center transition-all ${truckingType === 'quote' ? 'bg-red-600 ring-2 ring-white' : 'bg-gray-700'}`}>Request a Quote</button>
-                            <button type="button" onClick={() => handleTruckingTypeChange('provided')} className={`w-full p-3 rounded-md text-center transition-all ${truckingType === 'provided' ? 'bg-red-600 ring-2 ring-white' : 'bg-gray-700'}`}>Will Provide Trucking</button>
-                        </div>
-                    </div>
-
-                    {truckingType === 'quote' && (
-                        <fieldset className="space-y-4 pt-4 border-t border-gray-700">
-                            <legend className="text-lg font-semibold text-white mb-2">Trucking Quote Details</legend>
-                            <p className="text-sm text-gray-400">Please provide the current location details for an accurate quote.</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div><Label htmlFor="storageCompany">Storage Company</Label><Input id="storageCompany" name="storageCompany" type="text" value={truckingDetails.storageCompany} onChange={handleTruckingDetailsChange} required /></div>
-                                <div><Label htmlFor="storageContactName">Contact Name</Label><Input id="storageContactName" name="storageContactName" type="text" value={truckingDetails.storageContactName} onChange={handleTruckingDetailsChange} required /></div>
-                                <div><Label htmlFor="storageContactEmail">Contact Email</Label><Input id="storageContactEmail" name="storageContactEmail" type="email" value={truckingDetails.storageContactEmail} onChange={handleTruckingDetailsChange} required /></div>
-                                <div><Label htmlFor="storageContactNumber">Contact Number</Label><Input id="storageContactNumber" name="storageContactNumber" type="tel" value={truckingDetails.storageContactNumber} onChange={handleTruckingDetailsChange} required /></div>
-                            </div>
-                            <div><Label htmlFor="storageLocation">Storage Location (City or Full Address)</Label><Input id="storageLocation" name="storageLocation" type="text" value={truckingDetails.storageLocation} onChange={handleTruckingDetailsChange} required /></div>
-                            <div><Label htmlFor="specialInstructions">Any Special Instructions?</Label><Textarea id="specialInstructions" name="specialInstructions" value={truckingDetails.specialInstructions} onChange={handleTruckingDetailsChange} /></div>
-                        </fieldset>
-                    )}
-                    
-                    {truckingType === 'provided' && (
-                        <div className="pt-4 border-t border-gray-700">
-                            <Label htmlFor="specialInstructions">Additional Information or Instructions</Label>
-                            <Textarea id="specialInstructions" name="specialInstructions" value={truckingDetails.specialInstructions} onChange={handleTruckingDetailsChange} />
-                        </div>
-                    )}
-
-                    <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-700">
-                        <Button variant="secondary" onClick={() => setWizardStep('details')} className="w-full py-3">Back</Button>
-                        <Button type="submit" disabled={isLoading || !truckingType} className="w-full py-3 bg-red-600 hover:bg-red-700 focus:ring-red-500">
-                            {isLoading ? <Spinner /> : 'Submit for Approval'}
-                        </Button>
-                    </div>
-                </form>
-            </WizardCard>
-        );
-    }
-    
-    const handleLogout = async () => {
-        await signOut();
-        window.location.reload(); // Refresh to go back to auth screen
-    };
-
-    const handleDashboardReturn = () => {
-        if (onReturnToDashboard) {
-            onReturnToDashboard();
-        } else {
-            setWizardStep('details');
-        }
-    };
-
-    const renderSubmitted = () => (
-         <WizardCard title="Thank You For Your Request!">
-            <div className="text-center space-y-4">
-                <p className="text-gray-300">Your request has been submitted for approval. Our team will review the details and you will be notified shortly.</p>
-
-                <div className="bg-gray-800 p-6 rounded-lg border-2 border-yellow-500">
-                    <p className="text-yellow-400 font-semibold mb-2">Key Information - Save This!</p>
-                    <div className="bg-gray-900 p-4 rounded-md mt-3">
-                        <p className="text-sm text-gray-400">Your Project Reference ID</p>
-                        <p className="text-2xl font-bold text-red-500 mt-1">{referenceId}</p>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-3">
-                        Tip: Keep this Reference ID handy - you will need it to check status, schedule deliveries, and talk to the MPS team about this project.
-                    </p>
-                </div>
-
-                <p className="text-red-500 font-semibold mt-4">MPS Celebrating 20 Years</p>
-
-                <div className="mt-6 pt-6 border-t border-gray-700 space-y-3">
-                    <p className="text-sm text-gray-400">You are now signed in to PipeVault</p>
-                    <Button
-                        onClick={handleDashboardReturn}
-                        className="w-full py-3 bg-red-600 hover:bg-red-700 focus:ring-red-500"
-                    >
-                        Back to Dashboard
-                    </Button>
-                    <Button
-                        onClick={handleLogout}
-                        className="w-full py-3 bg-gray-700 hover:bg-gray-600"
-                    >
-                        Logout
-                    </Button>
-                </div>
-            </div>
-        </WizardCard>
-    )
-
-    const renderStep = (status: RequestStatus | 'NONE', currentStep: typeof wizardStep) => {
-        if (status === 'COMPLETED' || status === 'REJECTED') {
-             // These states are handled by the Dashboard
-             return null;
-        }
-
-        if (status === 'PENDING') {
-            return (
-                 <WizardCard title="Request Pending Approval" subtitle="Our team is reviewing your request. You will be notified upon approval.">
-                    <div className="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
-                       <h3 className="font-semibold text-white">Request Summary for: {request?.referenceId}</h3>
-                       <p className="text-gray-300 text-sm mt-2" style={{ whiteSpace: 'pre-wrap' }}>{request?.approvalSummary || 'Generating summary...'}</p>
-                    </div>
-                </WizardCard>
+        if (outerDiameter && weight) {
+            const match = CASING_DATA.find(d => 
+                d.size_in === outerDiameter && 
+                d.weight_lbs_ft === weight
             );
+
+            if (match) {
+                setValue('casingSpec', match);
+            }
         }
-        
-        if (status === 'APPROVED') {
-             return (
-                <WizardCard title="Request Approved!" subtitle="Your items have been assigned a storage location.">
-                    <div className="text-center space-y-4">
-                       <p className="text-gray-300">Your request has been approved and your storage location is confirmed.</p>
-                       <div className="bg-gray-800 p-4 rounded-lg inline-block">
-                           <p className="text-sm text-gray-400">Assigned Location</p>
-                           <p className="text-2xl font-bold text-red-500">{request?.assignedLocation || 'N/A'}</p>
-                       </div>
-                       <p className="text-gray-400">You can now view your project inventory and interact with the AI assistant from your main dashboard.</p>
-                       <Button onClick={handleComplete} className="w-full py-3 bg-red-600 hover:bg-red-700 focus:ring-red-500">
-                            Go to Dashboard
-                        </Button>
-                    </div>
-                </WizardCard>
-            );
-        }
-        
-        // Handle new request flow (status is DRAFT)
-        switch(currentStep) {
-            case 'details': return renderDetailsForm();
-            case 'submitted': return renderSubmitted();
-            default: return renderDetailsForm();
-        }
-    }
+    }, [outerDiameter, weight, setValue]);
+
+    const nextStep = () => setStep(prev => Math.min(prev + 1, 3));
+    const prevStep = () => setStep(prev => Math.max(prev - 1, 1));
 
     return (
-        <>
-            <Toaster />
-            {renderStep(request?.status || 'DRAFT', wizardStep)}
-        </>
+        <div className="min-h-screen bg-slate-900 text-white p-4 md:p-8">
+            <Toaster position="top-right" />
+            
+            {/* Step Indicator */}
+            <div className="flex items-center justify-center mb-12">
+                {[1, 2, 3].map((stepNumber) => (
+                    <React.Fragment key={stepNumber}>
+                        <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 font-bold transition-all duration-300 ${
+                            step >= stepNumber
+                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.4)] scale-110'
+                                : 'bg-slate-800 border-slate-600 text-slate-500'
+                        }`}>
+                            {step > stepNumber ? <CheckCircleIcon className="w-6 h-6" /> : stepNumber}
+                        </div>
+                        {stepNumber < 3 && (
+                            <div className={`w-16 h-1 transition-colors duration-300 ${
+                                step > stepNumber ? 'bg-indigo-600' : 'bg-slate-700'
+                            }`} />
+                        )}
+                    </React.Fragment>
+                ))}
+            </div>
+
+            <form onSubmit={handleSubmit(onSubmit)}>
+                {step === 1 && (
+                    <WizardCard title="Project Details" subtitle="Tell us about your project">
+                        <div className="space-y-8">
+                            {/* Requestor Summary */}
+                            <div className="relative group">
+                                <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl blur-md opacity-50"></div>
+                                <div className="relative bg-gradient-to-br from-slate-800/60 via-slate-800/40 to-slate-900/60 backdrop-blur-md rounded-lg p-5 border border-slate-600/30 shadow-xl">
+                                    <h3 className="text-sm font-semibold text-indigo-300 mb-4 uppercase tracking-wider flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path></svg>
+                                        Requestor Information
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <span className="block text-slate-500 text-xs mb-1">Company</span>
+                                            <span className="font-medium text-white">{session.company.name}</span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-slate-500 text-xs mb-1">Contact</span>
+                                            <span className="font-medium text-white">
+                                                {user?.user_metadata?.first_name && user?.user_metadata?.last_name
+                                                    ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+                                                    : 'N/A'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-slate-500 text-xs mb-1">Email</span>
+                                            <span className="font-medium text-white">{user?.email}</span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-slate-500 text-xs mb-1">Phone</span>
+                                            <span className="font-medium text-white">{user?.user_metadata?.contact_number || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Hidden inputs to maintain form state */}
+                                <input type="hidden" {...register('companyName')} />
+                                <input type="hidden" {...register('fullName')} />
+                                <input type="hidden" {...register('contactEmail')} />
+                                <input type="hidden" {...register('contactNumber')} />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="col-span-2">
+                                    <Label htmlFor="referenceId" required>Project Reference ID</Label>
+                                    <Input id="referenceId" placeholder="e.g. PRJ-2024-001" {...register('referenceId')} />
+                                    <p className="mt-1.5 text-xs text-slate-400 ml-1">
+                                        This is your internal project reference. You can categorize it however you wish (e.g., well name, AFE number, project code).
+                                    </p>
+                                    {errors.referenceId && <p className="mt-1 text-sm text-red-400">{errors.referenceId.message}</p>}
+                                </div>
+                                
+                                <div>
+                                    <Label htmlFor="storageStartDate" required>Storage Start Date</Label>
+                                    <Input type="date" id="storageStartDate" {...register('storageStartDate')} />
+                                    {errors.storageStartDate && <p className="mt-1 text-sm text-red-400">{errors.storageStartDate.message}</p>}
+                                </div>
+                                <div>
+                                    <Label htmlFor="storageEndDate" required>Storage End Date</Label>
+                                    <Input type="date" id="storageEndDate" {...register('storageEndDate')} />
+                                    {errors.storageEndDate && <p className="mt-1 text-sm text-red-400">{errors.storageEndDate.message}</p>}
+                                </div>
+                            </div>
+                        </div>
+                    </WizardCard>
+                )}
+
+                {step === 2 && (
+                    <WizardCard title="Pipe Specifications" subtitle="Define your inventory specs">
+                        <div className="space-y-6">
+
+
+                            <div>
+                                <Label htmlFor="itemType" required>Item Type</Label>
+                                <Select id="itemType" {...register('itemType')}>
+                                    <option value="Blank Pipe">Blank Pipe</option>
+                                    <option value="Sand Control">Sand Control</option>
+                                    <option value="Flow Control">Flow Control</option>
+                                    <option value="Tools">Tools</option>
+                                    <option value="Other">Other</option>
+                                </Select>
+                            </div>
+
+                            {itemType === 'Sand Control' && (
+                                <div>
+                                    <Label htmlFor="sandControlScreenType" required>Screen Type</Label>
+                                    <Select id="sandControlScreenType" {...register('sandControlScreenType')}>
+                                        <option value="">Select Screen Type</option>
+                                        <option value="Wire Wrap">Wire Wrap</option>
+                                        <option value="Premium Mesh">Premium Mesh</option>
+                                        <option value="Other">Other</option>
+                                    </Select>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <Label htmlFor="outerDiameter" required>Outer Diameter</Label>
+                                    <Select 
+                                        id="outerDiameter" 
+                                        {...register('outerDiameter', { valueAsNumber: true })}
+                                        onChange={(e) => {
+                                            setValue('outerDiameter', parseFloat(e.target.value));
+                                            setValue('weight', 0); // Reset weight when OD changes
+                                        }}
+                                    >
+                                        <option value={0}>Select OD</option>
+                                        {uniqueODs.map(od => {
+                                            // Find the metric equivalent for display
+                                            const metricOD = CASING_DATA.find(d => d.size_in === od)?.size_mm;
+                                            return (
+                                                <option key={od} value={od}>
+                                                    {od}" ({metricOD}mm)
+                                                </option>
+                                            );
+                                        })}
+                                    </Select>
+                                    {errors.outerDiameter && <p className="mt-1 text-sm text-red-400">{errors.outerDiameter.message}</p>}
+                                </div>
+                                <div>
+                                    <Label htmlFor="weight" required>Weight</Label>
+                                    <Select 
+                                        id="weight" 
+                                        {...register('weight', { valueAsNumber: true })}
+                                        disabled={!outerDiameter}
+                                    >
+                                        <option value={0}>Select Weight</option>
+                                        {availableWeights.map((d, i) => {
+                                            const metricWeight = (d.weight_lbs_ft * 1.488).toFixed(2);
+                                            return (
+                                                <option key={i} value={d.weight_lbs_ft}>
+                                                    {d.weight_lbs_ft} lbs/ft ({metricWeight} kg/m)
+                                                </option>
+                                            );
+                                        })}
+                                    </Select>
+                                    {errors.weight && <p className="mt-1 text-sm text-red-400">{errors.weight.message}</p>}
+                                </div>
+                            </div>
+
+                            {/* Display Calculated Fields */}
+                            {outerDiameter > 0 && weight > 0 && (
+                                <div className="relative group">
+                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-green-500/20 via-emerald-500/20 to-teal-500/20 rounded-xl blur-md opacity-60 group-hover:opacity-80 transition duration-300"></div>
+                                    <div className="relative grid grid-cols-2 gap-4 bg-gradient-to-br from-slate-800/60 via-slate-800/40 to-slate-900/60 backdrop-blur-md p-5 rounded-lg border border-slate-600/30 shadow-xl">
+                                        <div>
+                                            <span className="block text-xs text-emerald-400 uppercase tracking-wider mb-2 font-medium">Inner Diameter</span>
+                                            <span className="text-xl font-mono font-bold text-white">
+                                                {watch('casingSpec')?.id_in}" <span className="text-slate-500 text-sm font-normal">({watch('casingSpec')?.id_mm}mm)</span>
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-xs text-emerald-400 uppercase tracking-wider mb-2 font-medium">Drift</span>
+                                            <span className="text-xl font-mono font-bold text-white">
+                                                {watch('casingSpec')?.drift_in}" <span className="text-slate-500 text-sm font-normal">({watch('casingSpec')?.drift_mm}mm)</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <Label htmlFor="grade">Grade <span className="text-slate-500 font-normal text-xs">(Optional)</span></Label>
+                                    <Input id="grade" placeholder="e.g. L80, P110" {...register('grade')} />
+                                    {errors.grade && <p className="mt-1 text-sm text-red-400">{errors.grade.message}</p>}
+                                </div>
+                                <div>
+                                    <Label htmlFor="connection">Connection <span className="text-slate-500 font-normal text-xs">(Optional)</span></Label>
+                                    <Input id="connection" placeholder="e.g. BTC, LTC" {...register('connection')} />
+                                    {errors.connection && <p className="mt-1 text-sm text-red-400">{errors.connection.message}</p>}
+                                </div>
+                            </div>
+                        </div>
+                    </WizardCard>
+                )}
+
+                {step === 3 && (
+                    <WizardCard title="Quantity Details" subtitle="How much pipe do you have?">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <Label htmlFor="totalJoints" required>Total Joints</Label>
+                                <Input type="number" id="totalJoints" {...register('totalJoints', { valueAsNumber: true })} />
+                                {errors.totalJoints && <p className="mt-1 text-sm text-red-400">{errors.totalJoints.message}</p>}
+                            </div>
+                            <div>
+                                <Label htmlFor="avgJointLength" required>Avg Joint Length (m)</Label>
+                                <Input type="number" step="0.01" id="avgJointLength" {...register('avgJointLength', { valueAsNumber: true })} />
+                                {errors.avgJointLength && <p className="mt-1 text-sm text-red-400">{errors.avgJointLength.message}</p>}
+                            </div>
+                        </div>
+
+                        {/* Total Meterage Summary */}
+                        {watch('totalJoints') > 0 && watch('avgJointLength') > 0 && (
+                            <div className="mt-6 relative group">
+                                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500/20 via-indigo-500/20 to-purple-500/20 rounded-xl blur-md opacity-60 group-hover:opacity-80 transition duration-300"></div>
+                                <div className="relative bg-gradient-to-br from-slate-800/60 via-slate-800/40 to-slate-900/60 backdrop-blur-md p-5 rounded-lg border border-slate-600/30 shadow-xl flex items-center justify-between">
+                                    <div>
+                                        <span className="block text-xs text-indigo-400 uppercase tracking-wider mb-1 font-medium">Total Meterage Requested</span>
+                                        <p className="text-slate-400 text-sm">
+                                            {watch('totalJoints')} joints × {watch('avgJointLength')} m
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-2xl font-mono font-bold text-white">
+                                            {(watch('totalJoints') * watch('avgJointLength')).toFixed(1)}
+                                        </span>
+                                        <span className="text-slate-400 ml-1 font-medium">m</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </WizardCard>
+                )}
+
+
+
+                <div className="max-w-4xl mx-auto flex justify-between mt-8 pt-6 border-t border-slate-700/50">
+                    {step > 1 ? (
+                        <GlassButton type="button" variant="secondary" onClick={prevStep} className="px-6">
+                            <ChevronLeftIcon className="w-4 h-4" /> Back
+                        </GlassButton>
+                    ) : (
+                        <GlassButton type="button" variant="secondary" onClick={onReturnToDashboard} className="px-6">
+                            Cancel
+                        </GlassButton>
+                    )}
+                    
+                    {step < 3 ? (
+                        <GlassButton type="button" variant="primary" onClick={nextStep} className="px-8">
+                            Next <ChevronRightIcon className="w-4 h-4" />
+                        </GlassButton>
+                    ) : (
+                        <GlassButton type="submit" variant="primary" disabled={isSubmitting} className="px-8 shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)]">
+                            {isSubmitting ? 'Submitting...' : 'Submit Request'}
+                        </GlassButton>
+                    )}
+                </div>
+            </form>
+        </div>
     );
 };
 
 export default StorageRequestWizard;
-

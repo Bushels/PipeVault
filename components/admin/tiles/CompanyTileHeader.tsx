@@ -30,12 +30,12 @@ const CompanyTileHeader: React.FC<CompanyTileHeaderProps> = ({ company }) => {
                        'Unknown User';
 
   return (
-    <div className="flex flex-col gap-3 pb-4 border-b border-gray-700/50">
+    <div className="flex flex-col gap-3 pb-4 border-b border-slate-700/50">
       {/* Top Row: Company Info + Status */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           {/* Company Icon */}
-          <div className="w-12 h-12 bg-cyan-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
+          <div className="w-12 h-12 bg-cyan-500/10 rounded-lg flex items-center justify-center flex-shrink-0 border border-cyan-500/20 shadow-[0_0_10px_rgba(6,182,212,0.1)]">
             <svg
               className="w-6 h-6 text-cyan-400"
               fill="none"
@@ -53,10 +53,10 @@ const CompanyTileHeader: React.FC<CompanyTileHeaderProps> = ({ company }) => {
 
           {/* Company Info */}
           <div className="min-w-0">
-            <h3 className="text-xl font-bold text-white truncate">
+            <h3 className="text-xl font-bold text-white truncate drop-shadow-md">
               {company.name}
             </h3>
-            <p className="text-xs text-gray-400 truncate">
+            <p className="text-xs text-slate-400 truncate">
               {company.domain}
             </p>
           </div>
@@ -65,7 +65,7 @@ const CompanyTileHeader: React.FC<CompanyTileHeaderProps> = ({ company }) => {
         {/* Status Dot (yellow pulse if pending approvals) */}
         {hasPending && (
           <div
-            className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse flex-shrink-0"
+            className="w-3 h-3 bg-amber-500 rounded-full animate-pulse flex-shrink-0 shadow-[0_0_8px_rgba(245,158,11,0.6)]"
             title={`${company.pendingRequests} pending approval${company.pendingRequests === 1 ? '' : 's'}`}
             aria-label={`${company.pendingRequests} pending approvals`}
           />
@@ -74,11 +74,11 @@ const CompanyTileHeader: React.FC<CompanyTileHeaderProps> = ({ company }) => {
 
       {/* Requester Card (only shown when pending requests exist) */}
       {hasRequesterInfo && (
-        <div className="bg-yellow-900/20 border border-yellow-700/30 rounded-lg px-3 py-2">
+        <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg px-3 py-2 backdrop-blur-sm">
           <div className="flex items-start gap-2">
             {/* User Icon */}
             <svg
-              className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5"
+              className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -93,15 +93,15 @@ const CompanyTileHeader: React.FC<CompanyTileHeaderProps> = ({ company }) => {
 
             {/* Requester Info */}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-yellow-100 truncate">
+              <p className="text-sm font-semibold text-amber-100 truncate">
                 {displayName}
               </p>
               {company.lastRequesterEmail && (
-                <p className="text-xs text-yellow-300/80 truncate">
+                <p className="text-xs text-amber-300/80 truncate">
                   {company.lastRequesterEmail}
                 </p>
               )}
-              <p className="text-xs text-yellow-400/60 mt-1">
+              <p className="text-xs text-amber-400/60 mt-1">
                 Latest pending request
               </p>
             </div>

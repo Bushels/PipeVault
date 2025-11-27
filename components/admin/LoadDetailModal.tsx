@@ -125,7 +125,7 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
   if (isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-        <div className="bg-gray-900 rounded-3xl p-8 max-w-4xl w-full mx-4">
+        <div className="glass-panel rounded-3xl p-8 max-w-4xl w-full mx-4 border border-slate-700/50 shadow-2xl">
           <div className="flex items-center justify-center space-x-3">
             <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin" />
             <p className="text-white text-lg">Loading load details...</p>
@@ -138,13 +138,13 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
   if (error || !data) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-        <div className="bg-gray-900 rounded-3xl p-8 max-w-4xl w-full mx-4">
+        <div className="glass-panel rounded-3xl p-8 max-w-4xl w-full mx-4 border border-slate-700/50 shadow-2xl">
           <p className="text-red-400 text-center mb-4">
             Failed to load details: {error?.message || 'Unknown error'}
           </p>
           <button
             onClick={onClose}
-            className="w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700"
+            className="w-full px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors"
           >
             Close
           </button>
@@ -176,22 +176,23 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
         style={{ zIndex: 9999 }}
       >
         {/* Modal Content */}
+        {/* Modal Content */}
         <div
-          className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 w-full max-w-6xl rounded-3xl border-2 border-cyan-500 shadow-2xl flex flex-col max-h-[90vh] pointer-events-auto"
+          className="glass-panel w-full max-w-6xl rounded-3xl border border-slate-700/50 shadow-2xl flex flex-col max-h-[90vh] pointer-events-auto backdrop-blur-xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-start justify-between px-6 py-4 border-b border-gray-800">
+          <div className="flex items-start justify-between px-6 py-4 border-b border-slate-700/50 bg-slate-900/30">
             <div>
-              <p className="text-xs uppercase tracking-widest text-gray-500">
+              <p className="text-xs uppercase tracking-widest text-slate-500">
                 Load #{loadData.sequence_number} - {storageRequest.referenceId}
               </p>
-              <h2 className="text-2xl font-bold text-white">{company.name}</h2>
-              <p className="text-sm text-gray-400">{company.domain}</p>
+              <h2 className="text-2xl font-bold text-white drop-shadow-md">{company.name}</h2>
+              <p className="text-sm text-slate-400">{company.domain}</p>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors text-2xl font-bold"
+              className="text-slate-400 hover:text-white transition-colors text-2xl font-bold"
               title="Close"
             >
               ✕
@@ -201,8 +202,9 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Scheduling Section */}
-            <div className="border border-gray-700 rounded-xl p-4 bg-gray-900/40">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">
+            {/* Scheduling Section */}
+            <div className="border border-slate-700/50 rounded-xl p-4 bg-slate-800/30 backdrop-blur-sm">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
                 Scheduling
               </h3>
               <div className="grid grid-cols-2 gap-4">
@@ -240,8 +242,9 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
             </div>
 
             {/* Trucking Details */}
-            <div className="border border-gray-700 rounded-xl p-4 bg-gray-900/40">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">
+            {/* Trucking Details */}
+            <div className="border border-slate-700/50 rounded-xl p-4 bg-slate-800/30 backdrop-blur-sm">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
                 Trucking Details
               </h3>
               <dl className="grid grid-cols-2 gap-4 text-sm">
@@ -281,8 +284,9 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
             </div>
 
             {/* Location Info */}
-            <div className="border border-gray-700 rounded-xl p-4 bg-gray-900/40">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">
+            {/* Location Info */}
+            <div className="border border-slate-700/50 rounded-xl p-4 bg-slate-800/30 backdrop-blur-sm">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
                 Locations
               </h3>
               <div className="space-y-3">
@@ -312,13 +316,14 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
             </div>
 
             {/* AI Extracted Manifest Data */}
-            <div className="border border-gray-700 rounded-xl p-4 bg-gray-900/40">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">
+            {/* AI Extracted Manifest Data */}
+            <div className="border border-slate-700/50 rounded-xl p-4 bg-slate-800/30 backdrop-blur-sm">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
                 AI Extracted Manifest Data
               </h3>
 
               {/* Summary Totals */}
-              <div className="grid grid-cols-3 gap-4 mb-4 p-3 bg-cyan-900/20 border border-cyan-700 rounded-lg">
+              <div className="grid grid-cols-3 gap-4 mb-4 p-3 bg-cyan-900/20 border border-cyan-700/50 rounded-lg backdrop-blur-sm">
                 <div>
                   <p className="text-xs text-cyan-400 uppercase">Total Joints</p>
                   <p className="text-2xl font-bold text-white">
@@ -354,13 +359,13 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
                   <div className="space-y-2">
                     {documents.map(doc => {
                       // Safety check: Skip documents without a valid storage path
-                      if (!doc.storagePath) {
+                      if (!(doc as any).storage_path) {
                         return (
                           <div
                             key={doc.id}
-                            className="flex items-center justify-between p-2 bg-gray-800 rounded-lg opacity-50"
+                            className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg opacity-50 border border-slate-700/30"
                           >
-                            <span className="text-gray-400 text-sm">{doc.fileName}</span>
+                            <span className="text-slate-400 text-sm">{doc.fileName}</span>
                             <span className="text-xs text-red-400">File not uploaded</span>
                           </div>
                         );
@@ -368,12 +373,12 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
 
                       const publicUrl = supabase.storage
                         .from('documents')
-                        .getPublicUrl(doc.storagePath).data.publicUrl;
+                        .getPublicUrl((doc as any).storage_path).data.publicUrl;
 
                       return (
                         <div
                           key={doc.id}
-                          className="flex items-center justify-between p-2 bg-gray-800 rounded-lg"
+                          className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg border border-slate-700/30 hover:bg-slate-700/50 transition-colors"
                         >
                           <span className="text-white text-sm">{doc.fileName}</span>
                           <a
@@ -395,9 +400,9 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
               {parsedManifestItems.length > 0 && (
                 <div className="overflow-x-auto">
                   <p className="text-xs text-gray-500 uppercase mb-2">Detailed Breakdown</p>
-                  <div className="max-h-64 overflow-y-auto">
+                  <div className="max-h-64 overflow-y-auto custom-scrollbar">
                     <table className="w-full text-sm">
-                      <thead className="bg-gray-800/60 text-gray-400 text-xs uppercase sticky top-0">
+                      <thead className="bg-slate-800/80 text-slate-400 text-xs uppercase sticky top-0 backdrop-blur-sm">
                         <tr>
                           <th className="text-left px-3 py-2">Serial #</th>
                           <th className="text-left px-3 py-2">Heat #</th>
@@ -409,7 +414,7 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
                       </thead>
                       <tbody>
                         {parsedManifestItems.map((item: any, idx: number) => (
-                          <tr key={idx} className="border-t border-gray-800">
+                          <tr key={idx} className="border-t border-slate-700/50 hover:bg-slate-700/20 transition-colors">
                             <td className="px-3 py-2 text-white">
                               {item.serial_number || '—'}
                             </td>
@@ -443,8 +448,8 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
 
             {/* Original Customer Request (for comparison) */}
             {storageRequest.requestDetails && (
-              <div className="border border-gray-700 rounded-xl p-4 bg-gray-900/40">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">
+              <div className="border border-slate-700/50 rounded-xl p-4 bg-slate-800/30 backdrop-blur-sm">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
                   Original Customer Request (For Comparison)
                 </h3>
                 <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -486,13 +491,13 @@ const LoadDetailModal: React.FC<LoadDetailModalProps> = ({
           </div>
 
           {/* Footer - Admin Actions */}
-          <div className="border-t border-gray-800 px-6 py-4 bg-gray-900">
+          <div className="border-t border-slate-700/50 px-6 py-4 bg-slate-900/50 backdrop-blur-md rounded-b-3xl">
             <div className="flex items-center justify-between gap-4">
               {/* Close Button */}
               <button
                 onClick={onClose}
                 disabled={isApproving || isMarkingInTransit}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-slate-700/50"
               >
                 Close
               </button>

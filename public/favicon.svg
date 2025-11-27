@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <!-- Shield background in red -->
-  <path fill="#ef4444" d="M12 2L2 5v6.5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-10-3z"/>
+  <!-- Shield background in cyan-500 (matching PipeVault logo) -->
+  <path fill="#06b6d4" d="M12 2L2 5v6.5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-10-3z"/>
   <!-- Pipe dots in white -->
   <circle cx="9" cy="9.5" r="1.5" fill="#ffffff"/>
   <circle cx="12" cy="12.5" r="1.5" fill="#ffffff"/>

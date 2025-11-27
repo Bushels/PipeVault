@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import Button from '../../../components/ui/Button';
+import GlassButton from '../../../components/ui/GlassButton';
 import type { CompanySummary } from '../../../hooks/useCompanyData';
 
 interface CompanyTileActionsProps {
@@ -28,25 +28,27 @@ const CompanyTileActions: React.FC<CompanyTileActionsProps> = ({
   const hasPending = company.pendingRequests > 0;
 
   return (
-    <div className="pt-4 border-t border-gray-700/50 flex gap-2">
+    <div className="pt-4 border-t border-slate-700/50 flex gap-2">
       {/* Primary Action: View Details */}
-      <Button
+      <GlassButton
         onClick={(e) => {
           e.stopPropagation();
           onViewDetails();
         }}
         disabled={isLoadingApproval}
-        className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-medium py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex-1"
+        variant="secondary"
       >
         View Details
-      </Button>
+      </GlassButton>
 
       {/* Conditional Action: Quick Approve */}
       {hasPending && (
-        <Button
+        <GlassButton
           onClick={onQuickApprove}
           disabled={isLoadingApproval}
-          className="px-4 bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2.5 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 whitespace-nowrap"
+          variant="primary"
         >
           {isLoadingApproval ? (
             <span className="flex items-center gap-2">
@@ -59,7 +61,7 @@ const CompanyTileActions: React.FC<CompanyTileActionsProps> = ({
           ) : (
             `Quick Approve (${company.pendingRequests})`
           )}
-        </Button>
+        </GlassButton>
       )}
     </div>
   );

@@ -46,12 +46,21 @@ const TruckReceiving: React.FC<TruckReceivingProps> = ({
   const approvedRequests = requests.filter(r => r.status === 'APPROVED' || r.status === 'COMPLETED');
   const inStoragePipes = inventory.filter(p => p.status === 'IN_STORAGE');
 
-  // Get all available racks from yards
+  // Get all available racks from yards with capacity data
   const allRacks = yards.flatMap(yard =>
     yard.areas.flatMap(area =>
       area.racks.map(rack => ({
         id: rack.id,
+        yardName: yard.name,
+        areaName: area.name,
+        rackName: rack.name,
         label: `${yard.name} - ${area.name} - ${rack.name}`,
+        capacity: rack.capacityMeters || 0,
+        occupied: rack.occupiedMeters || 0,
+        available: (rack.capacityMeters || 0) - (rack.occupiedMeters || 0),
+        utilizationPercent: rack.capacityMeters > 0 
+          ? ((rack.occupiedMeters || 0) / rack.capacityMeters * 100) 
+          : 0,
       }))
     )
   );
@@ -342,22 +351,88 @@ const TruckReceiving: React.FC<TruckReceivingProps> = ({
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Storage Area/Rack *
+            <div className="space-y-3">
+              <label className="block text-sm font-semibold text-slate-300 mb-3">
+                Select Storage Location *
               </label>
-              <select
-                value={storageAreaId}
-                onChange={(e) => setStorageAreaId(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select storage location</option>
-                {allRacks.map(rack => (
-                  <option key={rack.id} value={rack.id}>
-                    {rack.label}
-                  </option>
-                ))}
-              </select>
+              <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-2">
+                {allRacks.map(rack => {
+                  const isSelected = storageAreaId === rack.id;
+                  const isAvailable = rack.available > 0;
+                  
+                  return (
+                    <div
+                      key={rack.id}
+                      onClick={() => isAvailable && setStorageAreaId(rack.id)}
+                      className={`relative group ${!isAvailable && 'opacity-50 cursor-not-allowed'} ${isAvailable && 'cursor-pointer'}`}
+                    >
+                      {/* Gradient glow */}
+                      <div className={`absolute -inset-0.5 rounded-xl blur-md transition duration-300 ${
+                        isSelected 
+                          ? 'bg-gradient-to-r from-green-500 to-emerald-500 opacity-60' 
+                          : isAvailable 
+                            ? 'bg-gradient-to-r from-indigo-500/20 to-purple-500/20 opacity-0 group-hover:opacity-100'
+                            : 'bg-gradient-to-r from-slate-500/10 to-slate-500/10 opacity-30'
+                      }`}></div>
+                      
+                      {/* Card */}
+                      <div className={`relative bg-gradient-to-br from-slate-800/70 via-slate-800/50 to-slate-900/70 backdrop-blur-md rounded-lg p-4 border transition-all duration-300 ${
+                        isSelected 
+                          ? 'border-green-500/70 ring-2 ring-green-500/30' 
+                          : isAvailable
+                            ? 'border-slate-600/40 hover:border-slate-500/60'
+                            : 'border-slate-700/30'
+                      }`}>
+                        {/* Rack name */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="min-w-0">
+                            <h4 className="font-semibold text-white text-sm truncate">{rack.rackName}</h4>
+                            <p className="text-xs text-slate-400 mt-0.5">{rack.yardName} • {rack.areaName}</p>
+                          </div>
+                          {isSelected && (
+                            <div className="flex-shrink-0 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center ml-2">
+                              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Utilization bar */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-400">Capacity</span>
+                            <span className={`font-medium ${
+                              rack.utilizationPercent > 90 
+                                ? 'text-red-400' 
+                                : rack.utilizationPercent > 70 
+                                  ? 'text-yellow-400' 
+                                  : 'text-green-400'
+                            }`}>
+                              {rack.utilizationPercent.toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-900/50 rounded-full h-2 overflow-hidden">
+                            <div 
+                              className={`h-2 rounded-full transition-all duration-500 ${
+                                rack.utilizationPercent > 90 
+                                  ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                                  : rack.utilizationPercent > 70
+                                    ? 'bg-gradient-to-r from-yellow-500 to-yellow-600'
+                                    : 'bg-gradient-to-r from-green-500 to-emerald-600'
+                              }`}
+                              style={{ width: `${Math.min(rack.utilizationPercent, 100)}%` }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            {rack.available.toFixed(1)}m of {rack.capacity.toFixed(1)}m available
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div>

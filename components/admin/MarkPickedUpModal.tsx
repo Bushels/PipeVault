@@ -16,8 +16,8 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
-import type { TruckingLoad, StorageRequest, Inventory } from '../../types';
-import Button from '../ui/Button';
+import type { TruckingLoad, StorageRequest, Pipe } from '../../types';
+import GlassButton from '../ui/GlassButton';
 import Spinner from '../ui/Spinner';
 import InventoryStatusDisplay from './InventoryStatusDisplay';
 
@@ -29,8 +29,28 @@ interface MarkPickedUpModalProps {
   onSuccess: () => void;
 }
 
-interface InventoryWithRack extends Inventory {
-  rackName?: string;
+// Interface for the raw DB response (snake_case)
+interface InventoryDBItem {
+  id: string;
+  company_id: string;
+  reference_id: string;
+  type: 'Drill Pipe' | 'Casing' | 'Tubing' | 'Line Pipe';
+  grade: string;
+  outer_diameter: number;
+  weight_lbs_ft: number;
+  length_ft: number;
+  quantity: number;
+  status: string;
+  storage_area_id: string;
+  created_at: string;
+  racks?: {
+    name: string;
+  };
+}
+
+// Interface for the component state (camelCase)
+interface InventoryItem extends Pipe {
+  rackName: string;
 }
 
 const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
@@ -68,10 +88,20 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
 
       if (error) throw error;
 
-      // Transform to include rack name
-      const enriched: InventoryWithRack[] = (data || []).map(inv => ({
-        ...inv,
-        rackName: (inv.racks as any)?.name || inv.storage_area_id || 'Unknown',
+      // Map DB response to frontend interface
+      const enriched: InventoryItem[] = (data as any[] || []).map((inv: any) => ({
+        id: inv.id,
+        companyId: inv.company_id,
+        referenceId: inv.reference_id,
+        type: inv.type,
+        grade: inv.grade,
+        outerDiameter: inv.outer_diameter || inv.outerDiameter || 0,
+        weight: inv.weight_lbs_ft || inv.weight || 0,
+        length: inv.length_ft || inv.length || 0,
+        quantity: inv.quantity,
+        status: inv.status,
+        storageAreaId: inv.storage_area_id,
+        rackName: inv.racks?.name || inv.storage_area_id || 'Unknown',
       }));
 
       return enriched;
@@ -192,14 +222,14 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
-      <div className="bg-gray-900 rounded-3xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="glass-panel rounded-3xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-slate-700/50 shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 border-b border-slate-700/50 pb-4">
           <div>
-            <h2 className="text-2xl font-bold text-white">
+            <h2 className="text-2xl font-bold text-white drop-shadow-md">
               {showSuccessState ? 'Pickup Completed' : 'Mark as Picked Up'}
             </h2>
-            <p className="text-gray-400 text-sm">
+            <p className="text-slate-400 text-sm">
               Outbound Load #{load.sequenceNumber} - {request.referenceId}
             </p>
           </div>
@@ -211,7 +241,7 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
               onClose();
             }}
             disabled={isSubmitting}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-slate-400 hover:text-white transition-colors"
             aria-label="Close"
           >
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -225,7 +255,7 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
           <div className="space-y-6">
             {/* Success Icon */}
             <div className="flex justify-center">
-              <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center">
+              <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(34,197,94,0.3)]">
                 <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
@@ -234,7 +264,7 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
 
             <div className="text-center">
               <p className="text-lg font-semibold text-white mb-2">Pickup Completed Successfully</p>
-              <p className="text-gray-400 text-sm">
+              <p className="text-slate-400 text-sm">
                 Inventory has been marked as picked up and rack occupancy updated
               </p>
             </div>
@@ -248,7 +278,7 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
 
             {/* Action Button */}
             <div className="flex justify-center pt-4">
-              <Button
+              <GlassButton
                 onClick={() => {
                   onSuccess();
                   onClose();
@@ -257,17 +287,17 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
                 className="px-6 py-3"
               >
                 Done - Close
-              </Button>
+              </GlassButton>
             </div>
           </div>
         ) : (
           // Form State - Original form content
           <form onSubmit={handleSubmit} className="space-y-6">
           {/* Destination Info */}
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-            <p className="text-xs uppercase text-gray-400 mb-2">Destination</p>
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 backdrop-blur-sm">
+            <p className="text-xs uppercase text-slate-400 mb-2">Destination</p>
             <p className="text-white font-medium">📍 {destinationDisplay}</p>
-            <p className="text-gray-400 text-sm mt-1">
+            <p className="text-slate-400 text-sm mt-1">
               Shipping: {load.shippingMethod === 'CUSTOMER_ARRANGED' ? 'Customer Arranged' : 'MPS Quote'}
             </p>
           </div>
@@ -279,41 +309,41 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
             {isLoadingInventory ? (
               <div className="flex items-center justify-center py-8">
                 <Spinner size="lg" />
-                <span className="ml-3 text-gray-400">Loading available inventory...</span>
+                <span className="ml-3 text-slate-400">Loading available inventory...</span>
               </div>
             ) : availableInventory.length === 0 ? (
-              <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-4 text-yellow-200">
+              <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-4 text-amber-200">
                 No inventory currently in storage for this customer. The customer may need to deliver pipe before scheduling outbound pickups.
               </div>
             ) : (
-              <div className="space-y-2 max-h-[300px] overflow-y-auto bg-gray-800 border border-gray-700 rounded-lg p-3">
+              <div className="space-y-2 max-h-[300px] overflow-y-auto bg-slate-800/50 border border-slate-700/50 rounded-lg p-3 backdrop-blur-sm">
                 {availableInventory.map(inv => {
                   const isSelected = selectedInventoryIds.includes(inv.id);
                   return (
                     <label
                       key={inv.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
                         isSelected
-                          ? 'bg-blue-500/20 border-2 border-blue-500'
-                          : 'bg-gray-700/50 border-2 border-transparent hover:border-gray-600'
+                          ? 'bg-blue-500/20 border-2 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.2)]'
+                          : 'bg-slate-700/30 border-2 border-transparent hover:bg-slate-700/50 hover:border-slate-600'
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleInventorySelection(inv.id)}
-                        className="w-5 h-5 rounded border-gray-600 text-blue-500 focus:ring-blue-500"
+                        className="w-5 h-5 rounded border-slate-600 text-blue-500 focus:ring-blue-500 bg-slate-800"
                       />
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <span className="text-white font-medium">
                             {inv.quantity} joints • {inv.type}
                           </span>
-                          <span className="text-gray-400 text-sm">
+                          <span className="text-slate-400 text-sm">
                             Rack: {inv.rackName}
                           </span>
                         </div>
-                        <div className="text-gray-400 text-xs mt-1">
+                        <div className="text-slate-400 text-xs mt-1">
                           {inv.grade} • {inv.outerDiameter}" OD • {inv.weight} lbs/ft • {inv.length} ft avg
                         </div>
                       </div>
@@ -326,19 +356,19 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
 
           {/* Selection Summary */}
           {selectedInventoryIds.length > 0 && (
-            <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
+            <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4 backdrop-blur-sm">
               <p className="text-xs uppercase text-blue-400 mb-2">Selection Summary</p>
               <div className="grid grid-cols-3 gap-4 text-sm">
                 <div>
-                  <p className="text-gray-400">Selected Items</p>
+                  <p className="text-slate-400">Selected Items</p>
                   <p className="text-white font-semibold text-lg">{selectedInventoryIds.length}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400">Total Joints</p>
+                  <p className="text-slate-400">Total Joints</p>
                   <p className="text-white font-semibold text-lg">{selectedTotalJoints}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400">Total Meters</p>
+                  <p className="text-slate-400">Total Meters</p>
                   <p className="text-white font-semibold text-lg">{selectedTotalMeters.toFixed(1)} m</p>
                 </div>
               </div>
@@ -348,7 +378,7 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
           {/* Actual Quantity Loaded */}
           {selectedInventoryIds.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-slate-300 mb-1">
                 Actual Joints Loaded <span className="text-red-400">*</span>
               </label>
               <input
@@ -356,10 +386,10 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
                 min="1"
                 value={actualJointsLoaded}
                 onChange={(e) => setActualJointsLoaded(Number(e.target.value))}
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                className="w-full px-4 py-2 glass-input text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-lg"
                 required
               />
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-slate-400 mt-1">
                 Must match selected inventory total ({selectedTotalJoints} joints)
               </p>
               {actualJointsLoaded !== selectedTotalJoints && actualJointsLoaded > 0 && (
@@ -372,36 +402,36 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
 
           {/* Completion Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-300 mb-1">
               Completion Notes (Optional)
             </label>
             <textarea
               value={completionNotes}
               onChange={(e) => setCompletionNotes(e.target.value)}
               rows={3}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              className="w-full px-4 py-2 glass-input text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-lg"
               placeholder="e.g., Loaded by Acme Trucking, Driver John Smith, Truck #42"
             />
           </div>
 
           {/* Error Message */}
           {errorMessage && (
-            <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 text-red-200 text-sm">
+            <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-3 text-red-200 text-sm backdrop-blur-sm">
               {errorMessage}
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
-            <Button
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-700/50">
+            <GlassButton
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
               variant="secondary"
             >
               Cancel
-            </Button>
-            <Button
+            </GlassButton>
+            <GlassButton
               type="submit"
               disabled={isSubmitting || selectedInventoryIds.length === 0 || actualJointsLoaded !== selectedTotalJoints}
               variant="primary"
@@ -414,7 +444,7 @@ const MarkPickedUpModal: React.FC<MarkPickedUpModalProps> = ({
               ) : (
                 'Mark as Picked Up'
               )}
-            </Button>
+            </GlassButton>
           </div>
         </form>
         )}

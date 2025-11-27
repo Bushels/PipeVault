@@ -196,7 +196,7 @@ const AdminAIAssistant: React.FC<AdminAIAssistantProps> = ({ requests, companies
               <button
                 key={idx}
                 onClick={() => handleQuickQuestion(q)}
-                className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-md border border-gray-700 transition-colors"
+                className="text-xs bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-md border border-slate-700/50 transition-colors backdrop-blur-sm"
               >
                 {q}
               </button>

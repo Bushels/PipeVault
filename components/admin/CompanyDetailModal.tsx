@@ -14,6 +14,8 @@ import type {
   ProvidedTruckingDetails,
   StorageRequest,
 } from '../../types';
+import GlassButton from '../ui/GlassButton';
+import Spinner from '../ui/Spinner';
 
 interface CompanyDetailModalProps {
   companyId: string | null;
@@ -22,11 +24,11 @@ interface CompanyDetailModalProps {
 }
 
 const statusThemes: Record<ReturnType<typeof getStatusBadgeTone>, string> = {
-  pending: 'bg-yellow-500/15 text-yellow-300 border border-yellow-600/30',
-  info: 'bg-blue-500/15 text-blue-300 border border-blue-600/30',
-  success: 'bg-green-500/15 text-green-300 border border-green-600/30',
-  danger: 'bg-red-500/15 text-red-300 border border-red-600/30',
-  neutral: 'bg-gray-500/15 text-gray-300 border border-gray-500/30',
+  pending: 'bg-amber-500/10 text-amber-300 border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.2)] backdrop-blur-md',
+  info: 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] backdrop-blur-md',
+  success: 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)] backdrop-blur-md',
+  danger: 'bg-rose-500/10 text-rose-300 border border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.2)] backdrop-blur-md',
+  neutral: 'bg-slate-500/10 text-slate-300 border border-slate-500/30 shadow-[0_0_15px_rgba(100,116,139,0.2)] backdrop-blur-md',
 };
 
 type Fact = { label: string; value: string; fullWidth?: boolean };
@@ -166,19 +168,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
     refetch,
   } = useCompanyDetails(isOpen && companyId ? companyId : undefined);
 
-  // DIAGNOSTIC: Log modal state and data flow
-  useEffect(() => {
-    console.log('[CompanyDetailModal] State Update:', {
-      isOpen,
-      companyId,
-      hasData: !!data,
-      dataKeys: data ? Object.keys(data) : [],
-      requestsCount: data?.requests?.length ?? 0,
-      isLoading,
-      error,
-      activeRequestId,
-    });
-  }, [isOpen, companyId, data, isLoading, error, activeRequestId]);
+
 
   // Reset when company changes or modal closes
   useEffect(() => {
@@ -217,25 +207,15 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
     };
   }, [activeRequest]);
 
-  // DEBUG: Log modal state
-  console.log('🔍 CompanyDetailModal render:', {
-    isOpen,
-    companyId,
-    hasData: !!data,
-    isLoading,
-    error: error?.message,
-    requestsCount: data?.requests?.length,
-    activeRequestId,
-    activeRequestRef: activeRequest?.referenceId,
-  });
+
 
   // Early return AFTER all hooks to satisfy Rules of Hooks
   if (!isOpen || !companyId) {
-    console.log('❌ Modal not rendering - isOpen:', isOpen, 'companyId:', companyId);
+    // console.log('❌ Modal not rendering - isOpen:', isOpen, 'companyId:', companyId);
     return null;
   }
 
-  console.log('📄 Active request:', activeRequest?.referenceId || 'None');
+
 
   const renderRequestList = () => {
     if (isLoading) {
@@ -244,7 +224,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
           {[1, 2, 3].map(i => (
             <div
               key={i}
-              className="h-16 rounded-xl bg-gray-800/70 border border-gray-700 animate-pulse"
+              className="h-16 rounded-xl bg-slate-800/50 border border-slate-700/50 animate-pulse"
             />
           ))}
         </div>
@@ -253,7 +233,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
 
     if (error) {
       return (
-        <div className="p-4 rounded-xl bg-red-900/20 border border-red-700 text-sm text-red-200 space-y-3">
+        <div className="p-4 rounded-xl bg-red-900/20 border border-red-700/50 text-sm text-red-200 space-y-3 backdrop-blur-sm">
           <p>Failed to load company details.</p>
           <button
             onClick={() => refetch()}
@@ -267,7 +247,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
 
     if (!data || data.requests.length === 0) {
       return (
-        <div className="p-4 rounded-xl bg-gray-800/60 border border-gray-700 text-sm text-gray-300">
+        <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/50 text-sm text-slate-400 backdrop-blur-sm">
           No storage requests found for this company.
         </div>
       );
@@ -284,21 +264,21 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
             <button
               key={request.id}
               onClick={() => setActiveRequestId(request.id)}
-              className={`w-full text-left rounded-xl border px-4 py-3 transition-all ${
+              className={`w-full text-left rounded-xl border px-4 py-3 transition-all duration-200 ${
                 isActive
-                  ? 'bg-cyan-900/30 border-cyan-600 shadow-lg shadow-cyan-900/40'
-                  : 'bg-gray-900/40 border-gray-700 hover:border-cyan-500/60'
+                  ? 'bg-cyan-900/20 border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                  : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800/60 hover:border-slate-600'
               }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-white font-semibold">
+                  <p className={`font-semibold ${isActive ? 'text-cyan-300' : 'text-white'}`}>
                     {request.referenceId}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-slate-400">
                     {request.requestDetails?.companyName ?? 'Unknown company'}
                   </p>
-                  <p className="text-[11px] text-gray-500 mt-1">
+                  <p className="text-[11px] text-slate-500 mt-1">
                     Submitted{' '}
                     {request.createdAt
                       ? formatDate(request.createdAt, true)
@@ -306,11 +286,12 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
                   </p>
                 </div>
                 <span
-                  className={`text-[11px] uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                  className={`relative text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full overflow-hidden transition-all duration-200 ${
                     statusThemes[tone]
                   }`}
                 >
-                  {request.status}
+                  <span className="absolute inset-0 bg-linear-to-r from-white/5 to-transparent opacity-50"></span>
+                  <span className="relative z-10">{request.status}</span>
                 </span>
               </div>
             </button>
@@ -323,7 +304,8 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
   const renderRequestDetails = () => {
     if (isLoading) {
       return (
-        <div className="flex items-center justify-center h-full text-gray-400">
+        <div className="flex items-center justify-center h-full text-slate-400">
+          <Spinner size="lg" className="mr-3" />
           Loading request details...
         </div>
       );
@@ -331,7 +313,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
 
     if (!activeRequest) {
       return (
-        <div className="flex flex-col items-center justify-center text-center h-full space-y-3 text-gray-400">
+        <div className="flex flex-col items-center justify-center text-center h-full space-y-3 text-slate-400">
           <p>No request selected.</p>
           <p className="text-sm">
             Choose a request from the left panel to view full details.
@@ -354,8 +336,8 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm text-gray-400">Reference ID</p>
-              <h3 className="text-2xl font-bold text-white">
+              <p className="text-sm text-slate-400">Reference ID</p>
+              <h3 className="text-2xl font-bold text-white drop-shadow-md">
                 {activeRequest.referenceId}
               </h3>
             </div>
@@ -367,7 +349,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
               </span>
             )}
           </div>
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-slate-400">
             Submitted{' '}
             {activeRequest.createdAt
               ? formatDate(activeRequest.createdAt, true)
@@ -381,21 +363,21 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="border border-gray-700 rounded-xl p-4 bg-gray-900/40">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
+          <div className="glass-panel border border-slate-700/50 rounded-xl p-4 bg-slate-900/40 backdrop-blur-sm">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
               Contact Info
             </h4>
-            <dl className="text-sm text-gray-300 space-y-2">
+            <dl className="text-sm text-slate-300 space-y-2">
               <div>
-                <dt className="text-gray-500 text-xs uppercase">
+                <dt className="text-slate-500 text-xs uppercase">
                   Company
                 </dt>
-                <dd className="text-white">
+                <dd className="text-white font-medium">
                   {details?.companyName ?? 'N/A'}
                 </dd>
               </div>
               <div>
-                <dt className="text-gray-500 text-xs uppercase">
+                <dt className="text-slate-500 text-xs uppercase">
                   Name
                 </dt>
                 <dd className="text-white">
@@ -403,7 +385,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
                 </dd>
               </div>
               <div>
-                <dt className="text-gray-500 text-xs uppercase">
+                <dt className="text-slate-500 text-xs uppercase">
                   Email
                 </dt>
                 <dd className="text-white break-words">
@@ -411,7 +393,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
                 </dd>
               </div>
               <div>
-                <dt className="text-gray-500 text-xs uppercase">
+                <dt className="text-slate-500 text-xs uppercase">
                   Phone
                 </dt>
                 <dd className="text-white">
@@ -421,13 +403,13 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
             </dl>
           </div>
 
-          <div className="border border-gray-700 rounded-xl p-4 bg-gray-900/40">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
+          <div className="glass-panel border border-slate-700/50 rounded-xl p-4 bg-slate-900/40 backdrop-blur-sm">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
               Status Timeline
             </h4>
-            <dl className="text-sm text-gray-300 space-y-2">
+            <dl className="text-sm text-slate-300 space-y-2">
               <div className="flex items-center justify-between">
-                <dt className="text-gray-500 text-xs uppercase">
+                <dt className="text-slate-500 text-xs uppercase">
                   Requested
                 </dt>
                 <dd>
@@ -437,7 +419,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
                 </dd>
               </div>
               <div className="flex items-center justify-between">
-                <dt className="text-gray-500 text-xs uppercase">
+                <dt className="text-slate-500 text-xs uppercase">
                   Approved
                 </dt>
                 <dd>
@@ -447,7 +429,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
                 </dd>
               </div>
               <div className="flex items-center justify-between">
-                <dt className="text-gray-500 text-xs uppercase">
+                <dt className="text-slate-500 text-xs uppercase">
                   Rejected
                 </dt>
                 <dd>
@@ -461,20 +443,20 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
         </div>
 
         {pipeFacts.length > 0 && (
-          <div className="border border-gray-700 rounded-xl p-4 bg-gray-900/40">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
+          <div className="glass-panel border border-slate-700/50 rounded-xl p-4 bg-slate-900/40 backdrop-blur-sm">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
               Customer Input (Pipe Specs)
             </h4>
-            <dl className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-300">
+            <dl className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-300">
               {pipeFacts.map(fact => (
                 <div
                   key={`${fact.label}-${fact.value}`}
                   className={fact.fullWidth ? 'md:col-span-2' : undefined}
                 >
-                  <dt className="text-xs uppercase text-gray-500">
+                  <dt className="text-xs uppercase text-slate-500">
                     {fact.label}
                   </dt>
-                  <dd className="text-white whitespace-pre-wrap">{fact.value}</dd>
+                  <dd className="text-white font-medium whitespace-pre-wrap">{fact.value}</dd>
                 </div>
               ))}
             </dl>
@@ -482,44 +464,44 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
         )}
 
         {activeRequest.approvalSummary && (
-          <div className="border border-gray-700 rounded-xl p-4 bg-gray-900/40">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
+          <div className="glass-panel border border-slate-700/50 rounded-xl p-4 bg-slate-900/40 backdrop-blur-sm">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
               Approval Summary
             </h4>
-            <p className="text-sm text-gray-200 whitespace-pre-wrap">
+            <p className="text-sm text-slate-200 whitespace-pre-wrap">
               {activeRequest.approvalSummary}
             </p>
           </div>
         )}
 
         {truckingFacts.length > 0 && (
-          <div className="border border-gray-700 rounded-xl p-4 bg-gray-900/40">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
+          <div className="glass-panel border border-slate-700/50 rounded-xl p-4 bg-slate-900/40 backdrop-blur-sm">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
               Customer Input (Trucking & Logistics)
             </h4>
-            <dl className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-300">
+            <dl className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-300">
               {truckingFacts.map(fact => (
                 <div
                   key={`${fact.label}-${fact.value}`}
                   className={fact.fullWidth ? 'md:col-span-2' : undefined}
                 >
-                  <dt className="text-xs uppercase text-gray-500">
+                  <dt className="text-xs uppercase text-slate-500">
                     {fact.label}
                   </dt>
-                  <dd className="text-white whitespace-pre-wrap">{fact.value}</dd>
+                  <dd className="text-white font-medium whitespace-pre-wrap">{fact.value}</dd>
                 </div>
               ))}
             </dl>
           </div>
         )}
 
-        <div className="border border-gray-700 rounded-xl p-4 bg-gray-900/40">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
+        <div className="glass-panel border border-slate-700/50 rounded-xl p-4 bg-slate-900/40 backdrop-blur-sm">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
             Logistics Snapshot
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-300">
             <div>
-              <p className="text-gray-500 text-xs uppercase mb-1">
+              <p className="text-slate-500 text-xs uppercase mb-1">
                 Inbound Loads
               </p>
               <p className="text-white font-semibold">
@@ -529,7 +511,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
               </p>
             </div>
             <div>
-              <p className="text-gray-500 text-xs uppercase mb-1">
+              <p className="text-slate-500 text-xs uppercase mb-1">
                 Outbound Loads
               </p>
               <p className="text-white font-semibold">
@@ -541,9 +523,9 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
           </div>
 
           {activeRequest.truckingLoads && activeRequest.truckingLoads.length > 0 && (
-            <div className="mt-4 border border-gray-800 rounded-lg overflow-hidden">
+            <div className="mt-4 border border-slate-700/50 rounded-lg overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-gray-800/60 text-gray-400 text-xs uppercase tracking-wide">
+                <thead className="bg-slate-800/60 text-slate-400 text-xs uppercase tracking-wide">
                   <tr>
                     <th className="text-left px-3 py-2">Direction</th>
                     <th className="text-left px-3 py-2">Load #</th>
@@ -553,19 +535,19 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
                 </thead>
                 <tbody>
                   {activeRequest.truckingLoads.map(load => (
-                    <tr key={load.id} className="border-t border-gray-800">
-                      <td className="px-3 py-2 text-gray-300">
+                    <tr key={load.id} className="border-t border-slate-700/50 hover:bg-slate-800/30 transition-colors">
+                      <td className="px-3 py-2 text-slate-300">
                         {load.direction}
                       </td>
-                      <td className="px-3 py-2 text-gray-300">
+                      <td className="px-3 py-2 text-slate-300">
                         {load.sequenceNumber}
                       </td>
                       <td className="px-3 py-2">
-                        <span className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-200">
+                        <span className="px-2 py-0.5 rounded text-xs bg-slate-800 text-slate-300 border border-slate-700">
                           {load.status}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-gray-300">
+                      <td className="px-3 py-2 text-slate-300">
                         {load.documents?.length ?? 0}
                       </td>
                     </tr>
@@ -583,7 +565,7 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
   const companyDomain =
     data?.company?.domain ?? data?.summary?.domain ?? undefined;
 
-  console.log('🏢 Rendering modal for:', companyName, '- Requests:', data?.requests?.length);
+
 
   const overviewStats = [
     { label: 'Total Requests', value: data?.summary?.totalRequests ?? 0 },
@@ -607,37 +589,39 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
       >
         {/* Modal Content */}
         <div
-          className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 w-full max-w-6xl rounded-3xl border border-gray-700 shadow-2xl flex flex-col max-h-[90vh] pointer-events-auto"
+          className="glass-panel w-full max-w-6xl rounded-3xl border border-slate-700/50 shadow-2xl flex flex-col max-h-[90vh] pointer-events-auto bg-slate-900/90 backdrop-blur-xl"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between px-6 py-4 border-b border-gray-800">
+          <div className="flex items-start justify-between px-6 py-4 border-b border-slate-700/50">
             <div>
-              <p className="text-xs uppercase tracking-widest text-gray-500">
+              <p className="text-xs uppercase tracking-widest text-slate-500">
                 Company Detail
               </p>
-              <h2 className="text-2xl font-bold text-white">{companyName}</h2>
+              <h2 className="text-2xl font-bold text-white drop-shadow-md">{companyName}</h2>
               {companyDomain && (
-                <p className="text-sm text-gray-400">{companyDomain}</p>
+                <p className="text-sm text-slate-400">{companyDomain}</p>
               )}
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors"
+              className="text-slate-400 hover:text-white transition-colors p-2 hover:bg-slate-800/50 rounded-full"
               title="Close"
             >
-              ✕
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
 
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-            <aside className="lg:w-80 border-b lg:border-b-0 lg:border-r border-gray-800 p-5 space-y-6 overflow-y-auto">
+            <aside className="lg:w-80 border-b lg:border-b-0 lg:border-r border-slate-700/50 p-5 space-y-6 overflow-y-auto bg-slate-900/50">
               <div className="grid grid-cols-2 gap-3">
                 {overviewStats.map(stat => (
                   <div
                     key={stat.label}
-                    className="p-3 rounded-xl bg-gray-900/60 border border-gray-700 text-center"
+                    className="p-3 rounded-xl bg-slate-800/40 border border-slate-700/50 text-center backdrop-blur-sm"
                   >
-                    <p className="text-xs uppercase tracking-wide text-gray-500">
+                    <p className="text-[10px] uppercase tracking-wide text-slate-500">
                       {stat.label}
                     </p>
                     <p className="text-lg font-semibold text-white">
@@ -648,14 +632,14 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({
               </div>
 
               <div>
-                <h3 className="text-xs uppercase tracking-wide text-gray-500 mb-3">
+                <h3 className="text-xs uppercase tracking-wide text-slate-500 mb-3 font-semibold">
                   Requests
                 </h3>
                 {renderRequestList()}
               </div>
             </aside>
 
-            <section className="flex-1 overflow-y-auto p-6 bg-gray-950/40">
+            <section className="flex-1 overflow-y-auto p-6 bg-slate-950/30">
               {renderRequestDetails()}
             </section>
           </div>

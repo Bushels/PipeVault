@@ -6,8 +6,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage } from '../types';
-import Button from './ui/Button';
-import Card from './ui/Card';
+import GlassButton from './ui/GlassButton';
+import GlassCard from './ui/GlassCard';
 import { SendIcon, BotIcon, UserIcon } from './icons/Icons';
 import Spinner from './ui/Spinner';
 import { callGeminiFormHelper } from '../services/geminiService';
@@ -68,10 +68,10 @@ Ask me anything about the form fields - what is a project reference, connection 
   };
 
   return (
-    <Card className="flex flex-col h-[75vh] max-h-[650px]">
-      <div className="flex-shrink-0 p-4 border-b border-gray-700 bg-gradient-to-r from-indigo-900 to-purple-900">
-        <h3 className="font-semibold text-white text-center">Need Help?</h3>
-        <p className="text-sm text-gray-300 mt-1 text-center">
+    <GlassCard className="flex flex-col h-[75vh] max-h-[650px] border-slate-700/50 shadow-2xl overflow-hidden">
+      <div className="flex-shrink-0 p-4 border-b border-slate-700/50 bg-gradient-to-r from-indigo-900/50 to-purple-900/50 backdrop-blur-md">
+        <h3 className="font-semibold text-white text-center tracking-wide">Need Help?</h3>
+        <p className="text-sm text-slate-300 mt-1 text-center">
           Ask me anything about filling out this form!
         </p>
       </div>
@@ -111,7 +111,7 @@ Ask me anything about the form fields - what is a project reference, connection 
         )}
         <div ref={messagesEndRef} />
       </div>
-      <div className="flex-shrink-0 p-3 border-t border-gray-700 bg-gray-800">
+      <div className="flex-shrink-0 p-3 border-t border-slate-700/50 bg-slate-900/50 backdrop-blur-md">
         <form onSubmit={handleSend} className="flex items-center gap-2">
           <input
             type="text"
@@ -119,23 +119,15 @@ Ask me anything about the form fields - what is a project reference, connection 
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask a question..."
             disabled={isLoading}
-            className="w-full bg-gray-700 text-white text-sm placeholder-gray-400 border border-gray-600 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+            className="w-full glass-input text-white text-sm placeholder-slate-400 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 disabled:opacity-50 transition-all duration-200"
           />
-          <Button type="submit" disabled={isLoading || input.trim() === ''} className="px-3 py-2">
+          <GlassButton type="submit" disabled={isLoading || input.trim() === ''} className="px-3 py-2" variant="primary">
             <SendIcon className="w-4 h-4" />
-          </Button>
+          </GlassButton>
         </form>
       </div>
-    </Card>
+    </GlassCard>
   );
 };
 
 export default FormHelperChatbot;
-
-
-
-
-
-
-
-

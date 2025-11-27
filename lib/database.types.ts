@@ -734,6 +734,140 @@ export interface Database {
           updated_at?: string;
         };
       };
+      trucking_quotes: {
+        Row: {
+          id: string;
+          request_id: string;
+          company_id: string;
+          created_by: string;
+          quote_number: string;
+          origin_address: Json | null;
+          destination_address: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          company_id: string;
+          created_by: string;
+          quote_number: string;
+          origin_address?: Json | null;
+          destination_address?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          request_id?: string;
+          company_id?: string;
+          created_by?: string;
+          quote_number?: string;
+          origin_address?: Json | null;
+          destination_address?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      documents: {
+        Row: {
+          id: string;
+          company_id: string;
+          request_id: string | null;
+          file_name: string;
+          file_type: string;
+          file_size: number;
+          storage_path: string;
+          extracted_data: Json | null;
+          is_processed: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          request_id?: string | null;
+          file_name: string;
+          file_type: string;
+          file_size: number;
+          storage_path: string;
+          extracted_data?: Json | null;
+          is_processed?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          request_id?: string | null;
+          file_name?: string;
+          file_type?: string;
+          file_size?: number;
+          storage_path?: string;
+          extracted_data?: Json | null;
+          is_processed?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      notifications: {
+        Row: {
+          id: string;
+          user_email: string;
+          type: 'NEW_REQUEST' | 'DELIVERY_SCHEDULED' | 'PICKUP_SCHEDULED' | 'URGENT_REQUEST' | 'CUSTOMER_MESSAGE';
+          title: string;
+          message: string;
+          read: boolean;
+          data: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_email: string;
+          type: 'NEW_REQUEST' | 'DELIVERY_SCHEDULED' | 'PICKUP_SCHEDULED' | 'URGENT_REQUEST' | 'CUSTOMER_MESSAGE';
+          title: string;
+          message: string;
+          read?: boolean;
+          data?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_email?: string;
+          type?: 'NEW_REQUEST' | 'DELIVERY_SCHEDULED' | 'PICKUP_SCHEDULED' | 'URGENT_REQUEST' | 'CUSTOMER_MESSAGE';
+          title?: string;
+          message?: string;
+          read?: boolean;
+          data?: Json | null;
+          created_at?: string;
+        };
+      };
+      yards: {
+        Row: {
+          id: string;
+          name: string;
+          location: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          location?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          location?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
