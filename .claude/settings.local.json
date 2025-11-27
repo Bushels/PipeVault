@@ -4,7 +4,10 @@
       "Bash(npm run dev:*)",
       "Bash(npx tsc:*)",
       "Bash(tasklist /FI 'IMAGENAME eq node.exe')",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(gh run:*)",
+      "Bash(git add:*)",
+      "Bash(del nul)"
     ],
     "deny": [],
     "ask": []
