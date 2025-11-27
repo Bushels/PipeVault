@@ -86,7 +86,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
 
     return () => subscription.unsubscribe();
-  }, [user?.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const checkAdminStatus = async (user: User | null) => {
     if (!user) {
